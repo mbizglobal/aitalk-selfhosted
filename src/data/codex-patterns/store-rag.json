@@ -1,0 +1,29 @@
+{
+  "templateId": "pattern-store-rag",
+  "name": "Store RAG Pattern",
+  "description": "Store text/JSON data to RAG Vector Store",
+  "keywords": [
+    "store",
+    "rag",
+    "save",
+    "write",
+    "vector",
+    "document",
+    "knowledge",
+    "persist"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "store",
+    "end"
+  ],
+  "features": [
+    "rag",
+    "store",
+    "vector-store",
+    "document-storage"
+  ],
+  "explanation": "Pattern for storing data to RAG Vector Store.\n\nStore node:\n- type: 'custom' (standard node)\n- nodeType: 'store'\n- color: 'bg-emerald-500'\n\nKey settings:\n- content: Text/template to store (supports {{variables}})\n- documentIdMode: 'auto' or 'template'\n- documentIdTemplate: Custom ID (when mode is 'template')\n- customMetadata: [{key, value}] for metadata\n\nTemplate variables in content:\n- {{context.xxx}}: Context variables\n- {{message}}: User message\n- {{aiResponse}}: AI response\n- {{httpResult}}: HTTP result (JSON)\n- {{httpResult.xxx}}: Specific fields\n\nResult: context.storeResult\n- { success, provider, documentCount, documentIds, error }\n\nRAG Providers (auto-detected from Settings):\n- openai_vector_store: OpenAI Vector Store\n- pinecone: Pinecone (with chunking)\n- gemini_file_search: Gemini Files API\n\nNote: Store is for WRITING to RAG.\nFor READING (retrieval), use Source RAG pattern.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"team\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"AI\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"systemMessage\":\"Summarize the user input for storage.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.3,\"maxTokens\":2048,\"outputFormat\":\"text\",\"includeChatHistory\":true}},{\"id\":\"store-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"RAG Store\",\"icon\":null,\"color\":\"bg-emerald-500\",\"nodeType\":\"store\",\"content\":\"{{aiResponse}}\",\"documentIdMode\":\"auto\",\"documentIdTemplate\":\"\",\"customMetadata\":[{\"key\":\"source\",\"value\":\"workflow\"}]}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":1000,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"store-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"store-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

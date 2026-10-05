@@ -1,0 +1,29 @@
+{
+  "templateId": "pattern-if-else-branch",
+  "name": "If/Else Branch Pattern",
+  "description": "Conditional branching with multiple conditions (if, else-if, else)",
+  "keywords": [
+    "if",
+    "else",
+    "condition",
+    "branch",
+    "classify",
+    "decision",
+    "route",
+    "switch"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "ifElse",
+    "end"
+  ],
+  "features": [
+    "conditional",
+    "branching",
+    "json-output",
+    "multi-branch"
+  ],
+  "explanation": "Pattern for conditional branching using If/Else node.\n\nKey flow:\n1. AI classifies input with JSON output\n2. If/Else evaluates conditions in order\n3. Routes to matching branch\n\nNode structure:\n- type: 'ifElse' (NOT 'custom')\n- data.nodeType: 'branch'\n- data.conditions: Array of condition objects\n\nCondition types:\n- if: First condition (required)\n- else-if: Additional conditions (optional, multiple allowed)\n- else: Default fallback (optional)\n\nCondition modes:\n- simple: field operator value (e.g., category == 'spam')\n- builder: multiple conditions with AND/OR\n- code: JavaScript expression\n\nEdge sourceHandle:\n- Use condition id (e.g., 'if-0', 'else-if-1', 'else')\n\nExample conditions array:\n[{id:'if-0', type:'if', caseName:'Yes', conditionField:'jsonData.category', conditionOperator:'==', conditionValue:'yes'},\n {id:'else', type:'else', caseName:'No'}]",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"Classify\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Classify the user input. Output the category.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0,\"maxTokens\":100,\"outputFormat\":\"json\",\"schemaName\":\"classification\",\"schemaProperties\":[{\"id\":\"prop-1\",\"name\":\"category\",\"type\":\"enum\",\"description\":\"Classification result\",\"required\":true,\"enumValues\":[\"yes\",\"no\"]}]}},{\"id\":\"ifelse-1\",\"type\":\"ifElse\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"If / Else\",\"icon\":null,\"color\":\"bg-yellow-500\",\"nodeType\":\"branch\",\"conditions\":[{\"id\":\"if-0\",\"type\":\"if\",\"caseName\":\"Yes\",\"conditionMode\":\"simple\",\"conditionField\":\"aiResponse.category\",\"conditionOperator\":\"==\",\"conditionValue\":\"yes\"},{\"id\":\"else\",\"type\":\"else\",\"caseName\":\"No\"}]}},{\"id\":\"end-yes\",\"type\":\"custom\",\"position\":{\"x\":900,\"y\":200},\"data\":{\"label\":\"End (Yes)\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}},{\"id\":\"end-no\",\"type\":\"custom\",\"position\":{\"x\":900,\"y\":400},\"data\":{\"label\":\"End (No)\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"ifelse-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"ifelse-1\",\"sourceHandle\":\"if-0\",\"target\":\"end-yes\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e4\",\"source\":\"ifelse-1\",\"sourceHandle\":\"else\",\"target\":\"end-no\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

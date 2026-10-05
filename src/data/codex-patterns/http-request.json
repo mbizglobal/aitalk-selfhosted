@@ -1,0 +1,35 @@
+{
+  "templateId": "pattern-http-request",
+  "name": "HTTP Request Pattern",
+  "description": "Make HTTP API calls with Single or Multi-URL mode and optional Preset",
+  "keywords": [
+    "http",
+    "api",
+    "rest",
+    "request",
+    "fetch",
+    "get",
+    "post",
+    "endpoint",
+    "url",
+    "webhook",
+    "trading",
+    "stock",
+    "portfolio"
+  ],
+  "nodeTypes": [
+    "start",
+    "httpRequest",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "http-request",
+    "multi-url",
+    "preset",
+    "api-call",
+    "rest-api"
+  ],
+  "explanation": "Pattern for making HTTP API calls.\n\nModes:\n- Single URL: One endpoint per node (method + url)\n- Multi-URL: Multiple endpoints in one node (baseUrl + requests[])\n\nAuth types:\n- none: No authentication\n- apiKey: Custom header (e.g., Authorization: YOUR_KEY)\n- bearer: Authorization: Bearer <token>\n- basic: Base64 encoded username:password\n\nPresets:\n- direct: Manual URL input (default)\n- trading212: Trading 212 API (5 endpoints)\n\nMulti-URL mode:\n- baseUrl: Base URL for all requests\n- environment: demo/live switching\n- requests[]: Array of { alias, method, path, enabled }\n- requestDelay: Rate limit delay between requests (ms)\n\nResult stored in:\n- Single: context.httpResult (status, data, rawBody, duration)\n- Multi: context.httpResult.{alias} (each with status, data, rawBody, duration)\n\nTemplate variables supported in URL, headers, body:\n- {{context.xxx}}: Context variables\n- {{message}}: User message\n- {{httpResult.xxx}}: Previous HTTP result\n\nCredentials: Encrypted storage via WorkflowConnection (Save Credentials button).",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"team\"}},{\"id\":\"http-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"HTTP Request\",\"icon\":null,\"color\":\"bg-orange-500\",\"nodeType\":\"httpRequest\",\"mode\":\"single\",\"method\":\"GET\",\"url\":\"https://api.example.com/v1/data\",\"authType\":\"apiKey\",\"authHeaderName\":\"Authorization\",\"authHeaderValue\":\"\",\"headers\":[],\"timeout\":30}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"AI\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"systemMessage\":\"Analyze the API response data.\\n\\nHTTP Result: {{httpResult.data}}\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.3,\"maxTokens\":4096,\"outputFormat\":\"text\",\"includeChatHistory\":true,\"imageInput\":false,\"pdfInput\":false}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":850,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"http-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"http-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

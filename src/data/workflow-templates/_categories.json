@@ -1,0 +1,44 @@
+[
+  {
+    "code": "ai_assistant",
+    "name": "AI Assistant",
+    "description": "Chatbots, RAG, summarisation",
+    "sortOrder": 50
+  },
+  {
+    "code": "document_processing",
+    "name": "Document Processing",
+    "description": "Process and analyze documents",
+    "sortOrder": 100
+  },
+  {
+    "code": "customer_support",
+    "name": "Customer Support",
+    "description": "Customer service automation",
+    "sortOrder": 200
+  },
+  {
+    "code": "email_automation",
+    "name": "Email Automation",
+    "description": "Automate email workflows",
+    "sortOrder": 300
+  },
+  {
+    "code": "data_extraction",
+    "name": "Data Extraction",
+    "description": "Extract structured data from various sources",
+    "sortOrder": 400
+  },
+  {
+    "code": "content_generation",
+    "name": "Content Generation",
+    "description": "Generate text, summaries, and content",
+    "sortOrder": 500
+  },
+  {
+    "code": "workflow_automation",
+    "name": "Workflow Automation",
+    "description": "Automate business processes",
+    "sortOrder": 600
+  }
+]

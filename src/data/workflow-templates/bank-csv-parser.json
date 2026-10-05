@@ -1,0 +1,76 @@
+{
+  "templateId": "bank-csv-parser",
+  "name": "Bank CSV Statement Parser",
+  "description": "Parse bank CSV statements and store transactions in Data Sheets (Example: Wise Bank)",
+  "categoryCode": "data_extraction",
+  "complexity": "intermediate",
+  "keywords": [
+    "bank",
+    "csv",
+    "wise",
+    "transactions",
+    "statement",
+    "parser",
+    "finance",
+    "import"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "dataSheets",
+    "end",
+    "note"
+  ],
+  "features": [
+    "csv-input",
+    "json-output",
+    "data-sheets",
+    "batch-insert",
+    "structured-output"
+  ],
+  "explanation": "This workflow parses bank CSV statements, extracts transaction data, and stores it in Data Sheets.\n\nExample: Wise Bank CSV\nFormat: Comma-separated, Date DD-MM-YYYY\n\nExample CSV:\nTransferWise ID,Date,Amount,Currency,Description,Running Balance\n123456,12-09-2025,922.14,EUR,Payment from Client,1887.48\n123457,01-09-2025,-8.92,EUR,Slack subscription,1005.51\n\nHow to use:\n1. Download CSV from your bank\n2. Upload the CSV file in the chat\n3. Transactions are automatically parsed and saved\n\nCustomization:\nThis template uses Wise Bank CSV format as an example. You can customize the AI node's system prompt to support your bank's specific CSV format.",
+  "sortOrder": 250,
+  "dataSheetSchema": {
+    "name": "Bank Transactions",
+    "description": "Parsed bank transaction data from CSV",
+    "columns": [
+      {
+        "name": "date",
+        "type": "date",
+        "required": true,
+        "description": "Transaction date"
+      },
+      {
+        "name": "description",
+        "type": "string",
+        "required": false,
+        "description": "Transaction description"
+      },
+      {
+        "name": "real_amount",
+        "type": "number",
+        "required": true,
+        "description": "Transaction amount (positive)"
+      },
+      {
+        "name": "currency",
+        "type": "string",
+        "required": true,
+        "description": "Currency code (EUR, USD, CHF, GBP)"
+      },
+      {
+        "name": "transaction_type",
+        "type": "string",
+        "required": true,
+        "description": "income or expense"
+      },
+      {
+        "name": "balance",
+        "type": "number",
+        "required": false,
+        "description": "Account balance after transaction"
+      }
+    ]
+  },
+  "workflowJson": "{\"nodes\":[{\"id\":\"note-bank-csv-guide\",\"type\":\"note\",\"position\":{\"x\":160,\"y\":60},\"data\":{\"noteText\":\"HOW TO USE:\\n1. Download CSV from your bank\\n2. Upload the CSV file in the chat\\n3. Transactions are parsed and saved\\n\\nCUSTOMIZATION:\\nEach bank has different CSV formats.\\nYou may need to modify:\\n• AI node: Update JSON schema\\n• Data Sheets: Adjust columns\\n\\nThis template uses Wise Bank as example.\",\"backgroundColor\":\"#fef3c7\",\"width\":300,\"height\":260}},{\"id\":\"ecec0fa0-9474-4947-bfa6-2736b707ed58\",\"type\":\"custom\",\"position\":{\"x\":280,\"y\":340},\"data\":{\"label\":\"Chat Widget\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"team\"},\"width\":144,\"height\":58},{\"id\":\"563a20c2-8e59-47b3-b2d6-0bda2cf84595\",\"type\":\"custom\",\"position\":{\"x\":560,\"y\":380},\"data\":{\"label\":\"AI: Wise CSV Parser\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"model\":\"gpt-4.1-mini\",\"temperature\":0,\"maxTokens\":4096,\"topP\":1,\"effort\":\"medium\",\"verbosity\":\"medium\",\"summary\":\"auto\",\"storeLogs\":true,\"includeChatHistory\":true,\"outputFormat\":\"json\",\"systemMessage\":\"Role: Wise CSV statement parser\\n\\nTASK: Parse Wise bank CSV file and extract ALL transactions.\\n\\nWise CSV Format:\\n- Columns: TransferWise ID, Date, Amount, Currency, Description, Running Balance\\n- Date format: DD-MM-YYYY (e.g., 12-09-2025)\\n- Amount: positive for income, negative for expense\\n\\nFor EACH transaction row, extract:\\n- date: Convert DD-MM-YYYY to YYYY-MM-DD (e.g., 12-09-2025 → 2025-09-12)\\n- description: Use Description column\\n- real_amount: Absolute value of Amount (always positive)\\n- currency: EUR, USD, CHF, or GBP\\n- transaction_type: \\\"income\\\" if Amount > 0, \\\"expense\\\" if Amount < 0\\n- balance: Running Balance value\\n\\nSkip rows with Amount = 0.00 or header/footer rows.\\n\\nOutput all transactions in JSON format.\",\"selectedTools\":{\"source\":false,\"mcp\":false,\"webSearch\":false,\"functionCalling\":false,\"imageInput\":false,\"pdfInput\":false},\"imageInput\":false,\"pdfInput\":false,\"hasToolsConnection\":false,\"csvInput\":true,\"jsonSchema\":\"{\\n  \\\"name\\\": \\\"wise_transactions\\\",\\n  \\\"strict\\\": true,\\n  \\\"schema\\\": {\\n    \\\"type\\\": \\\"object\\\",\\n    \\\"properties\\\": {\\n      \\\"currency\\\": {\\n        \\\"type\\\": \\\"string\\\",\\n        \\\"description\\\": \\\"Account currency (EUR, USD, CHF, GBP)\\\"\\n      },\\n      \\\"transactions\\\": {\\n        \\\"type\\\": \\\"array\\\",\\n        \\\"description\\\": \\\"List of all transactions from CSV\\\",\\n        \\\"items\\\": {\\n          \\\"type\\\": \\\"object\\\",\\n          \\\"properties\\\": {\\n            \\\"date\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Transaction date in YYYY-MM-DD format\\\"\\n            },\\n            \\\"description\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Transaction description\\\"\\n            },\\n            \\\"real_amount\\\": {\\n              \\\"type\\\": \\\"number\\\",\\n              \\\"description\\\": \\\"Transaction amount (positive number)\\\"\\n            },\\n            \\\"currency\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"description\\\": \\\"Transaction currency\\\"\\n            },\\n            \\\"transaction_type\\\": {\\n              \\\"type\\\": \\\"string\\\",\\n              \\\"enum\\\": [\\\"income\\\", \\\"expense\\\"],\\n              \\\"description\\\": \\\"Transaction direction\\\"\\n            },\\n            \\\"balance\\\": {\\n              \\\"type\\\": \\\"number\\\",\\n              \\\"description\\\": \\\"Account balance after this transaction\\\"\\n            }\\n          },\\n          \\\"required\\\": [\\\"date\\\", \\\"description\\\", \\\"real_amount\\\", \\\"currency\\\", \\\"transaction_type\\\", \\\"balance\\\"],\\n          \\\"additionalProperties\\\": false\\n        }\\n      }\\n    },\\n    \\\"required\\\": [\\\"currency\\\", \\\"transactions\\\"],\\n    \\\"additionalProperties\\\": false\\n  }\\n}\",\"schemaName\":\"wise_transactions\",\"schemaProperties\":[{\"id\":\"1\",\"name\":\"currency\",\"type\":\"string\",\"description\":\"Account currency (EUR, USD, CHF, GBP)\",\"required\":true},{\"id\":\"2\",\"name\":\"transactions\",\"type\":\"array\",\"description\":\"List of all transactions from CSV\",\"required\":true,\"itemsType\":\"object\",\"itemsProperties\":[{\"id\":\"2.1\",\"name\":\"date\",\"type\":\"string\",\"description\":\"Transaction date in YYYY-MM-DD format\",\"required\":true},{\"id\":\"2.2\",\"name\":\"description\",\"type\":\"string\",\"description\":\"Transaction description\",\"required\":true},{\"id\":\"2.3\",\"name\":\"real_amount\",\"type\":\"number\",\"description\":\"Transaction amount (positive number)\",\"required\":true},{\"id\":\"2.4\",\"name\":\"currency\",\"type\":\"string\",\"description\":\"Transaction currency\",\"required\":true},{\"id\":\"2.5\",\"name\":\"transaction_type\",\"type\":\"enum\",\"description\":\"Transaction direction\",\"required\":true,\"enumValues\":[\"income\",\"expense\"]},{\"id\":\"2.6\",\"name\":\"balance\",\"type\":\"number\",\"description\":\"Account balance after this transaction\",\"required\":true}]}]},\"width\":172,\"height\":56},{\"id\":\"1c4fbfc8-136f-42d2-acba-d2b47f0398a1\",\"type\":\"dataSheets\",\"position\":{\"x\":860,\"y\":340},\"data\":{\"label\":\"Data Sheets\",\"icon\":null,\"color\":\"bg-indigo-500\",\"nodeType\":\"dataSheets\",\"sheetId\":null,\"operation\":\"batch-insert\",\"outputVariable\":\"sheetData\",\"sheetName\":null,\"data\":{\"date\":\"{{date}}\",\"description\":\"{{description}}\",\"real_amount\":\"{{real_amount}}\",\"currency\":\"{{currency}}\",\"transaction_type\":\"{{transaction_type}}\",\"balance\":\"{{balance}}\"},\"filter\":{},\"fieldMappings\":[]},\"width\":160,\"height\":58},{\"id\":\"8145f62f-c90f-4892-aeb2-8183898b24cd\",\"type\":\"custom\",\"position\":{\"x\":1140,\"y\":400},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\",\"message\":\"✅ Transactions successfully imported to Data Sheets!\"},\"width\":100,\"height\":56}],\"edges\":[{\"id\":\"24ab426b-f6b4-47ec-a853-de0d9749137f\",\"source\":\"ecec0fa0-9474-4947-bfa6-2736b707ed58\",\"target\":\"563a20c2-8e59-47b3-b2d6-0bda2cf84595\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"9df7d042-f10a-43d1-a43f-a4bb80696795\",\"source\":\"563a20c2-8e59-47b3-b2d6-0bda2cf84595\",\"target\":\"1c4fbfc8-136f-42d2-acba-d2b47f0398a1\",\"targetHandle\":\"left\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"7c3ef994-a48a-4dcb-aa3b-3cd3da1f32c5\",\"source\":\"1c4fbfc8-136f-42d2-acba-d2b47f0398a1\",\"target\":\"8145f62f-c90f-4892-aeb2-8183898b24cd\",\"sourceHandle\":\"right\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

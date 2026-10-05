@@ -1,0 +1,211 @@
+{
+  "nodes": [
+    {
+      "id": "f8d0c8ac-3454-4c0c-ae55-5c04bea276dd",
+      "type": "custom",
+      "position": {
+        "x": 460,
+        "y": 380
+      },
+      "data": {
+        "label": "Start / PSTN",
+        "icon": null,
+        "color": "bg-green-500",
+        "showLeftHandle": false,
+        "nodeType": "start",
+        "triggerType": "pstn",
+        "greeting": "You're currently on the AI Talk trial, and you can edit this message. The business information you entered has been saved, and I'll only answer questions related to it. Feel free to ask me anything.",
+        "language": "en-US",
+        "voiceName": "realtime:coral",
+        "endCallPhrase": "goodbye",
+        "maxSilenceSeconds": 2,
+        "noResponseMessage": "",
+        "goodbyeMessage": "Goodbye",
+        "accessMode": "public",
+        "recordingConsent": null,
+        "webVoice": {
+          "enabled": true,
+          "timeLimitMin": 10,
+          "iconStyle": "classic",
+          "iconColor": "#FFFFFF",
+          "backgroundColor": "#14B8A6",
+          "animation": true
+        }
+      },
+      "selected": false,
+      "width": 106,
+      "height": 58,
+      "dragging": false
+    },
+    {
+      "id": "d9022239-c6ec-40e8-869a-03c970a1024c",
+      "type": "custom",
+      "position": {
+        "x": 700,
+        "y": 380
+      },
+      "data": {
+        "label": "AI",
+        "icon": null,
+        "color": "bg-blue-500",
+        "nodeType": "ai",
+        "showTools": true,
+        "toolCount": 0,
+        "model": "gpt-realtime-2.1",
+        "temperature": 1,
+        "maxTokens": 2048,
+        "topP": 1,
+        "effort": "medium",
+        "verbosity": "medium",
+        "summary": "auto",
+        "storeLogs": true,
+        "includeChatHistory": true,
+        "outputFormat": "text",
+        "systemMessage": "You are a voice assistant handling live business phone calls for this company.\nYou answer questions about the company's products, services, pricing, policies, support, and appointments.\n\nConversation context:\n- Assume questions are about this company unless the caller clearly says otherwise.\n- Do not ask which company, website, or product they mean when the question can reasonably be understood from RAG context.\n- For pricing keywords (price, cost, fees, plans, subscription, \"how much\"), treat as a general pricing question and answer directly from RAG.\n- For pricing answers, give the main plan/price summary first. Mention details (payment methods, taxes, regional exceptions, extra add-ons) only if asked.\n- Do not ask a follow-up question after a general pricing answer.\n- For broad questions (pricing, plans, features, support, setup, availability), answer directly using the retrieved RAG context.\n- Ask a clarifying question only when the question is non-pricing and the RAG context contains multiple options that cannot be answered safely without narrowing down.\n\nSource of truth:\n- For business facts, answer only from the RAG vector search results for this turn.\n- For appointment facts, use only the Calendar tool result for this turn.\n- Do not use general knowledge, training data, or prior conversation as facts.\n- Do not fill gaps or infer missing facts.\n- Summarize and rephrase retrieved results into natural spoken language.\n\nIf not found:\n- Say in the caller's language that you do not have that information and ask them to rephrase.",
+        "selectedTools": {
+          "source": true,
+          "mcp": false,
+          "webSearch": false,
+          "functionCalling": false,
+          "sendgrid": false,
+          "telegram": false,
+          "smtp": false,
+          "googleCalendar": true,
+          "microsoftCalendar": false,
+          "imageInput": false,
+          "pdfInput": false
+        },
+        "imageInput": false,
+        "pdfInput": false,
+        "hasToolsConnection": true,
+        "provider": "openai"
+      },
+      "selected": false,
+      "width": 150,
+      "height": 56,
+      "positionAbsolute": {
+        "x": 700,
+        "y": 380
+      },
+      "dragging": false
+    },
+    {
+      "id": "tool-source-1781695578734-0",
+      "type": "tool",
+      "data": {
+        "label": "Source",
+        "icon": null,
+        "color": "bg-yellow-500",
+        "toolType": "source",
+        "ragProvider": "azure_ai_search"
+      },
+      "position": {
+        "x": 850,
+        "y": 530
+      },
+      "width": 121,
+      "height": 56,
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "tool-google_calendar-1781695578734-1",
+      "type": "tool",
+      "data": {
+        "label": "Google Calendar",
+        "icon": null,
+        "color": "bg-blue-500",
+        "toolType": "google_calendar",
+        "nodeType": "google_calendar"
+      },
+      "position": {
+        "x": 550,
+        "y": 530
+      },
+      "width": 186,
+      "height": 56,
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "e8febb2d-9cfe-48eb-b717-04ca5496da98",
+      "type": "custom",
+      "position": {
+        "x": 980,
+        "y": 380
+      },
+      "data": {
+        "label": "End",
+        "icon": null,
+        "color": "bg-green-500",
+        "nodeType": "end"
+      },
+      "selected": false,
+      "width": 100,
+      "height": 56,
+      "positionAbsolute": {
+        "x": 980,
+        "y": 380
+      },
+      "dragging": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "1df6c418-ae32-4e06-8c6b-1cfeee51c008",
+      "source": "f8d0c8ac-3454-4c0c-ae55-5c04bea276dd",
+      "target": "d9022239-c6ec-40e8-869a-03c970a1024c",
+      "type": "default",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#666"
+      }
+    },
+    {
+      "id": "e-d9022239-c6ec-40e8-869a-03c970a1024c-tool-source-1781695578734-0",
+      "source": "d9022239-c6ec-40e8-869a-03c970a1024c",
+      "sourceHandle": "tools",
+      "target": "tool-source-1781695578734-0",
+      "type": "default",
+      "animated": false,
+      "className": "tool-edge-no-arrow",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2,
+        "strokeDasharray": "5, 5"
+      }
+    },
+    {
+      "id": "e-d9022239-c6ec-40e8-869a-03c970a1024c-tool-google_calendar-1781695578734-1",
+      "source": "d9022239-c6ec-40e8-869a-03c970a1024c",
+      "sourceHandle": "tools",
+      "target": "tool-google_calendar-1781695578734-1",
+      "type": "default",
+      "animated": false,
+      "className": "tool-edge-no-arrow",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2,
+        "strokeDasharray": "5, 5"
+      }
+    },
+    {
+      "id": "e26a5c2a-73a2-461f-9a51-27f0febe4a3c",
+      "source": "d9022239-c6ec-40e8-869a-03c970a1024c",
+      "target": "e8febb2d-9cfe-48eb-b717-04ca5496da98",
+      "type": "default",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#666"
+      }
+    }
+  ]
+}

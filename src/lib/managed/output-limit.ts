@@ -1,0 +1,2 @@
+
+export const MANAGED_MAX_OUTPUT_TOKENS = 4_096;

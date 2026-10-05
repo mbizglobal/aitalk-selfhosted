@@ -1,0 +1,27 @@
+{
+  "templateId": "pattern-imap-read",
+  "name": "IMAP Email Read Pattern",
+  "description": "Read emails from IMAP server (Gmail, Outlook, Zoho, etc.)",
+  "keywords": [
+    "imap",
+    "email",
+    "read",
+    "inbox",
+    "mail",
+    "fetch",
+    "gmail",
+    "outlook"
+  ],
+  "nodeTypes": [
+    "start",
+    "imap",
+    "end"
+  ],
+  "features": [
+    "imap",
+    "email-read",
+    "inbox-access"
+  ],
+  "explanation": "Pattern for reading emails from IMAP server.\n\nKey settings:\n- action: 'read' (fetch unread emails)\n- folder: 'INBOX' (default folder)\n- maxEmails: Number of emails to fetch (default: 10)\n- onlyUnseen: true (fetch only unread emails)\n\nResult stored in context.imapResult:\n- emails: Array of email objects\n- each email has: uid, from, to, subject, date, body, attachments\n\nSupported providers:\n- Gmail (use App Password)\n- Outlook/Office 365\n- Zoho Mail\n- Any IMAP server\n\nSetup: Configure IMAP connection in Connections settings.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"imap-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"Read Emails\",\"icon\":null,\"color\":\"bg-indigo-500\",\"nodeType\":\"imap\",\"action\":\"read\",\"folder\":\"INBOX\",\"maxEmails\":10,\"onlyUnseen\":true}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"imap-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"imap-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

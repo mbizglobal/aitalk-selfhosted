@@ -1,0 +1,30 @@
+{
+  "templateId": "pattern-mcp",
+  "name": "MCP (Model Context Protocol) Pattern",
+  "description": "Connect to external services via MCP protocol (Notion, Slack, GitHub, etc.)",
+  "keywords": [
+    "mcp",
+    "notion",
+    "slack",
+    "github",
+    "google",
+    "external",
+    "service",
+    "api",
+    "integration",
+    "tool"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "mcp",
+    "end"
+  ],
+  "features": [
+    "mcp",
+    "external-service",
+    "tool-calling"
+  ],
+  "explanation": "Pattern for calling external services via MCP (Model Context Protocol).\n\nKey settings:\n- mcpConnectionId: Reference to workflow_connections table\n- mcpToolName: Name of the tool to execute (e.g., 'notion_create_page')\n- mcpToolArgs: Arguments for the tool (JSON object)\n\nSupported providers:\n- Notion: Create/read pages, databases\n- Slack: Send messages, read channels\n- GitHub: Create issues, PRs, read repos\n- Google: Calendar, Drive, etc.\n\nResult is stored in context.mcpResult.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"Process Request\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Extract the necessary information from the user request to call the external service.\",\"model\":\"gpt-4o-mini\",\"temperature\":0.5,\"maxTokens\":1024,\"outputFormat\":\"json\",\"jsonSchema\":{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\"},\"data\":{\"type\":\"object\"}},\"required\":[\"action\",\"data\"],\"additionalProperties\":false}}},{\"id\":\"mcp-1\",\"type\":\"custom\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"MCP Service\",\"icon\":null,\"color\":\"bg-orange-500\",\"nodeType\":\"mcp\",\"toolType\":\"mcp\",\"mcpConnectionId\":\"\",\"mcpToolName\":\"\",\"mcpToolArgs\":{}}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":850,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"mcp-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"mcp-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

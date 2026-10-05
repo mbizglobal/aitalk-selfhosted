@@ -1,0 +1,17 @@
+# Robots.txt for aitalk.ch
+# Created to help search engines understand the site structure
+
+User-agent: *
+Allow: /
+
+Disallow: /api/
+Disallow: /app/api/
+Disallow: /_next/
+
+Disallow: /admin/
+Disallow: /console/
+Disallow: /auth/
+Disallow: /access-denied
+
+# Sitemap location
+Sitemap: https://www.aitalk.ch/sitemap.xml

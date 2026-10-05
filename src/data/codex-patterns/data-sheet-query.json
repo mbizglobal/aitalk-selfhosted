@@ -1,0 +1,30 @@
+{
+  "templateId": "pattern-data-sheet-query",
+  "name": "Data Sheet Query Pattern",
+  "description": "CRUD operations on internal data storage using Data Sheets node",
+  "keywords": [
+    "data",
+    "sheet",
+    "database",
+    "query",
+    "read",
+    "insert",
+    "batch",
+    "storage",
+    "table"
+  ],
+  "nodeTypes": [
+    "start",
+    "dataSheets",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "dataSheets",
+    "query",
+    "crud",
+    "batch-insert"
+  ],
+  "explanation": "Pattern for Data Sheets CRUD operations (internal storage).\n\nIMPORTANT: Data Sheets node uses type: 'dataSheets' (not 'custom').\n\nData Sheets operations:\n- read: Query rows with filters\n- insert: Insert single row\n- batch-insert: Insert multiple rows from array (e.g., AI JSON output)\n- update: Modify existing row\n- delete: Remove row\n\nKey settings:\n- sheetId: Target data sheet ID (null if auto-created)\n- operation: read/insert/batch-insert/update/delete\n- filter: Query conditions (for read)\n- data: Field mappings using {{variableName}} syntax\n- outputVariable: Variable name to store result\n\nFor batch-insert from AI JSON output:\n- AI outputs array of objects (e.g., transactions[])\n- Data Sheets maps each field: {\"date\": \"{{date}}\", \"amount\": \"{{amount}}\"}\n- Variables reference array item fields automatically",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ds-1\",\"type\":\"dataSheets\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"Data Sheets\",\"icon\":null,\"color\":\"bg-indigo-500\",\"nodeType\":\"dataSheets\",\"operation\":\"batch-insert\",\"sheetId\":null,\"data\":{\"field1\":\"{{field1}}\",\"field2\":\"{{field2}}\"},\"filter\":{},\"outputVariable\":\"sheetData\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ds-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ds-1\",\"target\":\"end-1\",\"sourceHandle\":\"right\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

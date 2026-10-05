@@ -1,0 +1,29 @@
+{
+  "templateId": "pattern-sendgrid-email",
+  "name": "SendGrid Email Pattern",
+  "description": "Send emails via SendGrid API",
+  "keywords": [
+    "email",
+    "sendgrid",
+    "mail",
+    "send",
+    "notification",
+    "alert",
+    "message",
+    "report",
+    "newsletter"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "sendgrid",
+    "end"
+  ],
+  "features": [
+    "email",
+    "sendgrid",
+    "notification"
+  ],
+  "explanation": "Pattern for sending emails via SendGrid.\n\nKey settings:\n- toEmail: Recipient email address\n- fromEmail: Sender email (must be verified in SendGrid)\n- fromName: Sender display name\n- subject: Email subject line\n- bodyTemplate: Email body (supports {{context.xxx}} variables)\n\nTemplate variables:\n- {{message}}: User input message\n- {{aiResponse}}: AI response text\n- {{context.aiResponse}}: Same as above\n- {{jsonData.fieldName}}: JSON output field\n\nSetup required:\n1. Configure SendGrid API key in Connections\n2. Verify sender email in SendGrid\n\nResult stored in context.sendGridResult.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"team\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"AI\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"systemMessage\":\"Generate email content based on the user request.\",\"model\":\"gpt-4.1-mini\",\"temperature\":1,\"maxTokens\":4096,\"outputFormat\":\"text\",\"includeChatHistory\":false,\"imageInput\":false,\"pdfInput\":false}},{\"id\":\"sendgrid-1\",\"type\":\"custom\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"SendGrid\",\"icon\":null,\"color\":\"bg-[#00A9D1]\",\"nodeType\":\"sendgrid\",\"toEmail\":\"recipient@example.com\",\"fromEmail\":\"noreply@yourdomain.com\",\"fromName\":\"AI Assistant\",\"subject\":\"Email Subject\",\"bodyTemplate\":\"{{context.aiResponse}}\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":850,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"sendgrid-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"sendgrid-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

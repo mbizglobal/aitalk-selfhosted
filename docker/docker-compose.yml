@@ -1,0 +1,83 @@
+# AI Talk Self-hosted — app · Postgres (pgvector) · file volume
+#
+# Use it from an install folder that holds only this file and .env.example (the offline bundle, or the docker/ folder of the
+#    public repository). Do not run it from the repository root (another .env would be mixed in).
+#   1) cp .env.example .env  — fill in the 3 required values (NEXTAUTH_URL · NEXTAUTH_SECRET · ENCRYPTION_SECRET) and POSTGRES_PASSWORD
+#   2) docker compose up -d
+#   3) open NEXTAUTH_URL in a browser (an HTTPS proxy in front is recommended — the app listens on 127.0.0.1 only)
+#
+# Upgrade = set AITALK_IMAGE in .env to the new tag → docker compose up -d — database changes are applied on start.
+#   Back up the database first (there is no automatic rollback). Variables expand inside the container; nothing is kept on failure or empty output:
+#      f=backup-$(date +%F-%H%M%S).sql; docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$f.part" \
+#        && [ -s "$f.part" ] && mv "$f.part" "$f" && echo "OK $f" || { rm -f "$f.part"; echo "BACKUP FAILED"; false; }
+#   Roll back (when the new version does not start) — first make sure the backup printed "OK":
+#      docker compose down → find this install's …_db volume with docker volume ls → docker volume rm <that name> → set AITALK_IMAGE to the old tag →
+#      docker compose up -d --wait db → docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' < <backup file> → docker compose up -d
+#   Keep ENCRYPTION_SECRET together with the backup — without it the stored secrets (AI keys · connection passwords) cannot be read.
+# Server without internet: copy the bundle file, docker load -i aitalk-offline-*.tar.gz → AITALK_IMAGE=<tag> in .env → docker compose up -d
+#   (bundle = docker/offline-bundle.sh — two images (app · pgvector) with checksums, optionally the Ollama image + model files)
+# The database user · name · password apply only when the database volume is first created — changing .env later does not change
+#   the database (to change them: back up → new volume → restore).
+# Two installs on one server: use a different APP_PORT and a different folder (= compose project name) for each.
+# One app container is the default. With --scale every copy runs the background jobs — to add more, copy the app service below
+#   to app2, give only app2 AITALK_BACKGROUND_JOBS: "off", and remove its ports or use another port (so jobs do not run twice).
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    pull_policy: missing
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aitalk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-aitalk}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    # The image tag you received (or loaded with docker load) — required, so a wrong "latest" image is never pulled
+    image: ${AITALK_IMAGE:?set AITALK_IMAGE in .env to the image tag you received, e.g. aitalk-selfhosted:1.0.0}
+    pull_policy: missing
+    # With wrong settings the start checks log the reason and stop — limited restarts instead of an endless loop
+    restart: on-failure:5
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aitalk}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aitalk}
+      AITALK_EDITION: selfhosted
+      FILE_STORE_DIR: /data/files
+    volumes:
+      - files:/data/files
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Optional — runs an open model on this server when the company has no AI server
+  #   Enable: COMPOSE_PROFILES=ollama in .env → docker compose up -d
+  #   Get a model (with internet): docker compose exec ollama ollama pull <model>
+  #   Load models (offline bundle): docker compose run --rm -T --entrypoint tar ollama -C /root/.ollama -xzf - < ollama-models.tar.gz
+  #   Settings > AI connections: type OpenAI-compatible · URL http://ollama:11434/v1 · any key (e.g. ollama) · model name = the model you pulled
+  #   Memory — the model size plus the context window (8B model + 16K window = more than 8 GB). Too little memory kills it silently
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.35.0}
+    profiles: ["ollama"]
+    pull_policy: missing
+    restart: unless-stopped
+    environment:
+      # A small default window silently cuts long input — a work app turn is 4–7 thousand tokens
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-16384}
+      # Turns off Ollama cloud (remote inference · web search) and the ollama.com lookup on start — nothing leaves this server
+      OLLAMA_NO_CLOUD: "1"
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  db:
+  files:
+  ollama:

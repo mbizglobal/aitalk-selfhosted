@@ -1,0 +1,26 @@
+{
+  "templateId": "pattern-wait-input",
+  "name": "Wait for User Input Pattern",
+  "description": "Pause workflow and wait for user input",
+  "keywords": [
+    "wait",
+    "input",
+    "pause",
+    "user",
+    "confirm",
+    "approval"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "wait",
+    "end"
+  ],
+  "features": [
+    "wait",
+    "user-input",
+    "multi-turn"
+  ],
+  "explanation": "Pattern for multi-turn conversation with Wait node.\n\nKey flow:\n1. AI processes initial input\n2. Wait node pauses for user response\n3. Workflow resumes with new input\n\nWait node:\n- type: 'wait' (NOT 'custom')\n- data.nodeType: 'wait'\n- displayMode: 'message' (show waitMessage directly) or default (format aiResponse as table)\n- waitMessage: Template string with {{variables}}\n- Pauses execution, waits for user's next message\n- Stores response in context.message\n- Continues to next node\n\nUseful for confirmations, clarifications, or multi-step processes.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"Initial Response\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Provide initial response and ask for confirmation.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.5,\"maxTokens\":1024,\"outputFormat\":\"text\",\"includeChatHistory\":true}},{\"id\":\"wait-1\",\"type\":\"wait\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"Wait for Input\",\"nodeType\":\"wait\",\"displayMode\":\"message\",\"waitMessage\":\"Please confirm or provide additional input...\"}},{\"id\":\"ai-2\",\"type\":\"custom\",\"position\":{\"x\":850,\"y\":300},\"data\":{\"label\":\"Process Response\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Process the user's confirmation or additional input.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.5,\"maxTokens\":1024,\"outputFormat\":\"text\",\"includeChatHistory\":true}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":1100,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"wait-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"wait-1\",\"target\":\"ai-2\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e4\",\"source\":\"ai-2\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

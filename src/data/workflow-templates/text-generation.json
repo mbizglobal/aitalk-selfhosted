@@ -1,0 +1,26 @@
+{
+  "templateId": "text-generation",
+  "name": "Text Generation Workflow",
+  "description": "Generate natural language text responses (summary, explanation, etc.)",
+  "categoryCode": "content_generation",
+  "complexity": "beginner",
+  "keywords": [
+    "text",
+    "generate",
+    "summary",
+    "explain",
+    "response"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "text-output",
+    "natural-language"
+  ],
+  "explanation": "This workflow demonstrates how to generate natural language text using the TEXT output mode.\n\nKey features:\n- outputFormat: \"text\" instead of \"json\"\n- No JSON Schema required - AI returns free-form text\n- gpt-6-luna: reasoning-capable model (temperature/top_p are not used by this model family)\n- Simple 3-node structure: Start → AI → End\n\nUse cases:\n- Summarizing documents or articles\n- Generating explanations or descriptions\n- Creating conversational responses\n- Writing content drafts\n\nThe systemMessage guides the AI's writing style and format.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"1a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"public\"}},{\"id\":\"2b3c4d5e-6f7a-4b2c-9d0e-1f2a3b4c5d6e\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"Generate Text\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"systemMessage\":\"You are a helpful text generator. Generate clear and well-structured text based on the user input. Provide informative and concise responses.\",\"model\":\"gpt-6-luna\",\"maxTokens\":2048,\"outputFormat\":\"text\",\"imageInput\":false,\"pdfInput\":false,\"includeChatHistory\":true}},{\"id\":\"3c4d5e6f-7a8b-4c3d-0e1f-2a3b4c5d6e7f\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"edge-1-2\",\"source\":\"1a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d\",\"target\":\"2b3c4d5e-6f7a-4b2c-9d0e-1f2a3b4c5d6e\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"edge-2-3\",\"source\":\"2b3c4d5e-6f7a-4b2c-9d0e-1f2a3b4c5d6e\",\"target\":\"3c4d5e6f-7a8b-4c3d-0e1f-2a3b4c5d6e7f\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}",
+  "sortOrder": 100
+}

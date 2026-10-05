@@ -1,0 +1,29 @@
+{
+  "templateId": "pattern-source-rag",
+  "name": "Source RAG Pattern",
+  "description": "RAG (Retrieval Augmented Generation) using Source tool",
+  "keywords": [
+    "source",
+    "rag",
+    "knowledge",
+    "document",
+    "search",
+    "retrieval",
+    "context",
+    "vector",
+    "embedding"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "source",
+    "end"
+  ],
+  "features": [
+    "rag",
+    "source",
+    "knowledge-base"
+  ],
+  "explanation": "Pattern for RAG using Source tool.\n\nKey settings:\n- AI node: selectedTools.source = true\n- Source tool node connected to AI (dashed line from tools handle)\n- ragProvider: \"openai_vector_store\" | \"gemini_file_search\" | \"pinecone\"\n\nConnection:\n- Connect AI node's 'tools' handle to Source node\n- Edge style: dashed (strokeDasharray: \"5, 5\")\n\nRAG Providers:\n- openai_vector_store: OpenAI's built-in vector store\n- gemini_file_search: Google Gemini file search\n- pinecone: Pinecone vector database\n\nSetup required:\n1. Upload documents to Storage\n2. Configure RAG provider in Settings\n3. Connect Source tool to AI node",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"AI with RAG\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Answer the user question using the provided knowledge base. If the answer is not found, say you don't know.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.3,\"maxTokens\":2048,\"outputFormat\":\"text\",\"selectedTools\":{\"source\":true,\"mcp\":false,\"webSearch\":false,\"functionCalling\":false,\"imageInput\":false,\"pdfInput\":false},\"hasToolsConnection\":true,\"includeChatHistory\":true}},{\"id\":\"tool-source-1\",\"type\":\"tool\",\"position\":{\"x\":560,\"y\":480},\"data\":{\"label\":\"Source\",\"icon\":null,\"color\":\"bg-yellow-500\",\"toolType\":\"source\",\"ragProvider\":\"openai_vector_store\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"sourceHandle\":\"tools\",\"target\":\"tool-source-1\",\"type\":\"default\",\"animated\":false,\"className\":\"tool-edge-no-arrow\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2,\"strokeDasharray\":\"5, 5\"}},{\"id\":\"e3\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

@@ -1,0 +1,26 @@
+{
+  "templateId": "pattern-smtp-forward",
+  "name": "SMTP Email Forward Pattern",
+  "description": "Forward emails via SMTP with optional prefix",
+  "keywords": [
+    "smtp",
+    "email",
+    "forward",
+    "send",
+    "relay",
+    "redirect",
+    "mail"
+  ],
+  "nodeTypes": [
+    "start",
+    "smtp",
+    "end"
+  ],
+  "features": [
+    "smtp",
+    "email-forward",
+    "email-relay"
+  ],
+  "explanation": "Pattern for forwarding emails via SMTP.\n\nKey settings:\n- mode: 'forward' (forward existing email)\n- to: Recipient email address\n- addPrefix: Subject prefix (e.g., '[Forwarded]', '[Customer Support]')\n\nForward mode uses context.currentEmail automatically in ForEach loop.\n\nAlternative mode: 'send'\n- mode: 'send' (compose new email)\n- to: Recipient email\n- subject: Email subject\n- body: Email body (supports {{context.xxx}} variables)\n\nTemplate variables:\n- {{context.currentEmail.from}}: Original sender\n- {{context.currentEmail.subject}}: Original subject\n\nSetup: Configure SMTP connection in Connections settings.",
+  "workflowJson": "{\"nodes\": [{\"id\": \"start-1\", \"type\": \"custom\", \"position\": {\"x\": 100, \"y\": 300}, \"data\": {\"label\": \"Start\", \"icon\": null, \"color\": \"bg-green-500\", \"showLeftHandle\": false, \"nodeType\": \"start\"}}, {\"id\": \"smtp-1\", \"type\": \"custom\", \"position\": {\"x\": 400, \"y\": 300}, \"data\": {\"label\": \"Forward Email\", \"icon\": null, \"color\": \"bg-purple-500\", \"nodeType\": \"smtp\", \"mode\": \"forward\", \"to\": \"recipient@example.com\", \"addPrefix\": \"[Forwarded]\"}}, {\"id\": \"end-1\", \"type\": \"custom\", \"position\": {\"x\": 700, \"y\": 300}, \"data\": {\"label\": \"End\", \"icon\": null, \"color\": \"bg-green-500\", \"nodeType\": \"end\"}}], \"edges\": [{\"id\": \"e1\", \"source\": \"start-1\", \"target\": \"smtp-1\", \"type\": \"default\", \"style\": {\"stroke\": \"#666\", \"strokeWidth\": 2}, \"markerEnd\": {\"type\": \"arrowclosed\", \"color\": \"#666\"}}, {\"id\": \"e2\", \"source\": \"smtp-1\", \"target\": \"end-1\", \"type\": \"default\", \"style\": {\"stroke\": \"#666\", \"strokeWidth\": 2}, \"markerEnd\": {\"type\": \"arrowclosed\", \"color\": \"#666\"}}]}"
+}

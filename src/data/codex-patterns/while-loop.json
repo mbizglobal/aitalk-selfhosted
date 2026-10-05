@@ -1,0 +1,28 @@
+{
+  "templateId": "pattern-while-loop",
+  "name": "While Loop Pattern",
+  "description": "Iterative processing with While loop node (supports forEach mode)",
+  "keywords": [
+    "while",
+    "loop",
+    "repeat",
+    "iterate",
+    "batch",
+    "process",
+    "foreach",
+    "array"
+  ],
+  "nodeTypes": [
+    "start",
+    "while",
+    "end"
+  ],
+  "features": [
+    "loop",
+    "iteration",
+    "batch-processing",
+    "foreach"
+  ],
+  "explanation": "Pattern for iterative processing with While loop.\n\nLoop Modes:\n1. while (condition-based):\n   - conditionMode: simple/builder/code\n   - conditionField: Field to evaluate\n   - conditionOperator: ==, !=, >, <, etc.\n   - conditionValue: Expected value\n\n2. forEach (array iteration):\n   - loopMode: 'forEach'\n   - forEachSource: Array path (e.g., 'imapResult.emails')\n   - forEachItemVar: Item variable name (e.g., 'currentEmail')\n   - Access item: {{context.currentEmail}}\n   - Access index: {{context.currentIndex}}\n   - Access total: {{context.totalCount}}\n\nCommon settings:\n- maxIterations: Safety limit (default: 10)\n- showTools: true (enable loop tools area)\n\nLoop Tools (inside While):\n- AI, Data Sheets, Wait, If/Else, Continue, IMAP, SMTP\n- Connect from While's 'loop' handle\n- loopOrder determines execution sequence",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"while-1\",\"type\":\"while\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"While\",\"icon\":null,\"color\":\"bg-orange-600\",\"nodeType\":\"while\",\"showTools\":true,\"maxIterations\":10,\"conditionField\":\"\",\"conditionOperator\":\"==\",\"conditionValue\":\"\",\"conditionMode\":\"simple\",\"loopMode\":\"forEach\",\"forEachSource\":\"items\",\"forEachItemVar\":\"currentItem\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"while-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"while-1\",\"sourceHandle\":\"exit\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

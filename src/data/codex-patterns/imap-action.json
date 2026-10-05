@@ -1,0 +1,29 @@
+{
+  "templateId": "pattern-imap-action",
+  "name": "IMAP Email Action Pattern",
+  "description": "Move or mark emails using IMAP (move to folder, mark as read)",
+  "keywords": [
+    "imap",
+    "email",
+    "move",
+    "folder",
+    "archive",
+    "spam",
+    "mark",
+    "read",
+    "organize"
+  ],
+  "nodeTypes": [
+    "start",
+    "imap",
+    "end"
+  ],
+  "features": [
+    "imap",
+    "email-move",
+    "email-organize",
+    "folder-management"
+  ],
+  "explanation": "Pattern for email actions: move to folder or mark as read.\n\nAction: move\n- folder: Source folder (e.g., 'INBOX')\n- targetFolder: Destination folder (e.g., 'Spam', 'Archive', 'General')\n- emailUid: Email UID to move (use {{context.currentEmail.uid}} in loops)\n\nAction: markRead\n- folder: Folder containing the email\n- uidToMark: Email UID to mark as read\n\nGmail folder mapping (automatic):\n- 'Spam' → '[Gmail]/Spam'\n- 'Trash' → '[Gmail]/Trash'\n- 'Archive' → '[Gmail]/All Mail'\n\nTemplate variables:\n- {{context.currentEmail.uid}}: Current email UID in ForEach loop\n- {{context.imapResult.emails[0].uid}}: First email UID",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"imap-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"Move Email\",\"icon\":null,\"color\":\"bg-indigo-500\",\"nodeType\":\"imap\",\"action\":\"move\",\"folder\":\"INBOX\",\"targetFolder\":\"Archive\",\"emailUid\":\"{{context.currentEmail.uid}}\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"imap-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"imap-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

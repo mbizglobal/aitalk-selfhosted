@@ -1,0 +1,27 @@
+{
+  "templateId": "pattern-schedule-trigger",
+  "name": "Schedule Trigger Pattern",
+  "description": "Automated workflow execution on schedule (daily, weekly, etc.)",
+  "keywords": [
+    "schedule",
+    "cron",
+    "daily",
+    "weekly",
+    "timer",
+    "automated",
+    "recurring",
+    "periodic"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "schedule",
+    "automation",
+    "cron"
+  ],
+  "explanation": "Pattern for scheduled/automated workflow execution.\n\nKey settings in Start node:\n- triggerType: \"schedule\"\n- schedulePreset: \"daily\" | \"weekly\" | \"monthly\" | \"custom\"\n- scheduleTimes: [{hour: 9, minute: 0}] (array of times)\n- scheduleDaysOfWeek: [1,2,3,4,5] (1=Mon, 7=Sun)\n- scheduleTimezone: \"Europe/Zurich\"\n- cronExpression: \"0 9 * * *\" (auto-generated)\n- scheduleEnabled: true/false\n- accessMode: \"team\" (required for schedule)\n\nCommon presets:\n- daily: Run every day at specified time\n- weekly: Run on specific days of week\n- monthly: Run on specific day of month\n- custom: Use cron expression",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start / Schedule\",\"icon\":null,\"color\":\"bg-purple-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"triggerType\":\"schedule\",\"schedulePreset\":\"daily\",\"scheduleTimes\":[{\"hour\":9,\"minute\":0}],\"scheduleDaysOfWeek\":[1,2,3,4,5],\"scheduleDayOfMonth\":1,\"scheduleTimezone\":\"Europe/Zurich\",\"cronExpression\":\"0 9 * * 1-5\",\"scheduleEnabled\":false,\"accessMode\":\"team\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"AI Task\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Perform the scheduled task.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.7,\"maxTokens\":2048,\"outputFormat\":\"text\",\"includeChatHistory\":false}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

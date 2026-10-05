@@ -1,0 +1,26 @@
+{
+  "templateId": "pattern-text-generation",
+  "name": "Text Generation Pattern",
+  "description": "Basic AI text generation pattern (Start -> AI -> End)",
+  "keywords": [
+    "text",
+    "generate",
+    "response",
+    "answer",
+    "chat",
+    "conversation",
+    "summary",
+    "explain"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "text-output",
+    "natural-language"
+  ],
+  "explanation": "Basic pattern for AI text generation.\n\nKey settings:\n- outputFormat: 'text' (not json)\n- No JSON Schema needed\n- temperature: 0.7 for creative responses\n- includeChatHistory: true for conversational context\n- showTools: true (can connect tools if needed)\n\nUse cases:\n- Summarizing documents\n- Generating explanations\n- Conversational responses\n- Content drafts\n\nThe systemMessage guides the AI's writing style.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"public\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"Generate Text\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"systemMessage\":\"You are a helpful text generator. Generate clear and well-structured text based on the user input.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.7,\"maxTokens\":2048,\"outputFormat\":\"text\",\"imageInput\":false,\"pdfInput\":false,\"includeChatHistory\":true}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

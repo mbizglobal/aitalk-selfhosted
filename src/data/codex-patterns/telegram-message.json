@@ -1,0 +1,27 @@
+{
+  "templateId": "pattern-telegram-message",
+  "name": "Telegram Message Pattern",
+  "description": "Send messages via Telegram Bot API",
+  "keywords": [
+    "telegram",
+    "message",
+    "chat",
+    "bot",
+    "notification",
+    "alert",
+    "send"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "telegram",
+    "end"
+  ],
+  "features": [
+    "telegram",
+    "messaging",
+    "notification"
+  ],
+  "explanation": "Pattern for sending messages via Telegram Bot.\n\nKey settings:\n- chatId: Recipient Chat ID (configure in Connections or use variable)\n- message: Message body (supports {{context.xxx}} variables)\n\nTemplate variables:\n- {{message}}: User input message\n- {{aiResponse}}: AI response text\n- {{context.currentEmail.from}}: Email sender (in ForEach loop)\n- {{context.currentEmail.subject}}: Email subject\n- {{context.nodeId.fieldName}}: Any previous node output\n\nSetup required:\n1. Create Telegram Bot via @BotFather\n2. Get Chat ID (message the bot, check updates API)\n3. Configure bot token in Connections settings\n\nResult stored in context.telegramResult.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"Generate Message\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Generate a notification message based on the user request.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.7,\"maxTokens\":1024,\"outputFormat\":\"text\"}},{\"id\":\"telegram-1\",\"type\":\"custom\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"Send Telegram\",\"icon\":null,\"color\":\"bg-sky-500\",\"nodeType\":\"telegram\",\"chatId\":\"\",\"message\":\"{{aiResponse}}\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":850,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"telegram-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e3\",\"source\":\"telegram-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

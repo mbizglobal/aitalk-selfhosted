@@ -1,0 +1,26 @@
+{
+  "templateId": "pattern-json-output",
+  "name": "JSON Output Pattern",
+  "description": "AI structured JSON output with schema validation",
+  "keywords": [
+    "json",
+    "structured",
+    "extract",
+    "parse",
+    "schema",
+    "data",
+    "classify"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "json-output",
+    "schema",
+    "structured-output"
+  ],
+  "explanation": "Pattern for structured JSON output from AI.\n\nKey settings:\n- outputFormat: 'json'\n- schemaName: Unique name for the schema (e.g., 'json_schema')\n\nSchema definition (two formats):\n\n1. schemaProperties array (recommended):\n   schemaProperties: [\n     {id:'prop-1', name:'category', type:'enum', required:true, enumValues:['a','b']},\n     {id:'prop-2', name:'score', type:'number', required:true}\n   ]\n\n2. jsonSchema object (legacy):\n   jsonSchema: {type:'object', properties:{...}, required:[...], additionalProperties:false}\n\nSupported property types:\n- string, number, boolean, enum, array, object\n\nResult stored in:\n- context.aiResponse (parsed JSON object)\n- Access fields: {{aiResponse.fieldName}}",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"Extract Data\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Extract structured data from the input.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0,\"maxTokens\":2048,\"outputFormat\":\"json\",\"schemaName\":\"json_schema\",\"schemaProperties\":[{\"id\":\"prop-1\",\"name\":\"field1\",\"type\":\"string\",\"description\":\"First field\",\"required\":true},{\"id\":\"prop-2\",\"name\":\"field2\",\"type\":\"number\",\"description\":\"Second field\",\"required\":true}]}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

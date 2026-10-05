@@ -1,0 +1,28 @@
+{
+  "templateId": "pattern-image-vision",
+  "name": "Image Vision Pattern",
+  "description": "AI image analysis with vision capability (supports PDF too)",
+  "keywords": [
+    "image",
+    "vision",
+    "picture",
+    "photo",
+    "analyze",
+    "ocr",
+    "receipt",
+    "pdf",
+    "document"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "end"
+  ],
+  "features": [
+    "imageInput",
+    "pdfInput",
+    "vision"
+  ],
+  "explanation": "Pattern for image/PDF analysis using AI vision.\n\nKey settings:\n- imageInput: true (enables image upload)\n- pdfInput: true (enables PDF upload)\n- model: 'gpt-4o' (vision-capable model required)\n- Can use json output for structured extraction\n\nUse cases:\n- Receipt data extraction\n- Invoice processing\n- Document digitization\n- Image content analysis\n\nFor structured output, set outputFormat: 'json' with schema.",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"accessMode\":\"team\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"Analyze Image\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":0,\"systemMessage\":\"Analyze the uploaded image or PDF and describe what you see.\",\"model\":\"gpt-4o\",\"temperature\":0,\"maxTokens\":2048,\"outputFormat\":\"text\",\"imageInput\":true,\"pdfInput\":true,\"includeChatHistory\":true}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

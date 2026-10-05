@@ -1,0 +1,33 @@
+{
+  "templateId": "daily-email-report",
+  "name": "Daily Email Report",
+  "description": "Scheduled workflow that searches the web and sends daily email reports via SendGrid",
+  "categoryCode": "content_generation",
+  "complexity": "intermediate",
+  "keywords": [
+    "schedule",
+    "email",
+    "sendgrid",
+    "daily",
+    "report",
+    "web search",
+    "automation",
+    "newsletter"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "webSearch",
+    "sendgrid",
+    "end"
+  ],
+  "features": [
+    "schedule-trigger",
+    "web-search",
+    "email-automation",
+    "daily-report"
+  ],
+  "explanation": "This workflow automates daily email reports by searching the web for information and sending results via SendGrid.\n\nKey features:\n- Schedule trigger: Runs automatically at specified time (default: daily at 18:00)\n- Web Search tool: Searches specific domains for relevant information\n- SendGrid integration: Sends formatted email with AI-generated content\n- Variable support: Use {{context.aiResponse}} in email body\n\nUse cases:\n- Daily news digest\n- Stock price alerts\n- Security vulnerability reports\n- Competitor monitoring\n- Industry trend summaries\n\nSetup required:\n1. Configure SendGrid connection in Connections\n2. Set recipient email address in SendGrid node\n3. Customize system message for your use case\n4. Adjust schedule time and timezone\n5. (Optional) Specify domains for web search",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start / Schedule\",\"icon\":null,\"color\":\"bg-purple-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"triggerType\":\"schedule\",\"schedulePreset\":\"daily\",\"scheduleTimes\":[{\"hour\":18,\"minute\":0}],\"scheduleDaysOfWeek\":[1],\"scheduleDayOfMonth\":1,\"scheduleTimezone\":\"Europe/Zurich\",\"cronExpression\":\"0 18 * * *\",\"scheduleEnabled\":false,\"accessMode\":\"team\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":350,\"y\":300},\"data\":{\"label\":\"AI\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"showTools\":true,\"toolCount\":1,\"model\":\"gpt-4.1-mini\",\"temperature\":1,\"maxTokens\":4096,\"includeChatHistory\":false,\"outputFormat\":\"text\",\"systemMessage\":\"You are a research assistant that provides daily briefings.\\n\\n## Search Criteria\\n- Search for news/updates from the **last 24 hours** only\\n- If no new updates, respond with: \\\"📭 No new updates today.\\\"\\n\\n## Output Rules\\n- Select up to 5 most important items\\n- Summarize each item in 3 lines or less\\n- Keep total response under 1000 characters\\n\\n## Output Format\\n### 📋 Daily Briefing ({{today's date}})\\n\\n**1. [Title]** - Date: YYYY-MM-DD\\n- Summary: (1-2 sentences)\\n- Action: (Recommended action if any)\",\"selectedTools\":{\"source\":false,\"mcp\":false,\"webSearch\":true,\"functionCalling\":false,\"imageInput\":false,\"pdfInput\":false},\"imageInput\":false,\"pdfInput\":false,\"hasToolsConnection\":true,\"provider\":\"openai\"}},{\"id\":\"tool-webSearch-1\",\"type\":\"tool\",\"position\":{\"x\":510,\"y\":480},\"data\":{\"label\":\"Web Search\",\"icon\":null,\"color\":\"bg-green-500\",\"toolType\":\"webSearch\",\"webSearchDomains\":\"\"}},{\"id\":\"sendgrid-1\",\"type\":\"custom\",\"position\":{\"x\":600,\"y\":300},\"data\":{\"label\":\"SendGrid\",\"icon\":null,\"color\":\"bg-[#00A9D1]\",\"nodeType\":\"sendgrid\",\"toEmail\":\"your-email@example.com\",\"fromEmail\":\"noreply@yourdomain.com\",\"fromName\":\"Daily Report\",\"subject\":\"Daily Briefing\",\"bodyTemplate\":\"{{context.aiResponse}}\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":900,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"edge-start-ai\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"edge-ai-websearch\",\"source\":\"ai-1\",\"sourceHandle\":\"tools\",\"target\":\"tool-webSearch-1\",\"type\":\"default\",\"animated\":false,\"className\":\"tool-edge-no-arrow\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2,\"strokeDasharray\":\"5, 5\"}},{\"id\":\"edge-ai-sendgrid\",\"source\":\"ai-1\",\"target\":\"sendgrid-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"edge-sendgrid-end\",\"source\":\"sendgrid-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}",
+  "sortOrder": 300
+}

@@ -1,0 +1,28 @@
+{
+  "templateId": "pattern-web-search",
+  "name": "Web Search Pattern",
+  "description": "AI with web search capability for real-time information",
+  "keywords": [
+    "web",
+    "search",
+    "internet",
+    "google",
+    "news",
+    "realtime",
+    "current",
+    "latest"
+  ],
+  "nodeTypes": [
+    "start",
+    "ai",
+    "webSearch",
+    "end"
+  ],
+  "features": [
+    "web-search",
+    "realtime",
+    "internet"
+  ],
+  "explanation": "Pattern for AI with web search capability.\n\nKey settings:\n- AI node: selectedTools.webSearch = true\n- Web Search tool node connected to AI (dashed line)\n- webSearchDomains: Optional comma-separated domains to restrict search\n\nConnection:\n- Connect AI node's 'tools' handle to Web Search node\n- Edge style: dashed (strokeDasharray: \"5, 5\")\n\nUse cases:\n- Real-time news/information lookup\n- Current events research\n- Price checking\n- Stock quotes\n- Weather information",
+  "workflowJson": "{\"nodes\":[{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":100,\"y\":300},\"data\":{\"label\":\"Start\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\"}},{\"id\":\"ai-1\",\"type\":\"custom\",\"position\":{\"x\":400,\"y\":300},\"data\":{\"label\":\"AI with Search\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"systemMessage\":\"Search the web and provide accurate, up-to-date information.\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.7,\"maxTokens\":2048,\"outputFormat\":\"text\",\"selectedTools\":{\"source\":false,\"mcp\":false,\"webSearch\":true,\"functionCalling\":false,\"imageInput\":false,\"pdfInput\":false},\"hasToolsConnection\":true}},{\"id\":\"tool-webSearch-1\",\"type\":\"tool\",\"position\":{\"x\":560,\"y\":480},\"data\":{\"label\":\"Web Search\",\"icon\":null,\"color\":\"bg-green-500\",\"toolType\":\"webSearch\",\"webSearchDomains\":\"\"}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":700,\"y\":300},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e1\",\"source\":\"start-1\",\"target\":\"ai-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e2\",\"source\":\"ai-1\",\"sourceHandle\":\"tools\",\"target\":\"tool-webSearch-1\",\"type\":\"default\",\"animated\":false,\"className\":\"tool-edge-no-arrow\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2,\"strokeDasharray\":\"5, 5\"}},{\"id\":\"e3\",\"source\":\"ai-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

@@ -1,0 +1,52 @@
+{
+  "templateId": "trading212-portfolio-tracker",
+  "name": "Trading 212 Portfolio Tracker",
+  "description": "Fetch portfolio data from Trading 212 API, AI analyzes and formats relevant data, optionally store in RAG",
+  "categoryCode": "data_extraction",
+  "complexity": "intermediate",
+  "keywords": [
+    "trading212",
+    "portfolio",
+    "stock",
+    "investment",
+    "positions",
+    "dividends",
+    "orders",
+    "transactions",
+    "account",
+    "api",
+    "http",
+    "finance",
+    "trading",
+    "rag",
+    "store",
+    "ai",
+    "analysis",
+    "confirm"
+  ],
+  "nodeTypes": [
+    "start",
+    "httpRequest",
+    "ai",
+    "wait",
+    "ifElse",
+    "store",
+    "end",
+    "note"
+  ],
+  "features": [
+    "multi-url",
+    "http-request",
+    "preset",
+    "trading212",
+    "ai-analysis",
+    "wait",
+    "ifelse",
+    "rag",
+    "store",
+    "portfolio-analysis"
+  ],
+  "explanation": "This workflow fetches portfolio data from Trading 212 API, uses AI to analyze and format relevant data based on user's question, then optionally stores in RAG.\n\nFlow: [Chat] → [HTTP: 6 endpoints] → [AI: Analyze & Format] → [Wait: Show result + ask save] → [If/Else: \"save\"?] → [Store/End]\n\nKey features:\n- HTTP Request node with Multi-URL mode (Trading 212 Preset, 6 endpoints)\n- AI node analyzes HTTP data and selects relevant info based on user's question\n- AI outputs JSON (sync mode) with formatted Markdown + summary\n- Wait node displays AI-formatted result and asks user to confirm RAG save\n- If/Else checks if user says \"save\" → Store to RAG, else → End\n- Rate Limit safe: requestDelay 1000ms between API calls\n\nTrading 212 API endpoints:\n- GET /equity/positions — Current holdings\n- GET /equity/history/orders?limit=50 — Order history\n- GET /equity/history/dividends?limit=50 — Dividend history\n- GET /equity/account/summary — Account summary (total value, P&L)\n- GET /equity/portfolio — Portfolio value\n- GET /equity/history/transactions?limit=50 — Transaction history\n\nSetup required:\n1. Get API Key ID + Secret Key from Trading 212 (Settings → API)\n2. Select Trading 212 preset in HTTP Request node\n3. Auth Type: Basic Auth → Username: API Key ID, Password: Secret Key\n4. Click 'Save Credentials'\n5. Choose Demo or Live environment\n6. Configure RAG Provider in Settings (for RAG Store)\n\nIMPORTANT: This is for viewing/recording only. No trading recommendations or profit features.",
+  "sortOrder": 450,
+  "workflowJson": "{\"nodes\":[{\"id\":\"note-guide\",\"type\":\"note\",\"position\":{\"x\":100,\"y\":60},\"data\":{\"noteText\":\"SETUP:\\n1. Get API Key ID + Secret Key\\n   from Trading 212 (Settings → API)\\n2. Select Trading 212 preset\\n   in HTTP Request node\\n3. Auth Type: Basic Auth\\n   Username: API Key ID\\n   Password: Secret Key\\n4. Click 'Save Credentials'\\n5. Choose Demo or Live environment\\n6. Configure RAG Provider in Settings\\n\\nFLOW:\\n• Chat → HTTP (6 endpoints)\\n• AI analyzes & formats data\\n• Wait: Shows result + save option\\n• User says \\\"save\\\" → RAG Store\",\"backgroundColor\":\"#fef3c7\",\"width\":320,\"height\":340}},{\"id\":\"start-1\",\"type\":\"custom\",\"position\":{\"x\":200,\"y\":380},\"data\":{\"label\":\"Chat Widget\",\"icon\":null,\"color\":\"bg-green-500\",\"showLeftHandle\":false,\"nodeType\":\"start\",\"triggerType\":\"chatWidget\",\"accessMode\":\"team\"}},{\"id\":\"http-t212-1\",\"type\":\"custom\",\"position\":{\"x\":440,\"y\":380},\"data\":{\"label\":\"HTTP: Trading 212\",\"icon\":null,\"color\":\"bg-orange-500\",\"nodeType\":\"httpRequest\",\"preset\":\"trading212\",\"mode\":\"multi\",\"baseUrl\":\"https://demo.trading212.com/api/v0\",\"environment\":\"demo\",\"authType\":\"basic\",\"requests\":[{\"alias\":\"positions\",\"method\":\"GET\",\"path\":\"/equity/positions\",\"description\":\"Current holdings\",\"enabled\":true},{\"alias\":\"orders\",\"method\":\"GET\",\"path\":\"/equity/history/orders?limit=50\",\"description\":\"Order history\",\"enabled\":true},{\"alias\":\"dividends\",\"method\":\"GET\",\"path\":\"/equity/history/dividends?limit=50\",\"description\":\"Dividend history\",\"enabled\":true},{\"alias\":\"account\",\"method\":\"GET\",\"path\":\"/equity/account/summary\",\"description\":\"Account summary\",\"enabled\":true},{\"alias\":\"portfolio\",\"method\":\"GET\",\"path\":\"/equity/portfolio\",\"description\":\"Portfolio value\",\"enabled\":true},{\"alias\":\"transactions\",\"method\":\"GET\",\"path\":\"/equity/history/transactions?limit=50\",\"description\":\"Transaction history\",\"enabled\":true}],\"requestDelay\":1000,\"timeout\":30}},{\"id\":\"ai-format-1\",\"type\":\"custom\",\"position\":{\"x\":680,\"y\":380},\"data\":{\"label\":\"AI: Analyze & Format\",\"icon\":null,\"color\":\"bg-blue-500\",\"nodeType\":\"ai\",\"model\":\"gpt-4.1-mini\",\"temperature\":0.3,\"maxTokens\":2048,\"outputFormat\":\"json\",\"includeChatHistory\":false,\"systemMessage\":\"You are a portfolio data analyst. Analyze the Trading 212 API data and respond to the user's question.\\n\\n## Available API Data\\n{{httpResult}}\\n\\n## Instructions\\n1. Select ONLY the data relevant to the user's question.\\n2. Format as clean Markdown with tables, headers, and emoji.\\n3. Guidelines:\\n   - Holdings/Positions → ticker, quantity, current price, P&L\\n   - Dividends → history with dates and amounts\\n   - Orders/Trades → order history\\n   - Account/Balance → cash, total value, free funds\\n   - General overview → key metrics from all sections\\n4. Respond in the same language as the user's question.\\n5. Include totals and calculations where appropriate.\\n6. If API returned errors for some endpoints, mention it briefly.\\n\\n## Output (JSON)\\n- formattedData: Complete Markdown response (shown directly to user)\\n- dataSummary: One-line summary (e.g. \\\"5 holdings, total assets $5,000\\\")\",\"schemaName\":\"json_schema\",\"schemaProperties\":[{\"id\":\"prop-1\",\"name\":\"formattedData\",\"type\":\"string\",\"description\":\"Markdown formatted portfolio data relevant to user's question\",\"required\":true},{\"id\":\"prop-2\",\"name\":\"dataSummary\",\"type\":\"string\",\"description\":\"Brief one-line summary\",\"required\":true}],\"jsonSchema\":\"{\\\"name\\\":\\\"json_schema\\\",\\\"strict\\\":true,\\\"schema\\\":{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"formattedData\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"Markdown formatted portfolio data\\\"},\\\"dataSummary\\\":{\\\"type\\\":\\\"string\\\",\\\"description\\\":\\\"Brief one-line summary\\\"}},\\\"required\\\":[\\\"formattedData\\\",\\\"dataSummary\\\"],\\\"additionalProperties\\\":false}}\",\"selectedTools\":{\"source\":false,\"mcp\":false,\"webSearch\":false,\"functionCalling\":false,\"imageInput\":false,\"pdfInput\":false},\"provider\":\"openai\"}},{\"id\":\"wait-confirm-1\",\"type\":\"wait\",\"position\":{\"x\":920,\"y\":380},\"data\":{\"label\":\"Wait: Confirm Save\",\"nodeType\":\"wait\",\"displayMode\":\"message\",\"waitMessage\":\"{{aiResponse.formattedData}}\\n\\n---\\n\\n💾 Would you like to save this data to RAG?\\nType 'save' to store it.\"}},{\"id\":\"ifelse-save-1\",\"type\":\"ifElse\",\"position\":{\"x\":1300,\"y\":360},\"data\":{\"label\":\"If / Else\",\"icon\":null,\"color\":\"bg-orange-500\",\"nodeType\":\"branch\",\"conditions\":[{\"id\":\"if-save\",\"type\":\"if\",\"caseName\":\"save\",\"conditionMode\":\"simple\",\"conditionField\":\"message\",\"conditionOperator\":\"contains\",\"conditionValue\":\"save\"},{\"id\":\"else\",\"type\":\"else\",\"caseName\":\"skip\"}]}},{\"id\":\"store-1\",\"type\":\"custom\",\"position\":{\"x\":1540,\"y\":260},\"data\":{\"label\":\"RAG Store: Portfolio\",\"icon\":null,\"color\":\"bg-emerald-500\",\"nodeType\":\"store\",\"content\":\"Portfolio Snapshot ({{message}})\\n\\nPositions: {{httpResult.positions.data}}\\nOrders: {{httpResult.orders.data}}\\nDividends: {{httpResult.dividends.data}}\\nAccount: {{httpResult.account.data}}\\nPortfolio: {{httpResult.portfolio.data}}\\nTransactions: {{httpResult.transactions.data}}\",\"documentIdMode\":\"auto\",\"documentIdTemplate\":\"\",\"customMetadata\":[{\"key\":\"type\",\"value\":\"portfolio_snapshot\"}]}},{\"id\":\"end-1\",\"type\":\"custom\",\"position\":{\"x\":1780,\"y\":460},\"data\":{\"label\":\"End\",\"icon\":null,\"color\":\"bg-green-500\",\"nodeType\":\"end\"}}],\"edges\":[{\"id\":\"e-start-http\",\"source\":\"start-1\",\"target\":\"http-t212-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e-http-ai\",\"source\":\"http-t212-1\",\"target\":\"ai-format-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e-ai-wait\",\"source\":\"ai-format-1\",\"target\":\"wait-confirm-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e-wait-ifelse\",\"source\":\"wait-confirm-1\",\"target\":\"ifelse-save-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e-ifelse-store\",\"source\":\"ifelse-save-1\",\"sourceHandle\":\"if-save\",\"target\":\"store-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e-ifelse-end\",\"source\":\"ifelse-save-1\",\"sourceHandle\":\"else\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}},{\"id\":\"e-store-end\",\"source\":\"store-1\",\"target\":\"end-1\",\"type\":\"default\",\"style\":{\"stroke\":\"#666\",\"strokeWidth\":2},\"markerEnd\":{\"type\":\"arrowclosed\",\"color\":\"#666\"}}]}"
+}

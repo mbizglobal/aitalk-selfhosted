@@ -1,0 +1,127 @@
+{
+  "nodes": [
+    {
+      "id": "start-1",
+      "type": "custom",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "label": "Start / Chat Widget",
+        "icon": null,
+        "color": "bg-green-500",
+        "showLeftHandle": false,
+        "nodeType": "start",
+        "triggerType": "chatWidget",
+        "accessMode": "public"
+      }
+    },
+    {
+      "id": "ai-1",
+      "type": "custom",
+      "position": {
+        "x": 400,
+        "y": 300
+      },
+      "data": {
+        "label": "AI",
+        "icon": null,
+        "color": "bg-blue-500",
+        "nodeType": "ai",
+        "showTools": true,
+        "toolCount": 1,
+        "model": "gpt-6-luna",
+        "maxTokens": 4096,
+        "outputFormat": "text",
+        "includeChatHistory": true,
+        "systemMessage": "Role\nYou are an AI assistant that helps users with inquiries using the provided knowledge base. Provide friendly, accurate, and efficient responses. Ask clarifying questions when needed.\n\nInstructions\n1. Language: Always respond in the user's language while searching all files regardless of their language\n2. Sources: Use ONLY the provided training data. If information isn't available, state so clearly\n3. Links & Media: When relevant links or images exist in the knowledge base, include them naturally in your response\n4. Focus: Stay on topic. Redirect off-topic conversations politely back to available resources\n5. Source Handling: Never display or mention internal file names, IDs, or raw reference markers. Present only clean, user-friendly information.\n\nGuidelines\n• Never mention \"training data\" or \"knowledge base\" explicitly\n• End responses positively when appropriate\n• Maintain consistent language throughout the conversation\n\nFallback Response\nIf no relevant information is found, respond with: \"I don't have specific information about that in my current resources. Could you rephrase your question or ask about [suggest related topics]?\"",
+        "selectedTools": {
+          "source": true,
+          "mcp": false,
+          "webSearch": false,
+          "functionCalling": false,
+          "imageInput": false,
+          "pdfInput": false
+        },
+        "imageInput": false,
+        "pdfInput": false,
+        "hasToolsConnection": true,
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "tool-source-1",
+      "type": "tool",
+      "position": {
+        "x": 560,
+        "y": 480
+      },
+      "data": {
+        "label": "Source",
+        "icon": null,
+        "color": "bg-yellow-500",
+        "toolType": "source",
+        "ragProvider": "azure_ai_search"
+      }
+    },
+    {
+      "id": "end-1",
+      "type": "custom",
+      "position": {
+        "x": 700,
+        "y": 300
+      },
+      "data": {
+        "label": "End",
+        "icon": null,
+        "color": "bg-green-500",
+        "nodeType": "end"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-ai",
+      "source": "start-1",
+      "target": "ai-1",
+      "type": "default",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#666"
+      }
+    },
+    {
+      "id": "edge-ai-end",
+      "source": "ai-1",
+      "target": "end-1",
+      "type": "default",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#666"
+      }
+    },
+    {
+      "id": "edge-ai-source",
+      "source": "ai-1",
+      "sourceHandle": "tools",
+      "target": "tool-source-1",
+      "type": "default",
+      "animated": false,
+      "className": "tool-edge-no-arrow",
+      "style": {
+        "stroke": "#666",
+        "strokeWidth": 2,
+        "strokeDasharray": "5, 5"
+      }
+    }
+  ]
+}

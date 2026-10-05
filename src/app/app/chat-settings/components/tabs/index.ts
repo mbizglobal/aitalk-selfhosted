@@ -1,0 +1,5 @@
+export { GeneralTab } from './GeneralTab'
+export { IconsTab } from './IconsTab'
+export { ExperienceTab } from './ExperienceTab'
+export { PrivacyTab } from './PrivacyTab'
+export { ChatButtonTab } from './ChatButtonTab'
