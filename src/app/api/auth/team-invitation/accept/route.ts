@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { assertSeatForMembership, TeamSeatLimitError } from '@/lib/teamSeats'
+import { memberLandingPath } from '@/lib/work/member-landing'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -37,7 +38,8 @@ export async function POST(request: NextRequest) {
         agent: {
           select: {
             agentId: true,
-            title: true
+            title: true,
+            userId: true
           }
         }
       }
@@ -89,10 +91,17 @@ export async function POST(request: NextRequest) {
       return member
     })
 
+    const landingPath = await memberLandingPath(prisma, {
+      agentId: invitation.agent.agentId,
+      ownerUserId: invitation.agent.userId,
+      workflowId: invitation.workflowId,
+    })
+
     return NextResponse.json({
       success: true,
       agentId: invitation.agent.agentId,
       workflowId: invitation.workflowId,
+      landingPath,
       member: {
         id: result.id,
         email: result.email,

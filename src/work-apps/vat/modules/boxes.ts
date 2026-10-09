@@ -1,6 +1,5 @@
 
-import { WorkError } from '@/lib/work/errors'
-import { moduleStop, type CalcModuleCtx, type CalcWorkModule, type PreviewStop, type ReadRow } from '@/lib/work/modules'
+import { WorkError, moduleStop, type CalcModuleCtx, type V1CalcWorkModule as CalcWorkModule, type PreviewStop, type ReadRow } from '@/lib/work/package-api'
 import {
   VatCoreError,
   computeVatReturn,

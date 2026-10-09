@@ -42,6 +42,7 @@ export function FilesTab({
   const {
     selectedProvider,
     hasApiKey,
+    needsAiConnection,
     isLoading: isLoadingProvider,
   } = useRagProvider()
 
@@ -304,6 +305,17 @@ export function FilesTab({
         </CardContent>
       </Card>
 
+      {needsAiConnection && (
+        <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/20">
+          <CardContent className="pt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 flex-1">{t('storage_needs_ai_connection')}</p>
+            <Button size="sm" variant="outline" onClick={() => { window.location.href = '/app/settings?tab=ai-connections' }}>
+              {t('aic_dash_button')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {hasApiKey && selectedProvider !== 'none' && (
         <Card>
           <CardHeader>
@@ -380,6 +392,7 @@ export function FilesTab({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {selectedProvider !== 'pgvector' && selectedProvider !== 'http_search' && (
             <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
               <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
                 🔒 {selectedProvider === 'azure_ai_search'
@@ -391,6 +404,7 @@ export function FilesTab({
                       : t('privacy_notice_openai')}
               </p>
             </div>
+            )}
 
             {/* Drag and Drop Area */}
             <div

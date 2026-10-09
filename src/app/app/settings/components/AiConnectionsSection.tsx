@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Cpu, Loader2, Trash2, Star, Pencil, PlugZap, CheckCircle2, AlertTriangle, XCircle, Info } from 'lucide-react'
+import { AI_CONNECTION_PRESETS } from './ai-connection-presets'
 
 type Kind = 'azure' | 'openai_compatible' | 'anthropic'
 interface Check { ok: boolean; at: string; tools: boolean; json: boolean; context?: boolean; image: boolean | null; embedding: boolean | null; error?: string }
@@ -28,6 +29,7 @@ export function AiConnectionsSection({ t }: Props) {
   const [form, setForm] = useState<Form | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [pgvectorMissing, setPgvectorMissing] = useState(false)
+  const [presetId, setPresetId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +72,20 @@ export function AiConnectionsSection({ t }: Props) {
     const ok = await act('save', { action: id ? 'update' : 'create', ...(id ? { id } : {}), ...rest, maxOutputTokens: maxOutputTokens.trim() ? Number(maxOutputTokens) : null })
     if (ok) setForm(null)
   }
+
+  const choosePreset = (id: string) => {
+    if (!form) return
+    const p = AI_CONNECTION_PRESETS.find((x) => x.id === id)
+    setPresetId(id)
+    if (!p) return
+    const prevName = AI_CONNECTION_PRESETS.find((x) => x.id === presetId)?.name
+    setForm({
+      ...form, kind: p.kind, baseUrl: p.baseUrl, textModel: p.textModel, imageModel: p.imageModel, embeddingModel: p.embeddingModel,
+      name: !form.name.trim() || form.name === prevName ? p.name : form.name,
+      apiKey: p.baseUrl === form.baseUrl ? form.apiKey : '',
+    })
+  }
+  const preset = AI_CONNECTION_PRESETS.find((x) => x.id === presetId)
 
   const edit = (c: Connection) => setForm({
     id: c.id, name: c.name, kind: c.kind, baseUrl: c.baseUrl, apiKey: '', apiVersion: c.apiVersion ?? '',
@@ -148,11 +164,27 @@ export function AiConnectionsSection({ t }: Props) {
           </div>
         ))}
 
-        {canManage && !form && <Button onClick={() => setForm({ ...EMPTY })}>{t('aic_add')}</Button>}
+        {canManage && !form && <Button onClick={() => { setPresetId(null); setForm({ ...EMPTY }) }}>{t('aic_add')}</Button>}
 
         {canManage && form && (
           <div className="rounded-md border p-4 space-y-3">
             <p className="font-medium">{form.id ? t('aic_edit_title') : t('aic_add_title')}</p>
+            {!form.id && (
+              <div className="space-y-2">
+                <span className="block text-sm">{t('aic_preset_title')}</span>
+                <div className="flex flex-wrap gap-2">
+                  {AI_CONNECTION_PRESETS.map((p) => (
+                    <Button key={p.id} type="button" size="sm" variant={presetId === p.id ? 'default' : 'outline'} onClick={() => choosePreset(p.id)}>
+                      {p.id === 'own_server' ? t('aic_preset_own_server') : p.label}
+                    </Button>
+                  ))}
+                  <Button type="button" size="sm" variant={presetId === 'custom' ? 'default' : 'outline'} onClick={() => choosePreset('custom')}>
+                    {t('aic_preset_custom')}
+                  </Button>
+                </div>
+                {preset && <span className="block text-xs text-muted-foreground">{t('aic_preset_note')}</span>}
+              </div>
+            )}
             <label className="block text-sm space-y-1">
               <span>{t('aic_name')}</span>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={100} autoComplete="off" />
@@ -173,6 +205,12 @@ export function AiConnectionsSection({ t }: Props) {
             <label className="block text-sm space-y-1">
               <span>{t('aic_api_key')}</span>
               <Input type="password" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder={form.id ? t('aic_api_key_keep') : ''} autoComplete="new-password" spellCheck={false} className="font-mono text-sm" />
+              {!form.id && preset?.keyUrl && (
+                <span className="block text-xs text-muted-foreground">
+                  {t('aic_key_where')}{' '}
+                  <a href={preset.keyUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{preset.keyUrl.replace(/^https:\/\//, '')}</a>
+                </span>
+              )}
               {form.id && <span className="block text-xs text-muted-foreground">{t('aic_api_key_move_note')}</span>}
             </label>
             {form.kind === 'azure' && (
@@ -185,14 +223,17 @@ export function AiConnectionsSection({ t }: Props) {
               <label className="block text-sm space-y-1">
                 <span>{t('aic_text_model')}</span>
                 <Input value={form.textModel} onChange={(e) => setForm({ ...form, textModel: e.target.value })} autoComplete="off" spellCheck={false} />
+                <span className="block text-xs text-muted-foreground">{t('aic_text_hint')}</span>
               </label>
               <label className="block text-sm space-y-1">
                 <span>{t('aic_image_model')}</span>
                 <Input value={form.imageModel} onChange={(e) => setForm({ ...form, imageModel: e.target.value })} placeholder={t('aic_optional')} autoComplete="off" spellCheck={false} />
+                <span className="block text-xs text-muted-foreground">{t('aic_image_hint')}</span>
               </label>
               <label className="block text-sm space-y-1">
                 <span>{t('aic_embedding_model')}</span>
                 <Input value={form.embeddingModel} onChange={(e) => setForm({ ...form, embeddingModel: e.target.value })} placeholder={form.kind === 'anthropic' ? t('aic_no_embeddings') : t('aic_optional')} disabled={form.kind === 'anthropic'} autoComplete="off" spellCheck={false} />
+                <span className="block text-xs text-muted-foreground">{t('aic_embedding_hint')}</span>
               </label>
             </div>
             <label className="block text-sm space-y-1">

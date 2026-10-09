@@ -20,6 +20,7 @@ import {
   Shield,
   RefreshCw,
   Pencil,
+  Lock,
 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useSession } from 'next-auth/react'
@@ -28,7 +29,6 @@ import { ConversationUsageChart } from '@/components/dashboard/conversation-usag
 import { BookingStatsCard } from '@/components/dashboard/booking-stats-card'
 import { VoiceQuizStatsCard } from '@/components/dashboard/voice-quiz-stats-card'
 import { McpServerCard } from '@/components/dashboard/mcp-server-card'
-import { BoosterPurchaseModal } from '@/components/subscription/BoosterPurchaseModal'
 import { formatDateOnlyWithUserSettings } from '@/lib/format-date-with-user-settings'
 function formatLocation(country?: string | null, region?: string | null, city?: string | null): string {
   const parts = [country, region, city].filter(Boolean)
@@ -100,6 +100,7 @@ interface Agent {
   accessMode?: 'public' | 'team'
   createdAt: string
   workflowCount?: number
+  locked?: boolean
 }
 
 const QUICK_SETUP_STRINGS = {
@@ -125,6 +126,7 @@ export default function DashboardPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean>(true)
+  const [aiReady, setAiReady] = useState<boolean | null>(null)
   const [plan, setPlan] = useState<string>('free')
   const [planReady, setPlanReady] = useState(false)
   const [maxAgents, setMaxAgents] = useState<number>(1)
@@ -201,7 +203,6 @@ export default function DashboardPage() {
     } | null
   } | null>(null)
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false)
-  const [boosterModalOpen, setBoosterModalOpen] = useState(false)
   const [feedbackContent, setFeedbackContent] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState('')
   const [feedbackSending, setFeedbackSending] = useState(false)
@@ -333,6 +334,18 @@ export default function DashboardPage() {
     window.addEventListener('agentTitleChanged', handleTitleChanged)
     return () => window.removeEventListener('agentTitleChanged', handleTitleChanged)
   }, [])
+
+  useEffect(() => {
+    if (!selfHosted || !userId) return
+    fetch('/api/settings/ai-connections', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.canManage) return setAiReady(null)
+        const list: { isDefault?: boolean; checkValid?: boolean }[] = Array.isArray(d.connections) ? d.connections : []
+        setAiReady(list.some((c) => c.isDefault && c.checkValid))
+      })
+      .catch(() => {})
+  }, [selfHosted, userId])
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -529,7 +542,7 @@ export default function DashboardPage() {
   }
 
   const canCreateMore = agents.length < maxAgents
-  const agentCountLabel = selfHosted ? String(agents.length) : `${agents.length}/${maxAgents}`
+  const agentCountLabel = Number.isFinite(maxAgents) ? `${agents.length}/${maxAgents}` : String(agents.length)
   const [isCreatingAgent, setIsCreatingAgent] = useState(false)
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
@@ -644,6 +657,27 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{t('dashboard_title')}</h1>
       </div>
+
+      {selfHosted && aiReady === false && (
+        <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/20">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <div className="space-y-2">
+                <h3 className="font-medium text-yellow-800 dark:text-yellow-200">{t('aic_dash_title')}</h3>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">{t('aic_dash_desc')}</p>
+                <Button
+                  size="sm"
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                  onClick={() => { window.location.href = '/app/settings?tab=ai-connections' }}
+                >
+                  {t('aic_dash_button')}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Security Migration Alert Banner */}
       {migrationRequired && (
@@ -864,6 +898,15 @@ export default function DashboardPage() {
                     <p className="text-xs text-muted-foreground">
                       {agent.workflowCount ?? 0} Workflow{(agent.workflowCount ?? 0) !== 1 ? 's' : ''}
                     </p>
+                    {agent.locked && (
+                      <div className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                        <Lock className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                        <span>
+                          {t('agent_locked_plan_limit')}{' '}
+                          <a href="/app/subscription" className="underline font-medium">{t('agent_locked_upgrade')}</a>
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -925,9 +968,11 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div className="text-sm text-muted-foreground">
                     <span className="font-medium">{agentCountLabel}</span> {t('agents_used')}
-                    {!selfHosted && <span className="ml-2 capitalize">({plan.charAt(0).toUpperCase() + plan.slice(1)} plan)</span>}
+                    {!selfHosted && (plan === 'free'
+                      ? <span className="ml-2">{t('agents_used_suspended')}</span>
+                      : <span className="ml-2 capitalize">({plan.charAt(0).toUpperCase() + plan.slice(1)} plan)</span>)}
                   </div>
-                  {!canCreateMore && (
+                  {!canCreateMore && !selfHosted && (
                     <Button
                       variant="link"
                       size="sm"
@@ -1143,21 +1188,6 @@ export default function DashboardPage() {
                   )}
 
 
-                  {userInfo.booster_data?.eligible && !userInfo.isTrial && (
-                    <div className="text-center mt-3">
-                      <Button
-                        size="sm"
-                        variant={userInfo.cpa_data.available === 0 ? 'default' : 'outline'}
-                        onClick={() => setBoosterModalOpen(true)}
-                        className="text-xs"
-                      >
-                        {userInfo.cpa_data.available === 0
-                          ? t('booster_cta_insufficient')
-                          : t('booster_cta_topup')}
-                      </Button>
-                    </div>
-                  )}
-
                 </>
                 )
               })()}
@@ -1166,8 +1196,6 @@ export default function DashboardPage() {
         </Card>
         )}
       </div>
-
-      <BoosterPurchaseModal open={boosterModalOpen} onOpenChange={setBoosterModalOpen} />
 
 
       {/* Feedback Modal */}

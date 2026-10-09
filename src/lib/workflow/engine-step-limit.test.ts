@@ -2,6 +2,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
+import '@/lib/agent-lock-test-no-db'
 import { WorkflowEngine } from './engine'
 import { findReachableCycle } from './validation'
 import { createStepBudget, defaultStepLimit, rewindLimit, clampMaxIterations, clampRestoredIteration } from './engine/step-budget'

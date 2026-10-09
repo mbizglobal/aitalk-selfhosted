@@ -441,7 +441,7 @@ export const SourcePanel: React.FC<Props> = ({ node }) => {
 
         {isManaged && managedSearchReady && (
           <p className="text-xs text-gray-400 leading-relaxed">
-            Azure AI Search is included with your Managed plan. Your vector data is stored in your selected region.
+            Azure AI Search is included with your Managed plan. Your vector data is stored in Switzerland (Azure Zurich).
           </p>
         )}
 

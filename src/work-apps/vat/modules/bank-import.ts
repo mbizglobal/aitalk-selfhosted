@@ -1,13 +1,19 @@
 
 import crypto from 'crypto'
-import { WorkError } from '@/lib/work/errors'
-import type { ImportPlan, ImportReader } from '@/lib/work/bank-import-contract'
-import { moduleStop, type ActionWorkModule, type ModuleRunCtx } from '@/lib/work/modules'
-import { readProjectFile } from '@/lib/work/files'
-import { createProjectSheet, readProjectSheet, submittedPeriods, withProjectSheetWrite, type SheetRowView } from '@/lib/work/sheet-gate'
-import { normalizeRow, uniqueKeyHash, type SheetSchema } from '@/lib/work/sheet-columns'
-import { dateInAny, type DateRange } from '@/lib/work/sheet-periods'
-import { findTemplate, templateSchema, type SheetTemplate } from '@/lib/work/sheet-templates'
+import {
+  WorkError,
+  dateInAny,
+  moduleStop,
+  normalizeRow,
+  uniqueKeyHash,
+  type ActionWorkModule,
+  type DateRange,
+  type ImportPlan,
+  type ImportReader,
+  type ModuleRunCtx,
+  type SheetRowView,
+  type SheetSchema,
+} from '@/lib/work/package-api'
 import { parseUbsCsv } from '../bank/ubs'
 import { BankFormatError, normalizeAmount } from '../bank/parse-csv'
 import { fingerprintWith, groupId, parseRecipe, readWithRecipe, recipeHash, type BankRecipe } from '../bank/recipe'
@@ -478,31 +484,24 @@ export function fileBalanceRequired(reader: ReaderView, g: Pick<BankImportGroup,
 }
 
 async function familySheets(ctx: ModuleRunCtx, family: string): Promise<Array<{ id: string; template: string }>> {
-  const list = await ctx.deps.db.dataSheet.findMany({
-    where: { kind: 'project', projectId: ctx.projectId, userId: ctx.userId, templateFamily: family },
-    select: { id: true, template: true },
-    orderBy: { id: 'asc' },
-  })
-  return list.map((s) => ({ id: s.id, template: s.template! }))
+  return (await ctx.sheets.list(family)).map((s) => ({ id: s.id, template: s.template }))
 }
 
 async function loadFile(ctx: ModuleRunCtx, fileId: string): Promise<{ buffer: Buffer; file: { id: string; sha256: string } }> {
-  const f = await ctx.deps.db.workFile.findFirst({ where: { id: fileId, userId: ctx.userId, projectId: ctx.projectId }, select: { id: true } })
-  if (!f) throw new WorkError('NOT_FOUND')
-  const { file, buffer } = await readProjectFile(ctx.deps, { userId: ctx.userId, fileId, actor: ctx.by })
-  return { buffer, file: { id: file.id, sha256: file.sha256 } }
+  const { id, sha256, buffer } = await ctx.files.read(fileId)
+  return { buffer, file: { id, sha256 } }
 }
 
-function txSchema(templates: readonly SheetTemplate[], sheets: Array<{ template: string }>): SheetSchema {
+function txSchema(ctx: ModuleRunCtx, sheets: Array<{ template: string }>): SheetSchema {
   if (sheets.length !== 1) throw moduleStop('sheet_count', `the project needs exactly one ${VAT_FAMILY.transactions} sheet (found ${sheets.length})`, { sheet: VAT_FAMILY.transactions, n: sheets.length })
-  return templateSchema(findTemplate(templates, sheets[0].template))
+  return ctx.sheets.schema(sheets[0].template)
 }
 
 async function ensureRecipeSheet(ctx: ModuleRunCtx): Promise<string> {
   const have = await familySheets(ctx, VAT_FAMILY.recipes)
   if (have.length > 0) return have[0].id
   try {
-    await createProjectSheet(ctx.deps, { userId: ctx.userId, projectId: ctx.projectId, name: 'Bank file readers', template: `${VAT_FAMILY.recipes}@1` })
+    await ctx.sheets.create({ name: 'Bank file readers', template: `${VAT_FAMILY.recipes}@1` })
   } catch (e) {
     if (!(e instanceof WorkError && e.code === 'DUPLICATE')) throw e
   }
@@ -547,16 +546,16 @@ export const bankImportModule: ActionWorkModule<ModuleRunCtx> = {
     if (ctx.by.type === 'ai' && input.step === 'apply') throw new WorkError('FORBIDDEN', 'a person applies an import plan')
     const { buffer, file } = await loadFile(ctx, input.fileId)
     const txSheets = await familySheets(ctx, VAT_FAMILY.transactions)
-    txSchema(ctx.deps.templates, txSheets)
+    txSchema(ctx, txSheets)
 
     if (input.step === 'plan') {
       const accountSheets = await familySheets(ctx, VAT_FAMILY.accounts)
       const ruleSheets = await familySheets(ctx, VAT_FAMILY.rules)
       const recipeSheets = await familySheets(ctx, VAT_FAMILY.recipes)
       const read = async (sheets: Array<{ id: string }>) =>
-        (await Promise.all(sheets.map((s) => readProjectSheet(ctx.deps, { userId: ctx.userId, projectId: ctx.projectId, sheetId: s.id })))).flatMap((x) => x.rows)
+        (await Promise.all(sheets.map((s) => ctx.sheets.read(s.id)))).flatMap((x) => x.rows)
       const src: PlanSources = {
-        periods: await submittedPeriods(ctx.deps.db, ctx.userId, ctx.projectId),
+        periods: await ctx.sheets.submittedPeriods(),
         transactions: await read(txSheets),
         accounts: await read(accountSheets),
         rules: await read(ruleSheets),
@@ -564,21 +563,20 @@ export const bankImportModule: ActionWorkModule<ModuleRunCtx> = {
       }
       const rf = readFile(buffer, input.reader, savedRecipes(src.recipes))
       const sheetIds = [...txSheets, ...accountSheets, ...ruleSheets].map((x) => x.id)
-      return computeImportPlan(src, rf, input, { file, sheetIds }, txSchema(ctx.deps.templates, txSheets)).plan
+      return computeImportPlan(src, rf, input, { file, sheetIds }, txSchema(ctx, txSheets)).plan
     }
 
     const saving = !!input.reader && typeof input.reader === 'object' && 'recipe' in input.reader
     const recipeSheetId = saving ? await ensureRecipeSheet(ctx) : null
-    return withProjectSheetWrite(
-      ctx.deps,
-      { userId: ctx.userId, projectId: ctx.projectId, sheetIds: [txSheets[0].id, ...(recipeSheetId ? [recipeSheetId] : [])], actor: { type: 'module', id: MODULE_ID, version: MODULE_VERSION } },
+    return ctx.sheets.write(
+      { sheetIds: [txSheets[0].id, ...(recipeSheetId ? [recipeSheetId] : [])] },
       async (w) => {
         const txNow = await w.sheetsOfFamily(VAT_FAMILY.transactions)
         const accountsNow = await w.sheetsOfFamily(VAT_FAMILY.accounts)
         const rulesNow = await w.sheetsOfFamily(VAT_FAMILY.rules)
         const recipesNow = await w.sheetsOfFamily(VAT_FAMILY.recipes)
         if (txNow.map((x) => x.id).join() !== txSheets.map((x) => x.id).join()) throw new WorkError('STALE', 'the sheets changed since the plan — plan again')
-        const lockedSchema = txSchema(ctx.deps.templates, txNow)
+        const lockedSchema = txSchema(ctx, txNow)
         const rowsOf = async (sheets: Array<{ id: string }>) => (await Promise.all(sheets.map((s) => w.rows(s.id)))).flat()
         const src: PlanSources = { periods: w.lockedPeriods(), transactions: await rowsOf(txNow), accounts: await rowsOf(accountsNow), rules: await rowsOf(rulesNow), recipes: await rowsOf(recipesNow) }
         const rf = readFile(buffer, input.reader, savedRecipes(src.recipes))

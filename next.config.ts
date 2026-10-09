@@ -29,14 +29,12 @@ const nextConfig: NextConfig = {
     ],
     unoptimized: true
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
   allowedDevOrigins: getDevOrigins(),
   serverExternalPackages: ['pdfjs-dist'],
+  agentRules: false,
   experimental: {
     serverActions: {
       bodySizeLimit: '50mb',
@@ -61,11 +59,11 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/chat/:agentId/app',
-        headers: [{ key: 'Content-Security-Policy', value: "frame-ancestors 'self'" }],
+        headers: [{ key: 'Content-Security-Policy', value: "frame-ancestors 'self'; img-src 'self' data: blob:" }],
       },
       {
         source: '/chat/:agentId/app/:path*',
-        headers: [{ key: 'Content-Security-Policy', value: "frame-ancestors 'self'" }],
+        headers: [{ key: 'Content-Security-Policy', value: "frame-ancestors 'self'; img-src 'self' data: blob:" }],
       },
       {
         source: '/book/:path*',

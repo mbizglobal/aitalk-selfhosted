@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, Loader2, LogOut, Menu, MessageSquare, Plus, Trash2 } from 'lucide-react'
-import { workT, type WorkLang } from '@/lib/translations/work'
+import { packageOfKind, workKindLabel, workT, type WorkLang } from '@/lib/translations/work'
 import { makeAppApi, makeWorkApi, makeWorkFiles, type ProjectOverview, type TaskSummary, type WorkAppOpen, type WorkAppProposal } from '../lib/api'
 import { SheetTable, errorText } from './SheetTable'
 import { TaskPanel } from './TaskPanel'
@@ -16,6 +16,7 @@ import { ChatPane } from './ChatPane'
 import { ApplyTemplateDialog, NewTaskDialog, type NewTaskInput } from './CreateDialogs'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ImportDialog, type ImportStart } from './ImportDialog'
+import { WorkPkg } from './work-pkg'
 
 interface Props {
   agentId: string
@@ -37,13 +38,14 @@ const DATA_WIDTH_MAX = 70
 const clampWidth = (n: number) => Math.min(DATA_WIDTH_MAX, Math.max(DATA_WIDTH_MIN, n))
 
 export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner, onLogout, onAuthError }: Props) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
   const api = useMemo(() => makeWorkApi(agentId, token, onAuthError), [agentId, token, onAuthError])
   const appApi = useMemo(() => makeAppApi(agentId, token, onAuthError), [agentId, token, onAuthError])
   const files = useMemo(() => makeWorkFiles(agentId, token, onAuthError), [agentId, token, onAuthError])
 
   const [app, setApp] = useState<WorkAppOpen | null>(null)
   const [overview, setOverview] = useState<ProjectOverview | null>(null)
+  const pkg = packageOfKind(overview?.kind)
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [taskId, setTaskId] = useState<string | null>(null)
   const [sheetId, setSheetId] = useState<string | null>(null)
   const [view, setView] = useState<DataView>('task')
@@ -101,6 +103,8 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
     window.addEventListener('blur', end)
   }
   const overviewSeq = useRef(0)
+  const pkgRef = useRef(pkg)
+  pkgRef.current = pkg
 
   const loadOverview = useCallback(async (projectId: string) => {
     const seq = ++overviewSeq.current
@@ -111,7 +115,7 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
       setSheetId((cur) => (cur && o.sheets.some((s) => s.id === cur) ? cur : o.sheets[0]?.id ?? null))
       setTaskId((cur) => (cur && o.tasks.some((x) => x.id === cur) ? cur : null))
     } catch (e) {
-      if (seq === overviewSeq.current) setPageError(errorText(lang, e))
+      if (seq === overviewSeq.current) setPageError(errorText(lang, e, pkgRef.current))
     }
   }, [api, lang])
 
@@ -137,7 +141,7 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
       setDialog(null)
       await loadOverview(app.projectId)
       setTaskId(r.id); setView('task')
-    } catch (e) { setError(errorText(lang, e)) } finally { setBusy(false) }
+    } catch (e) { setError(errorText(lang, e, pkg)) } finally { setBusy(false) }
   }
 
   const deleteTask = async (task: TaskSummary) => {
@@ -148,7 +152,7 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
       setDeletingTask(null)
       if (taskId === task.id) setTaskId(null)
       await loadOverview(app.projectId)
-    } catch (e) { setDeletingTask(null); setPageError(errorText(lang, e)) } finally { setBusy(false) }
+    } catch (e) { setDeletingTask(null); setPageError(errorText(lang, e, pkg)) } finally { setBusy(false) }
   }
 
   const applyTemplate = async (settings: Record<string, unknown>, modules: string[] | undefined) => {
@@ -158,7 +162,7 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
       await api('POST', `/projects/${app.projectId}/app-template`, { kind: proposal.kind, settings, ...(modules ? { modules } : {}) })
       setProposal(null)
       afterChange()
-    } catch (e) { setError(errorText(lang, e)) } finally { setBusy(false) }
+    } catch (e) { setError(errorText(lang, e, packageOfKind(proposal.kind))) } finally { setBusy(false) }
   }
 
   const task = overview?.tasks.find((x) => x.id === taskId) ?? null
@@ -304,6 +308,7 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
   )
 
   return (
+    <WorkPkg.Provider key={pkg ?? ''} value={pkg}>
     <div className="flex h-[100dvh] bg-[#1E1E1E] text-white overflow-hidden">
       <aside className="hidden md:block w-[260px] shrink-0 bg-[#171717] border-r border-[#2A2A2A]">{sidebar}</aside>
       {drawer && (
@@ -334,7 +339,7 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
         {pageNotice && <p className="px-4 py-2 text-sm text-emerald-300 border-b border-[#2A2A2A]">{pageNotice}</p>}
         {app?.fixedAppTemplate && projectIsEmpty && !overview?.readOnly && (
           <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-[#2A2A2A] bg-[#232323] text-sm">
-            <span className="text-gray-300">{t('fixed_template_note').replace('{template}', t(`kind_${app.fixedAppTemplate}`, app.fixedAppTemplate))}</span>
+            <span className="text-gray-300">{t('fixed_template_note').replace('{template}', workKindLabel(lang, app.fixedAppTemplate))}</span>
             <button onClick={() => { setError(null); setProposal({ type: 'apply_app_template', kind: app.fixedAppTemplate!, settings: {} }) }} className="px-3 py-1 rounded-md bg-[#E07B53] text-white hover:opacity-90">{t('fixed_template_apply')}</button>
           </div>
         )}
@@ -387,5 +392,6 @@ export function WorkApp({ agentId, workflowId, token, lang, memberName, isOwner,
         <ConfirmDialog message={t('delete_task_confirm')} okLabel={t('delete')} cancelLabel={t('cancel')} busy={busy} onOk={() => void deleteTask(deletingTask)} onCancel={() => setDeletingTask(null)} />
       )}
     </div>
+    </WorkPkg.Provider>
   )
 }

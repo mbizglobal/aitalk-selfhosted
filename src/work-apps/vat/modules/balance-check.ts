@@ -1,7 +1,5 @@
 
-import { WorkError } from '@/lib/work/errors'
-import type { ActionWorkModule, ModuleRunCtx, ScreenRows, ScreenRowsCtx } from '@/lib/work/modules'
-import { readProjectSheet, type SheetRowView } from '@/lib/work/sheet-gate'
+import { WorkError, type ActionWorkModule, type ModuleRunCtx, type ScreenRows, type ScreenRowsCtx, type SheetRowView } from '@/lib/work/package-api'
 import { reconcileBalance, type BalanceCheck } from '../bank/balance'
 import { normalizeAmount } from '../bank/parse-csv'
 import { formatCents, parseCents } from '../estv'
@@ -85,13 +83,8 @@ export function checkPeriod(period: { start: string; end: string }, accounts: re
 }
 
 export async function familyRows(ctx: ScreenRowsCtx, family: string): Promise<SheetRowView[]> {
-  const sheets = await ctx.deps.db.dataSheet.findMany({
-    where: { kind: 'project', projectId: ctx.projectId, userId: ctx.userId, templateFamily: family },
-    select: { id: true },
-    orderBy: { id: 'asc' },
-  })
   const out: SheetRowView[] = []
-  for (const s of sheets) out.push(...(await readProjectSheet(ctx.deps, { userId: ctx.userId, projectId: ctx.projectId, sheetId: s.id })).rows)
+  for (const s of await ctx.sheets.list(family)) out.push(...(await ctx.sheets.read(s.id)).rows)
   return out
 }
 
@@ -111,14 +104,13 @@ export const balanceCheckModule: ActionWorkModule<ModuleRunCtx> = {
   needs: ['bank.accounts>=1', 'bank.balances>=1', 'vat.transactions>=1'],
 
   async screenRows(ctx: ScreenRowsCtx): Promise<ScreenRows> {
-    const tasks = await ctx.deps.db.workTask.findMany({ where: { projectId: ctx.projectId, userId: ctx.userId, periodStart: { not: null }, periodEnd: { not: null } }, select: { periodStart: true, periodEnd: true }, orderBy: [{ periodStart: 'asc' }, { id: 'asc' }] })
-    if (tasks.length === 0) return { virtual: [], notes: {} }
+    const periods = (await ctx.tasks.list()).flatMap((t) => (t.period ? [t.period] : []))
+    if (periods.length === 0) return { virtual: [], notes: {} }
     const accounts = (await familyRows(ctx, VAT_FAMILY.accounts)).map((r) => String(r.data.accountKey))
     const balances = await familyRows(ctx, VAT_FAMILY.balances)
     const txs = await familyRows(ctx, VAT_FAMILY.transactions)
     const out: ScreenRows = { virtual: [], notes: {} }
-    for (const t of tasks) {
-      const period = { start: t.periodStart!.toISOString().slice(0, 10), end: t.periodEnd!.toISOString().slice(0, 10) }
+    for (const period of periods) {
       for (const a of checkPeriod(period, accounts, balances, txs)) {
         if (!a.ends) continue
         const result = { status: a.status, ...(a.status === 'mismatch' ? { diff: a.diff } : {}), source: a.source }
@@ -142,10 +134,10 @@ export const balanceCheckModule: ActionWorkModule<ModuleRunCtx> = {
     for (const k of Object.keys(o)) if (k !== 'taskId' && k !== 'accountKey') throw new WorkError('INVALID', `unknown input ${k}`)
     if (typeof o.taskId !== 'string') throw new WorkError('INVALID', 'taskId is required')
     if (o.accountKey !== undefined && typeof o.accountKey !== 'string') throw new WorkError('INVALID', 'accountKey must be text')
-    const task = await ctx.deps.db.workTask.findFirst({ where: { id: o.taskId, projectId: ctx.projectId, userId: ctx.userId }, select: { periodStart: true, periodEnd: true } })
+    const task = await ctx.tasks.get(o.taskId)
     if (!task) throw new WorkError('NOT_FOUND')
-    if (!task.periodStart || !task.periodEnd) throw new WorkError('INVALID', 'the task has no period')
-    const period = { start: task.periodStart.toISOString().slice(0, 10), end: task.periodEnd.toISOString().slice(0, 10) }
+    if (!task.period) throw new WorkError('INVALID', 'the task has no period')
+    const period = task.period
 
     const accounts = (await familyRows(ctx, VAT_FAMILY.accounts)).map((r) => String(r.data.accountKey))
     const wanted = o.accountKey === undefined ? accounts : accounts.filter((a) => a === o.accountKey)

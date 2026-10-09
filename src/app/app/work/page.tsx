@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Briefcase, ChevronDown, ChevronRight, ExternalLink, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
-import { workT, type WorkLang } from '@/lib/translations/work'
+import { workKindLabel, type WorkLang } from '@/lib/translations/work'
 import { ReferenceEditor } from './ReferenceEditor'
 import { ApprovalEditor } from './ApprovalEditor'
 import { useEdition } from '@/components/EditionProvider'
@@ -48,7 +48,7 @@ export default function WorkAppsPage() {
   }
   const templateLabel = (a: WorkAppItem) => {
     const kind = a.projectKind && a.projectKind !== 'free' ? a.projectKind : a.appTemplate
-    return kind ? workT(lang, `kind_${kind}`, kind) : t('work_no_template')
+    return kind ? workKindLabel(lang, kind) : t('work_no_template')
   }
 
   return (

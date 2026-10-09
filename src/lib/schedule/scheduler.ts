@@ -5,6 +5,8 @@ import { WorkflowEngine } from '../workflow/engine'
 import { WorkflowJson, WorkflowContext } from '../workflow/types'
 import { safeLogToken, describeCaughtError } from '../log-mask'
 import { isSelfHosted } from '@/lib/edition'
+import { assertServiceEntitlement } from '@/lib/entitlement'
+import { isAgentLocked } from '@/lib/agent-lock'
 
 //
 
@@ -139,6 +141,16 @@ async function executeScheduledWorkflow(
 
     if (workflow.status !== 'production') {
       console.log(`[SCHEDULER] Workflow ${safeLogToken(workflowId)} is not in production status, skipping`)
+      return
+    }
+
+    const entitlement = await assertServiceEntitlement(workflow.agent.userId)
+    if (!entitlement.allowed) {
+      console.log(`[SCHEDULER] Workflow ${safeLogToken(workflowId)} skipped — service blocked (${entitlement.reason})`)
+      return
+    }
+    if (await isAgentLocked(agentId)) {
+      console.log(`[SCHEDULER] Workflow ${safeLogToken(workflowId)} skipped — agent locked (plan limit)`)
       return
     }
 

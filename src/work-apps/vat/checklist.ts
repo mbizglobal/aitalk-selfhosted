@@ -1,6 +1,5 @@
 
-import type { ChecklistItem } from '@/lib/work/app-templates'
-import type { ScreenRowsCtx } from '@/lib/work/modules'
+import type { ChecklistItem, ScreenRowsCtx } from '@/lib/work/package-api'
 import { checkPeriod, familyRows } from './modules/balance-check'
 import { VAT_FAMILY, VAT_SHEET_TEMPLATES } from './templates'
 

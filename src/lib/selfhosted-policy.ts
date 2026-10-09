@@ -1,5 +1,5 @@
 export const SELF_HOSTED_POLICY = {
-  agentLimit: Number.POSITIVE_INFINITY,
+  agentLimit: 10,
   maxProduction: Number.POSITIVE_INFINITY,
   teamMemberLimit: Number.POSITIVE_INFINITY,
   maxWorkflows: null,

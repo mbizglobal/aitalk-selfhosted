@@ -4,6 +4,7 @@ import React from 'react'
 import { Paperclip, Pencil, X } from 'lucide-react'
 import { workT, type WorkLang } from '@/lib/translations/work'
 import type { ColumnDef, SheetRow } from '../lib/api'
+import { useWorkPkg } from './work-pkg'
 
 interface Props {
   lang: WorkLang
@@ -18,7 +19,8 @@ interface Props {
 }
 
 export function RowViewer({ lang, columns, row, format, hint, fileColumn, onOpenFile, onEdit, onClose }: Props) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const fileId = fileColumn && typeof row.data[fileColumn] === 'string' ? (row.data[fileColumn] as string) : null
   const closeRef = React.useRef<HTMLButtonElement>(null)
   const onCloseRef = React.useRef(onClose)

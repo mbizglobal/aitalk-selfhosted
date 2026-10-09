@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Briefcase, Loader2, LogOut } from 'lucide-react'
-import { workT, type WorkLang } from '@/lib/translations/work'
+import { workKindLabel, workT, type WorkLang } from '@/lib/translations/work'
 import { makeAppApi, type WorkAppListItem } from '../lib/api'
 import { errorText } from './SheetTable'
 
@@ -57,7 +57,7 @@ export function AppList({ agentId, token, lang, memberName, isOwner, onLogout, o
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium truncate">{a.name}</span>
                     <span className="block text-xs text-gray-500">
-                      {a.projectKind && a.projectKind !== 'free' ? t(`kind_${a.projectKind}`, a.projectKind) : a.appTemplate ? t(`kind_${a.appTemplate}`, a.appTemplate) : t('app_no_template')}
+                      {a.projectKind && a.projectKind !== 'free' ? workKindLabel(lang, a.projectKind) : a.appTemplate ? workKindLabel(lang, a.appTemplate) : t('app_no_template')}
                       {' · '}{t('app_tasks_count').replace('{n}', String(a.tasks))}
                     </span>
                   </span>

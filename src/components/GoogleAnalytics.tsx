@@ -1,10 +1,14 @@
 'use client'
 
 import Script from 'next/script'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+export const isWorkAppPath = (path: string | null): boolean => !!path && /^\/chat\/[^/]+\/app(\/|$)/.test(path)
+
 export function GoogleAnalytics() {
-  const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+  const pathname = usePathname()
+  const measurementId = isWorkAppPath(pathname) ? undefined : process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
   const [shouldLoad, setShouldLoad] = useState(false)
 
   useEffect(() => {

@@ -2,7 +2,8 @@
 import { WorkError } from './errors'
 import { assertProjectWritable, lockProjectForWrite, type SheetActor, type WorkSheetDeps } from './sheet-gate'
 import { workModules } from './registry'
-import { parseNeed, type ModuleLocale, type WorkModule } from './modules'
+import { parseNeed, type WorkModule } from './modules'
+import type { LocaleText } from './app-template-features'
 import { appTemplateOf } from './app-templates'
 import { writeWorkEvent } from './projects'
 
@@ -10,8 +11,8 @@ const TX_TIMEOUT_MS = 30_000
 
 export interface ModuleChoice {
   id: string
-  title: Record<ModuleLocale, string>
-  description: Record<ModuleLocale, string>
+  title: LocaleText
+  description: LocaleText
   enabled: boolean
   required: boolean
   usable: boolean

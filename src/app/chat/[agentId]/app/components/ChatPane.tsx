@@ -9,6 +9,7 @@ import { WorkApiError, type ShownAttachment, type WorkApi, type WorkFiles, type 
 import { errorText } from './SheetTable'
 import { asCsv } from './ImportDialog'
 import { DropOverlay, FILE_MAX_BYTES, PDF_MAX_PAGES, pdfPageBlobs, useFileDrop } from './FilesPanel'
+import { useWorkPkg } from './work-pkg'
 
 const MAX_FILES = 8
 const TEXT_MAX_LINES = 7
@@ -32,7 +33,8 @@ export function ChatPane({ agentId, workflowId, token, api, files, lang, project
   onTurnDone: () => void
   onAuthError: () => void
 }) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [messages, setMessages] = useState<WorkMessageView[] | null>(null)
   const [text, setText] = useState('')
   const [picked, setPicked] = useState<File[]>([])
@@ -55,8 +57,8 @@ export function ChatPane({ agentId, workflowId, token, api, files, lang, project
 
   useEffect(() => {
     setMessages(null); setError(null); setStreaming('')
-    load().catch((e) => setError(errorText(lang, e)))
-  }, [load, lang])
+    load().catch((e) => setError(errorText(lang, e, pkg)))
+  }, [load, lang, pkg])
 
   useEffect(() => {
     setPicked([])
@@ -139,7 +141,7 @@ export function ChatPane({ agentId, workflowId, token, api, files, lang, project
       }
       if (failed && liveKey.current === key) setError(t('chat_error'))
     } catch (e) {
-      setError(errorText(lang, e))
+      setError(errorText(lang, e, pkg))
     } finally {
       setSending(false); setStage(null)
       if (liveKey.current === key) {
@@ -206,13 +208,13 @@ export function ChatPane({ agentId, workflowId, token, api, files, lang, project
               <div className={`max-w-[92%] rounded-lg px-3 py-2 ${m.role === 'user' ? 'bg-[#2A2A2A] text-white' : 'text-gray-200'}`}>
                 {m.text && (
                   <div className="prose prose-invert prose-sm max-w-none">
-                    <MessageContent content={m.text} role={m.role} theme="dark" size="sm" />
+                    <MessageContent content={m.text} role={m.role} theme="dark" size="sm" remoteImages={false} />
                   </div>
                 )}
                 {m.files.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {m.files.map((f) => (
-                      <button key={f.id} onClick={() => { if (!f.id.startsWith('local-')) void files.open(projectId, f.id).catch((e) => setError(errorText(lang, e))) }}
+                      <button key={f.id} onClick={() => { if (!f.id.startsWith('local-')) void files.open(projectId, f.id).catch((e) => setError(errorText(lang, e, pkg))) }}
                         className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-[#1E1E1E] border border-[#3A3A3A] text-gray-300 hover:text-white">
                         <FileText className="w-3 h-3" /><span className="max-w-[180px] truncate">{f.name}</span>
                       </button>
@@ -249,7 +251,7 @@ export function ChatPane({ agentId, workflowId, token, api, files, lang, project
           ))}
           {streaming && (
             <div className="prose prose-invert prose-sm max-w-none text-gray-200 px-3">
-              <MessageContent content={streaming} role="assistant" theme="dark" size="sm" isStreaming />
+              <MessageContent content={streaming} role="assistant" theme="dark" size="sm" isStreaming remoteImages={false} />
             </div>
           )}
           {sending && !streaming && (

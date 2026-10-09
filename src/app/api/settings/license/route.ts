@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/route'
 import { isSelfHosted } from '@/lib/edition'
-import { canManageAiConnections } from '@/lib/ai-connections/admin'
+import { isInstallAdmin } from '@/lib/auth/selfhosted-setup'
 import { getLicenseState } from '@/lib/license'
 
 export async function GET() {
   if (!isSelfHosted()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const session = await getServerSession(authOptions as any) as any
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!canManageAiConnections(session.user.email)) return NextResponse.json({ success: true, canView: false })
+  if (!(await isInstallAdmin(session.user))) return NextResponse.json({ success: true, canView: false })
   const s = getLicenseState()
   const base = { success: true, canView: true, status: s.status }
   if (s.status === 'none') return NextResponse.json(base)

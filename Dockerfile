@@ -12,8 +12,9 @@ COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
 COPY . .
 # 4 GB heap is enough for the build; more can exhaust an 8 GB Docker VM
-# Page data collection imports server modules during the build — background jobs are switched off so they do not look for a database
-RUN npx prisma generate && AITALK_BACKGROUND_JOBS=off \
+# Page data collection imports server modules during the build — background jobs are switched off so they do not look for a database,
+#   and the edition is set as at run time so Cloud-only settings are not reported missing
+RUN npx prisma generate && AITALK_BACKGROUND_JOBS=off AITALK_EDITION=selfhosted \
     NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 FROM node:22-bookworm-slim

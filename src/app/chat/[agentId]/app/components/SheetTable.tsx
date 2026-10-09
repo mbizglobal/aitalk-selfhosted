@@ -10,6 +10,7 @@ import { MessageContent } from '@/components/chat/MessageContent'
 import { ConfirmDialog } from './ConfirmDialog'
 import { PairDialog } from './PairDialog'
 import { ImportDialog } from './ImportDialog'
+import { useWorkPkg } from './work-pkg'
 
 interface Props {
   api: WorkApi
@@ -22,14 +23,14 @@ interface Props {
   imports: SheetImport[]
 }
 
-export function errorText(lang: WorkLang, e: unknown): string {
+export function errorText(lang: WorkLang, e: unknown, pkg?: string | null): string {
   if (e instanceof WorkApiError) {
-    const base = workT(lang, `err_${e.code}`, workT(lang, 'err_INTERNAL'))
-    const stop = e.stop ? workStopText(lang, e.stop) : null
+    const base = workT(lang, `err_${e.code}`, workT(lang, 'err_INTERNAL', undefined, pkg), pkg)
+    const stop = e.stop ? workStopText(lang, e.stop, pkg) : null
     if (stop) return `${base}\n${stop}`
     return e.detail ? `${base}\n(${e.detail})` : base
   }
-  return workT(lang, 'err_INTERNAL')
+  return workT(lang, 'err_INTERNAL', undefined, pkg)
 }
 
 const EVIDENCE_CLS: Record<string, string> = {
@@ -40,15 +41,16 @@ const EVIDENCE_CLS: Record<string, string> = {
 }
 const EVIDENCE_COLUMN = 'evidence'
 
-function cell(lang: WorkLang, v: unknown, options: string[] | undefined): string {
+function cell(lang: WorkLang, v: unknown, options: string[] | undefined, pkg: string | null): string {
   if (v === undefined || v === null) return ''
-  if (typeof v === 'string') return options?.includes(v) ? workT(lang, `opt_${v}`, v) : v
+  if (typeof v === 'string') return options?.includes(v) ? workT(lang, `opt_${v}`, v, pkg) : v
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
 
 export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly, imports }: Props) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [data, setData] = useState<SheetScreen | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState<SheetRow | 'new' | null>(null)
@@ -68,9 +70,9 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
       setLoadError(null)
       setData(await api<SheetScreen>('GET', base))
     } catch (e) {
-      setLoadError(errorText(lang, e))
+      setLoadError(errorText(lang, e, pkg))
     }
-  }, [api, base, lang])
+  }, [api, base, lang, pkg])
 
   useEffect(() => { setData(null); setNotice(null); setEvidenceFilter(null); setSort(null); void load() }, [load])
 
@@ -122,7 +124,7 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
     const key = (r: SheetRow): number | string | null => {
       const v = r.data[col.name]
       if (v === undefined || v === null || v === '') return null
-      if (!numeric) return cell(lang, v, data.options[col.name])
+      if (!numeric) return cell(lang, v, data.options[col.name], pkg)
       const n = Number(v)
       return Number.isFinite(n) ? n : null
     }
@@ -132,7 +134,7 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
       if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1
       return sign * (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), lang, { numeric: true }))
     })
-  }, [periodRows, evidenceFilter, sort, data, lang])
+  }, [periodRows, evidenceFilter, sort, data, lang, pkg])
   const toggleSort = (name: string) => setSort((cur) => (cur?.col !== name ? { col: name, dir: 'asc' } : cur.dir === 'asc' ? { col: name, dir: 'desc' } : null))
   const rowNo = useMemo(() => new Map(periodRows.filter((r) => !r.virtual).map((r, i) => [r.id, i + 1])), [periodRows])
 
@@ -143,7 +145,7 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
     setNotice(null)
-    try { await fn() } catch (e) { setNotice(errorText(lang, e)) } finally { setBusy(false) }
+    try { await fn() } catch (e) { setNotice(errorText(lang, e, pkg)) } finally { setBusy(false) }
   }
 
   const save = async (values: Record<string, unknown>, confirm: boolean, fileChange: string | null | undefined) => {
@@ -156,7 +158,7 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
       setEditing(null)
       await load()
     } catch (e) {
-      setEditError(errorText(lang, e))
+      setEditError(errorText(lang, e, pkg))
     } finally {
       setBusy(false)
     }
@@ -266,7 +268,7 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
                         )
                       })()}
                       {!r.virtual && data.fileColumn && typeof r.data[data.fileColumn] === 'string' && (
-                        <button onClick={() => void files.open(projectId, r.data[data.fileColumn!] as string).catch((e) => setNotice(errorText(lang, e)))} className="p-1 text-gray-300 hover:text-white" title={t('file_open')}>
+                        <button onClick={() => void files.open(projectId, r.data[data.fileColumn!] as string).catch((e) => setNotice(errorText(lang, e, pkg)))} className="p-1 text-gray-300 hover:text-white" title={t('file_open')}>
                           <Paperclip className="w-4 h-4" />
                         </button>
                       )}
@@ -296,10 +298,10 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
                     <td key={c.name} title={typeof r.data[c.name] === 'string' && (r.data[c.name] as string).length > 30 ? r.data[c.name] as string : undefined}
                       className={`px-3 py-2 ${r.virtual ? 'text-gray-500' : 'text-gray-200'} max-w-[16rem] truncate ${c.type === 'money' || c.type === 'decimal' || c.type === 'number' ? 'text-right tabular-nums' : ''}`}>
                       {c.name === EVIDENCE_COLUMN && typeof r.data[c.name] === 'string' && EVIDENCE_CLS[r.data[c.name] as string]
-                        ? <span className={`px-2 py-0.5 text-xs rounded-full ${EVIDENCE_CLS[r.data[c.name] as string]}`}>{cell(lang, r.data[c.name], data.options[c.name])}</span>
+                        ? <span className={`px-2 py-0.5 text-xs rounded-full ${EVIDENCE_CLS[r.data[c.name] as string]}`}>{cell(lang, r.data[c.name], data.options[c.name], pkg)}</span>
                         : r.data[c.name] == null && fxHint(r.id, c.name)
                           ? <span className="text-gray-500" title={fxHint(r.id, c.name)!.title}>{fxHint(r.id, c.name)!.text}</span>
-                          : cell(lang, r.data[c.name], data.options[c.name])}
+                          : cell(lang, r.data[c.name], data.options[c.name], pkg)}
                     </td>
                   ))}
                 </tr>
@@ -309,7 +311,7 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
         )}
         {data.help && (
           <div className="mx-4 my-6 max-w-3xl rounded-lg border border-[#2A2A2A] bg-[#1C1C1C] px-5 py-4 prose prose-invert prose-sm">
-            <MessageContent content={t(data.help)} role="assistant" theme="dark" size="sm" enableJsonTable={false} />
+            <MessageContent content={t(data.help)} role="assistant" theme="dark" size="sm" enableJsonTable={false} remoteImages={false} />
           </div>
         )}
       </div>
@@ -338,10 +340,10 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
           lang={lang}
           columns={visible}
           row={viewing}
-          format={(c, v) => cell(lang, v, data.options[c.name])}
+          format={(c, v) => cell(lang, v, data.options[c.name], pkg)}
           hint={(c) => fxHint(viewing.id, c.name)}
           fileColumn={data.fileColumn}
-          onOpenFile={(id) => { const from = viewing.id; void files.open(projectId, id).catch((e) => { setViewingId((cur) => (cur === from ? null : cur)); setNotice(errorText(lang, e)) }) }}
+          onOpenFile={(id) => { const from = viewing.id; void files.open(projectId, id).catch((e) => { setViewingId((cur) => (cur === from ? null : cur)); setNotice(errorText(lang, e, pkg)) }) }}
           onEdit={readOnly || viewing.locked ? null : () => { const r = viewing; setViewingId(null); setEditError(null); setEditing(r) }}
           onClose={() => setViewingId(null)}
         />
@@ -359,9 +361,9 @@ export function SheetTable({ api, files, lang, projectId, sheet, task, readOnly,
           error={editError}
           fileColumn={data.fileColumn}
           onUpload={async (f) => {
-            try { return (await files.upload(projectId, f, 'receipt')).id } catch (e) { throw new Error(errorText(lang, e)) }
+            try { return (await files.upload(projectId, f, 'receipt')).id } catch (e) { throw new Error(errorText(lang, e, pkg)) }
           }}
-          onOpenFile={(id) => void files.open(projectId, id).catch((e) => setEditError(errorText(lang, e)))}
+          onOpenFile={(id) => void files.open(projectId, id).catch((e) => setEditError(errorText(lang, e, pkg)))}
           onSave={(v, c, fc) => void save(v, c, fc)}
           onClose={() => setEditing(null)}
         />

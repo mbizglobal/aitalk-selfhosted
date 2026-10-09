@@ -4,9 +4,10 @@ import React, { useState } from 'react'
 import { Clock, X } from 'lucide-react'
 import { APP_TEMPLATE_FEATURES, featureLabel } from '@/lib/work/app-template-features'
 import { isAppTemplateKind } from '@/lib/work/app-template-kinds'
-import { workT, type WorkLang } from '@/lib/translations/work'
+import { packageOfKind, workT, type WorkLang } from '@/lib/translations/work'
 import type { AppTemplatePeriodRule, AppTemplateScreen } from '../lib/api'
 import { AppTemplateFields, fieldsComplete, fieldsToValues, type FieldValues } from './AppTemplateFields'
+import { WorkPkg } from './work-pkg'
 
 const inputCls = 'w-full rounded-md bg-[#2A2A2A] border border-[#3A3A3A] px-3 py-2 text-sm text-white focus:outline-none focus:border-[#E07B53]'
 
@@ -45,14 +46,16 @@ function valuesToFields(fields: readonly AppTemplateScreen['ui']['settings'][num
 }
 
 export function ApplyTemplateDialog({ lang, appTemplate, settings, busy, error, onApply, onClose }: { lang: WorkLang; appTemplate: AppTemplateScreen; settings: Record<string, unknown>; busy: boolean; error: string | null; onApply: (settings: Record<string, unknown>, modules: string[] | undefined) => void; onClose: () => void }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = packageOfKind(appTemplate.kind)
+  const t = (k: string) => workT(lang, k, undefined, pkg)
   const [values, setValues] = useState<FieldValues>(() => valuesToFields(appTemplate.ui.settings, settings))
   const features = isAppTemplateKind(appTemplate.kind) ? APP_TEMPLATE_FEATURES[appTemplate.kind] : null
   const modules = features?.available.filter((f) => f.module) ?? []
   const [picked, setPicked] = useState<Set<string>>(() => new Set(modules.map((m) => m.id)))
   const ok = fieldsComplete(appTemplate.ui.settings, values)
-  const title = workT(lang, `kind_${appTemplate.kind}`, appTemplate.kind)
+  const title = workT(lang, `kind_${appTemplate.kind}`, appTemplate.kind, pkg)
   return (
+    <WorkPkg.Provider value={pkg}>
     <Shell
       title={t('start_template_title').replace('{template}', title)}
       closeLabel={t('close')}
@@ -101,6 +104,7 @@ export function ApplyTemplateDialog({ lang, appTemplate, settings, busy, error, 
       <p className="text-xs text-gray-500">{t('start_template_note')}</p>
       {error && <p role="alert" className="text-sm text-red-400 whitespace-pre-line">{error}</p>}
     </Shell>
+    </WorkPkg.Provider>
   )
 }
 

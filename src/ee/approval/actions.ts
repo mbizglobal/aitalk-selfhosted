@@ -136,7 +136,7 @@ export async function setApprovalSettings(deps: WorkSheetDeps, a: { userId: stri
   assertHuman(a.actor)
   const next = parseApprovalSettings(a.settings)
   if (!next) throw new WorkError('INVALID', `settings must be { enabled: boolean, owner: boolean, members: positive integer ids (up to ${MAX_APPROVERS}) }`)
-  if (next.enabled && !isEeFeatureEnabled('approval')) throw new WorkError('FORBIDDEN', 'an Enterprise license with approval is required')
+  if (next.enabled && !isEeFeatureEnabled('approval')) throw new WorkError('FORBIDDEN', 'a Business license with approval is required')
   const key = await deps.dataKey(deps.db, a.userId)
   await deps.db.$transaction(async (tx) => {
     const project = await lockProjectForWrite(tx, a.userId, a.projectId)

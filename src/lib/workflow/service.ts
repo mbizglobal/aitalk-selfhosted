@@ -1,6 +1,6 @@
 
 import { createHash } from 'crypto'
-import type { Prisma, Workflow } from '@prisma/client'
+import type { Prisma, SubscriptionPlan, Workflow } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { safeLogToken, describeCaughtError } from '@/lib/log-mask'
 import { validateTranslationTriggerModel } from '@/lib/workflow/validate-translation-model'
@@ -34,7 +34,9 @@ import {
 } from './bundle'
 import { createSchedule, updateSchedule, getScheduleByWorkflow } from '@/lib/schedule'
 import { isSelfHosted } from '@/lib/edition'
+import { hasManagedPlanTier, getManagedActiveWorkflowLimit } from '@/lib/invoice/subscription/utils'
 import { SELF_HOSTED_POLICY } from '@/lib/selfhosted-policy'
+import { isAgentLocked, AGENT_LOCKED_CODE, AGENT_LOCKED_MESSAGE } from '@/lib/agent-lock'
 
 // ========================================
 // ========================================
@@ -65,12 +67,15 @@ export interface WorkflowPlanLimits {
 export function planLimitsFor(
   planType: string | null | undefined,
   subscriptionStatus: string | null | undefined,
+  serviceVariant?: string | null,
 ): WorkflowPlanLimits {
   const isPaid = planType !== 'free' && subscriptionStatus === 'active'
   let maxProduction = FREE_USER_MAX_PRODUCTION
   if (isPaid) {
     const plan = planType || ''
-    if (plan.includes('pro')) maxProduction = 40
+    if (serviceVariant === 'managed' && hasManagedPlanTier(plan as SubscriptionPlan)) {
+      maxProduction = getManagedActiveWorkflowLimit(plan as SubscriptionPlan)
+    } else if (plan.includes('pro')) maxProduction = 40
     else if (plan.includes('growth')) maxProduction = 30
     else if (plan.includes('standard')) maxProduction = 20
     else maxProduction = 10 // starter
@@ -162,9 +167,9 @@ async function getPlanLimits(userId: string): Promise<WorkflowPlanLimits> {
   }
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { subscription: { select: { status: true, planType: true } } },
+    select: { subscription: { select: { status: true, planType: true, serviceVariant: true } } },
   })
-  return planLimitsFor(user?.subscription?.planType, user?.subscription?.status)
+  return planLimitsFor(user?.subscription?.planType, user?.subscription?.status, user?.subscription?.serviceVariant)
 }
 
 function assertWorkflowJsonValid(
@@ -256,6 +261,7 @@ async function assertActivationGate(
   client: Prisma.TransactionClient = prisma,
 ): Promise<WorkflowServiceError | null> {
   if (policy.block) return fail(403, policy.block.code, policy.block.message)
+  if (await isAgentLocked(agentId, client)) return fail(403, AGENT_LOCKED_CODE, AGENT_LOCKED_MESSAGE)
 
   const { limits } = policy
   const currentProductionCount = await client.workflow.count({

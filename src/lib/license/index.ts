@@ -174,12 +174,12 @@ export function describeLicenseState(s: LicenseState): string {
     case 'none':
       return '[License] none'
     case 'invalid':
-      return `[License] invalid key — ${s.reason} (Enterprise features off)`
+      return `[License] invalid key — ${s.reason} (Business features off)`
     case 'expired':
-      return `[License] expired — ${s.payload.licensee} (${s.payload.licenseId}) · until ${s.payload.expiresAt} · grace ended (Enterprise features off)`
+      return `[License] expired — ${s.payload.licensee} (${s.payload.licenseId}) · until ${s.payload.expiresAt} · grace ended (Business features off)`
     case 'grace':
       return `[License] ⚠️ grace — ${s.payload.licensee} (${s.payload.licenseId}) · expired ${s.payload.expiresAt} · features off on ${s.graceEndsAt.toISOString().slice(0, 10)} · features: ${s.features.join(', ') || '-'}`
     case 'active':
-      return `[License] Enterprise — ${s.payload.licensee} (${s.payload.licenseId}) · until ${s.payload.expiresAt} · features: ${s.features.join(', ') || '-'}`
+      return `[License] Business — ${s.payload.licensee} (${s.payload.licenseId}) · until ${s.payload.expiresAt} · features: ${s.features.join(', ') || '-'}`
   }
 }

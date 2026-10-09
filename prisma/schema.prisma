@@ -424,6 +424,9 @@ model Subscription {
   booster_expires_at           DateTime? @map("booster_expires_at")
   booster_expiry_alert_sent_at DateTime? @map("booster_expiry_alert_sent_at")
 
+  storePurchaseToken String? @unique @map("store_purchase_token") @db.VarChar(512)
+  storeAccountKey    String? @unique @map("store_account_key") @db.VarChar(64)
+
   created_at DateTime  @default(now())
   updated_at DateTime? @updatedAt
 
@@ -453,6 +456,43 @@ model BoosterPurchase {
   @@index([userId, purchasedAt])
   @@index([expiresAt])
   @@map("booster_purchases")
+}
+
+model StoreTransaction {
+  id             String                  @id @default(cuid()) @db.VarChar(25)
+  store          PaymentPlatform
+  kind           StoreTransactionKind
+  orderId        String                  @map("order_id") @db.VarChar(100)
+  purchaseToken  String                  @map("purchase_token") @db.VarChar(512)
+  linkedToken    String?                 @map("linked_token") @db.VarChar(512)
+  chainRoot      String?                 @map("chain_root") @db.VarChar(512)
+  productId      String                  @map("product_id") @db.VarChar(100)
+  expiryTime     DateTime?               @map("expiry_time")
+  userId         String                  @map("user_id") @db.VarChar(25)
+  outcome        StoreTransactionOutcome
+  refundedAt     DateTime?               @map("refunded_at")
+  acknowledgedAt DateTime?               @map("acknowledged_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  @@unique([store, orderId])
+  @@index([purchaseToken])
+  @@index([linkedToken])
+  @@index([userId, kind, createdAt])
+  @@index([userId, chainRoot])
+  @@map("store_transactions")
+}
+
+enum StoreTransactionKind {
+  subscription
+  pass
+}
+
+enum StoreTransactionOutcome {
+  granted
+  refused_double
+  refused_ineligible
+  ignored
 }
 
 model ManagedRegionConfig {
@@ -977,10 +1017,10 @@ model Storage {
 
   blobPath String? @map("blob_path") @db.VarChar(500)
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  agent     Agent     @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-  ragSpace  RagSpace? @relation(fields: [ragSpaceId], references: [id], onDelete: SetNull)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  agent           Agent            @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  ragSpace        RagSpace?        @relation(fields: [ragSpaceId], references: [id], onDelete: SetNull)
   knowledgeChunks KnowledgeChunk[]
 
   @@index([agentId, type])
@@ -1170,6 +1210,8 @@ enum AccountType {
 
 enum PaymentPlatform {
   manual_invoice
+  google_play
+  app_store
 }
 
 enum PaymentMethod {
@@ -1295,17 +1337,17 @@ model DataSheet {
 }
 
 model DataSheetRow {
-  id        String   @id @default(cuid()) @db.VarChar(25)
-  sheetId   String   @map("sheet_id") @db.VarChar(25)
-  kind      String   @default("agent") @db.VarChar(10)
-  projectId String?  @map("project_id") @db.VarChar(25)
-  userId    String?  @map("user_id") @db.VarChar(25)
-  rowData   String   @map("row_data") @db.Text
-  sealed    Bytes?   @db.ByteA
-  confirmed Boolean?
-  confirmedBy String? @map("confirmed_by") @db.VarChar(80)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid()) @db.VarChar(25)
+  sheetId     String   @map("sheet_id") @db.VarChar(25)
+  kind        String   @default("agent") @db.VarChar(10)
+  projectId   String?  @map("project_id") @db.VarChar(25)
+  userId      String?  @map("user_id") @db.VarChar(25)
+  rowData     String   @map("row_data") @db.Text
+  sealed      Bytes?   @db.ByteA
+  confirmed   Boolean?
+  confirmedBy String?  @map("confirmed_by") @db.VarChar(80)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   sheet        DataSheet      @relation("SheetRowsByKind", fields: [sheetId, kind], references: [id, kind], onDelete: Cascade)
   projectSheet DataSheet?     @relation("SheetRowsByProject", fields: [sheetId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
@@ -2630,27 +2672,27 @@ model VatFxRateManual {
 // ========================================
 
 model WorkProject {
-  id         String   @id @default(cuid()) @db.VarChar(25)
-  userId     String   @map("user_id") @db.VarChar(25)
+  id               String    @id @default(cuid()) @db.VarChar(25)
+  userId           String    @map("user_id") @db.VarChar(25)
   workflowId       String?   @unique @map("workflow_id") @db.VarChar(25)
   workflowLinkedAt DateTime? @map("workflow_linked_at")
-  kind       String   @default("free") @db.VarChar(40)
+  kind             String    @default("free") @db.VarChar(40)
   /// 'active' | 'archived'
-  status     String   @default("active") @db.VarChar(10)
-  settings   Bytes?   @db.ByteA
-  modules    String[] @default([])
-  approvalSettings Json? @map("approval_settings")
-  agentId    String?  @map("agent_id") @db.VarChar(20)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  status           String    @default("active") @db.VarChar(10)
+  settings         Bytes?    @db.ByteA
+  modules          String[]  @default([])
+  approvalSettings Json?     @map("approval_settings")
+  agentId          String?   @map("agent_id") @db.VarChar(20)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workflow Workflow?      @relation(fields: [workflowId], references: [workflowId], onDelete: SetNull)
-  agent    Agent?         @relation(fields: [agentId], references: [agentId], onDelete: SetNull)
-  tasks    WorkTask[]
-  sheets   DataSheet[]
-  pairs    SheetRowPair[]
-  files    WorkFile[]
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflow      Workflow?          @relation(fields: [workflowId], references: [workflowId], onDelete: SetNull)
+  agent         Agent?             @relation(fields: [agentId], references: [agentId], onDelete: SetNull)
+  tasks         WorkTask[]
+  sheets        DataSheet[]
+  pairs         SheetRowPair[]
+  files         WorkFile[]
   referencesOut ProjectReference[] @relation("ReferenceFrom")
   referencesIn  ProjectReference[] @relation("ReferenceTo")
   notes         WorkNote[]
@@ -2682,17 +2724,17 @@ model ProjectReference {
 }
 
 model WorkTask {
-  id          String    @id @default(cuid()) @db.VarChar(25)
-  projectId   String    @map("project_id") @db.VarChar(25)
-  userId      String    @map("user_id") @db.VarChar(25)
-  title       String    @db.VarChar(120)
-  periodStart DateTime? @map("period_start") @db.Date
-  periodEnd   DateTime? @map("period_end") @db.Date
-  status      String    @default("open") @db.VarChar(12)
-  approvalRequest Bytes? @map("approval_request") @db.ByteA
-  submittedAt DateTime? @map("submitted_at")
-  currentSubmissionId String? @map("current_submission_id") @db.VarChar(25)
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id                  String    @id @default(cuid()) @db.VarChar(25)
+  projectId           String    @map("project_id") @db.VarChar(25)
+  userId              String    @map("user_id") @db.VarChar(25)
+  title               String    @db.VarChar(120)
+  periodStart         DateTime? @map("period_start") @db.Date
+  periodEnd           DateTime? @map("period_end") @db.Date
+  status              String    @default("open") @db.VarChar(12)
+  approvalRequest     Bytes?    @map("approval_request") @db.ByteA
+  submittedAt         DateTime? @map("submitted_at")
+  currentSubmissionId String?   @map("current_submission_id") @db.VarChar(25)
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   project     WorkProject      @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
   submissions WorkSubmission[]
@@ -2808,10 +2850,10 @@ model WorkSubmission {
   preparedBy  String?  @map("prepared_by") @db.VarChar(80)
   approvedBy  String?  @map("approved_by") @db.VarChar(80)
 
-  task    WorkTask             @relation(fields: [taskId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
-  proofs  WorkSubmissionFile[]
-  sources WorkSubmissionSource[]
-  refAckDigest String? @map("ref_ack_digest") @db.VarChar(64)
+  task         WorkTask               @relation(fields: [taskId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+  proofs       WorkSubmissionFile[]
+  sources      WorkSubmissionSource[]
+  refAckDigest String?                @map("ref_ack_digest") @db.VarChar(64)
 
   @@unique([taskId, number])
   @@unique([id, projectId, userId])
@@ -2834,11 +2876,11 @@ model WorkFile {
   readText     Bytes?   @map("read_text") @db.ByteA
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
-  project  WorkProject          @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
-  parent   WorkFile?            @relation("WorkFileDerived", fields: [parentFileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
-  derived  WorkFile[]           @relation("WorkFileDerived")
-  tasks    WorkTaskFile[]
-  proofs   WorkSubmissionFile[]
+  project WorkProject          @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+  parent  WorkFile?            @relation("WorkFileDerived", fields: [parentFileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+  derived WorkFile[]           @relation("WorkFileDerived")
+  tasks   WorkTaskFile[]
+  proofs  WorkSubmissionFile[]
 
   @@unique([projectId, sha256])
   @@unique([id, projectId, userId])

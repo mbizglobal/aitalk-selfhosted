@@ -240,6 +240,7 @@ export class EmailServiceV2 {
     subject: string
     lines: Array<{ label: string; value: string }>
     note?: string
+    to?: string
   }): Promise<EmailResponse> {
     const rows = params.lines
       .map(
@@ -255,7 +256,7 @@ export class EmailServiceV2 {
       `<p style="color:#888;font-size:12px;margin:0 0 16px">AiTalk 내부 운영 알림 — 고객 발송 아님</p>` +
       `<table style="border-collapse:collapse;font-size:14px">${rows}</table>${note}</div>`
     return this.sendEmail({
-      to: 'support@aitalk.ch',
+      to: params.to ?? 'support@aitalk.ch',
       subject: `[AiTalk Ops] ${params.subject}`,
       html,
       from: 'support@aitalk.ch',
@@ -617,8 +618,9 @@ export class EmailServiceV2 {
     previousPlan: string
     previousBillingCycle?: string | null
     deletionDate: Date
+    reason?: 'payment' | 'cancelled'
   }): Promise<EmailResponse> {
-    const { to, name, language, previousPlan, previousBillingCycle, deletionDate } = params
+    const { to, name, language, previousPlan, previousBillingCycle, deletionDate, reason = 'payment' } = params
 
     const t = appTranslations[language] || appTranslations.en
 
@@ -637,7 +639,10 @@ export class EmailServiceV2 {
       name,
       previousPlanName: planName,
       deletionDate: formattedDeletionDate,
-      language
+      language,
+      message: reason === 'cancelled'
+        ? ((t as unknown as Record<string, string | undefined>).email_softfree_message_cancelled ?? appTranslations.en.email_softfree_message_cancelled)
+        : t.email_softfree_message,
     })
 
     return this.sendEmail({
@@ -1599,8 +1604,9 @@ export class EmailServiceV2 {
     previousPlanName: string
     deletionDate: string
     language: EmailLanguage
+    message: string
   }): string {
-    const { t, name, previousPlanName, deletionDate, language } = params
+    const { t, name, previousPlanName, deletionDate, language, message } = params
 
     return `
 <!DOCTYPE html>
@@ -1643,7 +1649,7 @@ export class EmailServiceV2 {
     </div>
     <div class="content">
       <div class="greeting">${t.email_softfree_greeting} ${name},</div>
-      <div class="message">${t.email_softfree_message}</div>
+      <div class="message">${message}</div>
 
       <div class="details-box">
         <div class="details-title">${t.email_softfree_details_title}</div>
@@ -1653,7 +1659,7 @@ export class EmailServiceV2 {
         </div>
         <div class="detail-row">
           <span class="detail-label">${t.email_softfree_current_plan}</span>
-          <span class="detail-value">Free</span>
+          <span class="detail-value">${t.email_softfree_current_plan_value ?? appTranslations.en.email_softfree_current_plan_value}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">${t.email_softfree_deletion_date}</span>
@@ -4091,9 +4097,7 @@ export class EmailServiceV2 {
           <span class="detail-value">${expiresAt}</span>
         </div>
       </div>
-      <div style="text-align: center;">
-        <a href="https://www.aitalk.ch/app/subscription" class="cta-button">${t.email_booster_expiring_cta}</a>
-      </div>
+      
     </div>
     <div class="footer">
       <div class="footer-brand">AITalk.ch</div>

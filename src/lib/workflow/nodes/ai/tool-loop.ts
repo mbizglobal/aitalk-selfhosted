@@ -289,7 +289,7 @@ export async function runToolFollowUps(p: {
             buildFollowUpConfig(p.requestConfig, p.nodeData, out.responseId, toolOutputs, lastRound ? 'none' : 'auto'),
           ) as unknown as AsyncIterable<any>
           await consumeRound(stream, r, delta => { p.onTextDelta?.(delta, first); first = false })
-          rateLimited = r.failure?.message === 'rate_limit_exceeded' && !r.sawOutput
+          rateLimited = r.failure?.code === 'rate_limit_exceeded' && !r.sawOutput
         } catch (e) {
           if (!waits.length || (e as { status?: number }).status !== 429 || r.sawOutput) throw e
           rateLimited = true

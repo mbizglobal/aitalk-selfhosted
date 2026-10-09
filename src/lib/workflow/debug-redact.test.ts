@@ -2,6 +2,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
+import '@/lib/agent-lock-test-no-db'
 import { WorkflowEngine } from './engine'
 import { redactCredentials, REDACTED, TRUNCATED, GETTER_FAILED } from './debug-redact'
 

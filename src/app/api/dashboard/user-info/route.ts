@@ -6,6 +6,8 @@ import { hasAnyApiKey } from '@/lib/ai-providers/get-api-key';
 import { isPaymentConvertedForUser } from '@/lib/entitlement';
 import { deriveAccountLifecycle } from '@/lib/subscription/lifecycle';
 import { isSelfHosted } from '@/lib/edition';
+import { SELF_HOSTED_POLICY } from '@/lib/selfhosted-policy';
+import { pricingPlans, managedPricingPlans } from '@/lib/translations';
 import {
   CPA_PER_VOICE_MINUTE,
   CPA_PER_REALTIME_VOICE_MINUTE,
@@ -128,12 +130,11 @@ export async function GET() {
         cpa_total = 50;
       }
     } else {
-      const PLAN_CREDITS: Record<string, number> = isManaged
-        ? { starter: 1000, standard: 6000, pro: 22000 }
-        : { starter: 5000, standard: 10000, growth: 20000, pro: 40000 };
+      const planCredits = (isManaged ? managedPricingPlans : pricingPlans)
+        .find(p => p.id === normalizedPlan)?.messagesPerMonth;
 
       cpa_available = user.subscription?.paid_cpa ?? 0;
-      cpa_total = user.subscription?.paid_total ?? PLAN_CREDITS[normalizedPlan] ?? 0;
+      cpa_total = user.subscription?.paid_total ?? planCredits ?? 0;
       has_cpa_data = user.subscription?.paid_cpa !== undefined;
     }
 
@@ -206,7 +207,7 @@ export async function GET() {
         time_format: user.settings?.time_format || 'DD.MM.YYYY HH:mm',
         locale: user.settings?.locale || 'en-US',
         api_key_configured: apiKeyConfigured,
-        num_assistant: selfHosted ? null : (user.subscription?.num_assistant || 1),
+        num_assistant: selfHosted ? SELF_HOSTED_POLICY.agentLimit : (user.subscription?.num_assistant || 1),
         service_period: user.subscription ? {
           start_date: user.subscription.start_date,
           end_date: user.subscription.end_date

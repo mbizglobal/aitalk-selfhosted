@@ -1,5 +1,5 @@
-import { WORK_APP_CORE_API } from '@/lib/work/package-api'
-import type { WorkAppFactory } from '@/lib/work/package'
+
+import type { V1WorkAppFactory as WorkAppFactory } from '@/lib/work/package-api'
 import { VAT_APP_TEMPLATE } from './app-template'
 import { VAT_SHEET_TEMPLATES } from './templates'
 import { vatBoxesModule } from './modules/boxes'
@@ -11,7 +11,7 @@ import { VAT_TOOLS } from './tools'
 export const vatWorkApp: WorkAppFactory = () => ({
   id: 'vat',
   version: '1.0.0',
-  core: WORK_APP_CORE_API,
+  core: 1,
   meta: vatWorkAppMeta,
   appTemplates: [VAT_APP_TEMPLATE],
   sheetTemplates: VAT_SHEET_TEMPLATES,

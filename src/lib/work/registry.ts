@@ -19,7 +19,8 @@ export interface WorkAppRegistry {
 }
 
 const ID_RE = /^[a-z][a-z0-9-]*$/
-const LANGS = ['en', 'de', 'fr', 'ko'] as const
+const MORE_LANGS = ['de', 'fr', 'ko'] as const
+const RESERVED_V2 = ['work', 'vat', 'bank']
 
 function fail(msg: string): never {
   throw new Error(`work app registry: ${msg}`)
@@ -49,21 +50,38 @@ function compose(factories: readonly WorkAppFactory[], metas: readonly WorkAppMe
   for (const p of packages) {
     if (!isId(p.id)) fail(`bad package id "${String(p.id)}"`)
     if (p.id === 'work') fail('package id "work" is reserved for the core')
-    if (p.core !== WORK_APP_CORE_API) fail(`${p.id} needs core ${p.core}, this core is ${WORK_APP_CORE_API}`)
+    if (!Number.isInteger(p.core) || p.core < 1 || p.core > WORK_APP_CORE_API) fail(`${p.id} needs core ${String(p.core)}, this core supports 1..${WORK_APP_CORE_API}`)
     if (p.meta?.id !== p.id) fail(`${p.id}: meta id "${String(p.meta?.id)}"`)
+    if (p.core >= 2) for (const m of p.modules) if (m.kind === 'calc' && m.prepare) fail(`${p.id}: module ${m.id} — prepare is for core 1 packages only`)
     const kinds = p.appTemplates.map((a) => a.kind)
     for (const k of kinds) if (!isId(k)) fail(`${p.id}: bad app template name "${String(k)}"`)
     if (!sameSet(kinds, p.meta.appTemplateKinds)) fail(`${p.id}: meta app templates [${p.meta.appTemplateKinds}] ≠ [${kinds}]`)
     if (!sameSet(Object.keys(p.meta.features), kinds)) fail(`${p.id}: features must cover exactly [${kinds}]`)
-    for (const l of LANGS) if (!p.meta.i18n?.[l] || typeof p.meta.i18n[l] !== 'object') fail(`${p.id}: i18n.${l} is missing`)
+    if (!p.meta.i18n?.en || typeof p.meta.i18n.en !== 'object') fail(`${p.id}: i18n.en is missing`)
     const keys = Object.keys(p.meta.i18n.en)
     if (keys.some((k) => !k)) fail(`${p.id}: empty i18n key`)
-    for (const l of LANGS) if (!sameSet(Object.keys(p.meta.i18n[l]), keys)) fail(`${p.id}: i18n keys differ between languages (${l})`)
+    const noEmpty = (d: Readonly<Record<string, string>>, l: string) => { for (const [k, v] of Object.entries(d)) if (typeof v !== 'string' || !v) fail(`${p.id}: i18n.${l} ${k} is empty`) }
+    noEmpty(p.meta.i18n.en, 'en')
+    for (const l of MORE_LANGS) {
+      const d = p.meta.i18n[l]
+      if (d === undefined) continue
+      if (!d || typeof d !== 'object') fail(`${p.id}: i18n.${l} is not a dictionary`)
+      if (!sameSet(Object.keys(d), keys)) fail(`${p.id}: i18n keys differ between languages (${l})`)
+      noEmpty(d, l)
+    }
+    for (const m of p.modules) {
+      if (!m.title?.en || !m.description?.en) fail(`${p.id}: module ${m.id} needs an English title and description`)
+      for (const l of MORE_LANGS) if ((m.title[l] !== undefined && !m.title[l]) || (m.description[l] !== undefined && !m.description[l])) fail(`${p.id}: module ${m.id} has an empty ${l} title or description`)
+    }
     checkFeatures(p)
+    if (p.core >= 2) checkNames(p, keys)
   }
 
   const d = (what: string, xs: readonly string[]) => { const x = dupes(xs); if (x.length) fail(`duplicate ${what}: ${x.join(', ')}`) }
   d('package id', packages.map((p) => p.id))
+  for (const a of packages) for (const b of packages) {
+    if (a !== b && (a.core >= 2 || b.core >= 2) && b.id.startsWith(`${a.id}-`)) fail(`package ids ${a.id} and ${b.id} — one is a prefix of the other`)
+  }
   if (metas.length !== packages.length || metas.some((m, i) => m?.id !== packages[i].id)) fail(`meta lists [${metas.map((m) => String(m?.id))}] ≠ packages [${packages.map((p) => p.id)}]`)
   for (const m of metas) if (m !== packages.find((p) => p.id === m.id)!.meta) fail(`${m.id}: meta list holds a different meta object than the package`)
 
@@ -97,12 +115,25 @@ function compose(factories: readonly WorkAppFactory[], metas: readonly WorkAppMe
   return { packages, appTemplates, sheetTemplates, modules }
 }
 
+function checkNames(p: WorkAppPackage, i18nKeys: readonly string[]): void {
+  if (RESERVED_V2.includes(p.id)) fail(`package id "${p.id}" is reserved`)
+  const own = (x: unknown) => typeof x === 'string' && x.startsWith(`${p.id}.`) && x.length > p.id.length + 1
+  for (const k of i18nKeys) if (!own(k)) fail(`${p.id}: i18n key "${k}" must start with "${p.id}."`)
+  for (const m of p.modules) if (!own(m.id)) fail(`${p.id}: module id "${String(m.id)}" must start with "${p.id}."`)
+  for (const t of p.sheetTemplates) {
+    if (!own(t.name)) fail(`${p.id}: sheet template "${String(t.name)}" must start with "${p.id}."`)
+    if (!own(t.family)) fail(`${p.id}: sheet family "${String(t.family)}" must start with "${p.id}."`)
+  }
+  for (const a of p.appTemplates) if (a.kind !== p.id && !a.kind.startsWith(`${p.id}-`)) fail(`${p.id}: app template name "${a.kind}" must be "${p.id}" or start with "${p.id}-"`)
+}
+
 function checkFeatures(p: WorkAppPackage): void {
   for (const a of p.appTemplates) {
     const f = p.meta.features[a.kind]
     for (const x of [...f.available, ...f.planned]) {
       if (!x.id) fail(`${a.kind}: feature without id`)
-      for (const l of LANGS) if (!x.label?.[l]) fail(`${a.kind}: feature ${x.id} has no ${l} label`)
+      if (!x.label?.en) fail(`${a.kind}: feature ${x.id} has no en label`)
+      for (const l of MORE_LANGS) if (x.label[l] !== undefined && !x.label[l]) fail(`${a.kind}: feature ${x.id} has an empty ${l} label`)
     }
     const dup = dupes([...f.available, ...f.planned].map((x) => x.id))
     if (dup.length) fail(`${a.kind}: feature listed twice: ${dup.join(', ')}`)
@@ -120,3 +151,10 @@ export function workAppRegistry(): WorkAppRegistry {
 export const appTemplates = (): readonly AppTemplate[] => workAppRegistry().appTemplates
 export const builtinSheetTemplates = (): readonly SheetTemplate[] => workAppRegistry().sheetTemplates
 export const workModules = (): readonly WorkModule[] => workAppRegistry().modules
+
+export function packageCoreOfModule(moduleId: string): number | null {
+  return workAppRegistry().packages.find((p) => p.modules.some((m) => m.id === moduleId))?.core ?? null
+}
+export function packageCoreOfKind(kind: string): number | null {
+  return workAppRegistry().packages.find((p) => p.appTemplates.some((a) => a.kind === kind))?.core ?? null
+}

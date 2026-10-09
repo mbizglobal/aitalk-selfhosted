@@ -6,6 +6,7 @@ import type { WorkFileDeps } from './files'
 import type { SheetActor } from './sheet-gate'
 import type { WorkScope } from './app-scope'
 import type { WorkAppMeta } from './package-meta'
+import type { WorkAppToolHandles } from './handles'
 
 export interface WorkAppPackage {
   id: string
@@ -18,7 +19,7 @@ export interface WorkAppPackage {
   tools?: readonly WorkAppTool[]
 }
 
-export interface WorkAppToolCtx {
+export interface WorkAppToolCtx extends WorkAppToolHandles {
   deps: WorkFileDeps
   userId: string
   workflowId: string

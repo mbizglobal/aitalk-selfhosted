@@ -5,12 +5,14 @@ import type { WorkFileDeps } from './files'
 import type { SheetActor } from './sheet-gate'
 import { isProjectDetached, lockProjectForWrite, readProjectSheet, sheetMeta } from './sheet-gate'
 import { appTemplateOf, type AppTemplateField } from './app-templates'
-import { appTemplates, workAppRegistry, workModules } from './registry'
-import type { WorkAppTool } from './package'
-import { workT } from '@/lib/translations/work'
+import { appTemplates, packageCoreOfKind, workAppRegistry, workModules } from './registry'
+import { entryCtx, frozenActor, toolHandles } from './handles'
+import type { WorkAppTool, WorkAppToolCtx } from './package'
+import { packageOfKind, workT } from '@/lib/translations/work'
 import { findWorkModule, runWorkModule } from './module-registry'
 import { deleteRowFromScreen, insertRowFromScreen, updateRowFromScreen } from './screen-writes'
-import { proposeNote, NOTE_KINDS, type NoteView } from './notes'
+import { proposeNote, type NoteView } from './notes'
+import { NOTE_KINDS } from './note-kinds'
 import { createTask, previewTask, type ProjectSettings } from './projects'
 import { isAppTemplateKind } from './app-template-kinds'
 import { APP_TEMPLATE_FEATURES } from './app-template-features'
@@ -93,7 +95,7 @@ export const WORK_APP_TOOL_DEFS = [
   },
   {
     name: 'work_delete_rows',
-    description: `Delete unconfirmed rows of one sheet (max ${MAX_WRITE_ROWS}). Confirmed rows are deleted only by a person.`,
+    description: `Delete rows of one sheet (max ${MAX_WRITE_ROWS}) — only unconfirmed rows that you inserted and no one else changed. Any other row (entered, confirmed or changed by a person, or imported) is deleted only by a person: tell the person which row and why.`,
     parameters: obj({ sheetId: { type: 'string' }, rowIds: { type: 'array', maxItems: MAX_WRITE_ROWS, items: { type: 'string' } } }, ['sheetId', 'rowIds']),
   },
   {
@@ -238,9 +240,9 @@ const COMMON_RULES = [
   '- The person never sees the word "project": call it "this work app". Project notes are shown as "notes for all tasks"; the project conversation as the general conversation.',
 ].join('\n')
 
-function settingsForAi(fields: readonly AppTemplateField[]) {
-  return fields.map((f) => {
-    const help = workT('en', `set_${f.name}_help`, '')
+function settingsForAi(tpl: { kind: string; ui: { settings: readonly AppTemplateField[] } }) {
+  return tpl.ui.settings.map((f) => {
+    const help = workT('en', `set_${f.name}_help`, '', packageOfKind(tpl.kind))
     return { ...f, ...(help ? { help } : {}) }
   })
 }
@@ -363,8 +365,8 @@ async function runTool(c: WorkAppAiCtx, name: string, args: Record<string, unkno
             ...(all.length > OVERVIEW_FILES ? { filesTotal: all.length, filesNote: `only the newest ${OVERVIEW_FILES} are listed` } : {}),
           }
         })()),
-        ...(tpl ? { appTemplateSettings: settingsForAi(tpl.ui.settings) } : {}),
-        ...(empty ? { applicableAppTemplates: await (async () => { const fixed = await fixedAppTemplate(c); return appTemplates().filter((a) => !fixed || a.kind === fixed).map((a) => ({ kind: a.kind, settings: settingsForAi(a.ui.settings), period: a.ui.period })) })() } : {}),
+        ...(tpl ? { appTemplateSettings: settingsForAi(tpl) } : {}),
+        ...(empty ? { applicableAppTemplates: await (async () => { const fixed = await fixedAppTemplate(c); return appTemplates().filter((a) => !fixed || a.kind === fixed).map((a) => ({ kind: a.kind, settings: settingsForAi(a), period: a.ui.period })) })() } : {}),
       }
     }
     case 'work_read_rows': {
@@ -548,7 +550,14 @@ async function runPackageTool(c: WorkAppAiCtx, name: string, args: Record<string
   const p = await scopedProject(c)
   const tool = packageToolsFor(p.kind).find((t) => t.def.name === name)
   if (!tool) throw new WorkError('INVALID', `unknown tool ${name}`)
-  return tool.run({ deps: c.deps, userId: c.userId, workflowId: c.workflowId, scope: c.scope, actor: actorOf(c), project: p }, args)
+  const actor = actorOf(c)
+  const handles = toolHandles(
+    { deps: c.deps, userId: c.userId, projectId: p.id, caller: actor, writeAs: actor, readAsWorkflow: c.workflowId },
+    c.scope.runId,
+    (moduleId, input, caller) => runWorkModule(c.deps, { userId: c.userId, projectId: p.id, moduleId, input, by: caller }),
+  )
+  const ctx = entryCtx(handles, packageCoreOfKind(p.kind), c.deps, { userId: c.userId, workflowId: c.workflowId, scope: c.scope, actor: frozenActor(actor), project: p }) as WorkAppToolCtx
+  return tool.run(ctx, args)
 }
 
 async function visionImages(c: WorkAppAiCtx, projectId: string, fileId: string, mimeType: string, buffer: Buffer): Promise<{ list: Array<{ mime: string; base64: string }> } | { error: string }> {

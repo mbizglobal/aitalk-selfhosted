@@ -1,23 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canManageAiConnections } from './admin'
 import { maskSecrets } from './check'
 import { translations as en } from '@/lib/translations/dashboard/en'
 import { translations as de } from '@/lib/translations/dashboard/de'
 import { translations as fr } from '@/lib/translations/dashboard/fr'
 import { translations as ko } from '@/lib/translations/dashboard/ko'
-
-test('admin - only emails on the list with selfhosted (case and whitespace ignored); an empty list means nobody', () => {
-  const sh = { AITALK_EDITION: 'selfhosted', SELFHOSTED_ADMIN_EMAILS: ' A@x.ch , b@y.ch' }
-  assert.equal(canManageAiConnections('a@x.ch', sh), true)
-  assert.equal(canManageAiConnections(' B@Y.CH ', sh), true)
-  assert.equal(canManageAiConnections('c@z.ch', sh), false)
-  assert.equal(canManageAiConnections(null, sh), false)
-  assert.equal(canManageAiConnections('', sh), false)
-  assert.equal(canManageAiConnections('a@x.ch', { AITALK_EDITION: 'selfhosted' }), false)
-  assert.equal(canManageAiConnections('a@x.ch', { AITALK_EDITION: 'selfhosted', SELFHOSTED_ADMIN_EMAILS: ' , ' }), false)
-  assert.equal(canManageAiConnections('a@x.ch', { SELFHOSTED_ADMIN_EMAILS: 'a@x.ch' }), false) // cloud
-})
 
 test('check result error message - masks key-like strings', () => {
   assert.equal(maskSecrets('401 — Incorrect API key provided: sk-proj-abc123*******xyz9.'), '401 — Incorrect API key provided: [hidden]')

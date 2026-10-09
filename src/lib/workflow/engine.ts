@@ -19,6 +19,7 @@ import { describeCaughtError, safeLogToken } from '@/lib/log-mask'
 import { createStepBudget, defaultStepLimit, stepBudgetExceededMessage } from './engine/step-budget'
 import { extractContextVariables } from './engine/context-projection'
 import { isMiniAppNode, miniAppsRunBy } from './mini-app-registry'
+import { isAgentLocked, AGENT_LOCKED_MESSAGE } from '@/lib/agent-lock'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -64,6 +65,20 @@ export class WorkflowEngine {
           emitDebug ? `[${nodeError.nodeLabel}] ${nodeError.error}` : PUBLIC_NODE_ERROR_MESSAGE,
           [],
         ),
+        executionPath: [],
+        totalDuration: 0,
+        debugLogs: [],
+        context,
+        nodeError,
+      }
+    }
+
+    if (await isAgentLocked(context.agentId)) {
+      const startNodeId = nodes.find(n => resolveNodeType(n) === 'start')?.id || ''
+      const nodeError = { nodeId: startNodeId, nodeLabel: 'Start', error: AGENT_LOCKED_MESSAGE }
+      console.warn(`[Workflow] Agent locked (plan limit) [${safeLogToken(context.agentId)}]`)
+      return {
+        streamResponse: this.createErrorStreamResponse(AGENT_LOCKED_MESSAGE, []),
         executionPath: [],
         totalDuration: 0,
         debugLogs: [],

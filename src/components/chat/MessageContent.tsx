@@ -24,7 +24,12 @@ export interface MessageContentProps {
   onHasTable?: (hasTable: boolean) => void
   isStreaming?: boolean
   enableJsonTable?: boolean
+  remoteImages?: boolean
 }
+
+const BlockedImage = ({ src, alt }: { src?: unknown; alt?: string }) => (
+  <span className="break-all opacity-70">{`![${alt ?? ''}](${typeof src === 'string' ? src : ''})`}</span>
+)
 
 export const MessageContent: React.FC<MessageContentProps> = ({
   content,
@@ -34,6 +39,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
   onHasTable,
   isStreaming = false,
   enableJsonTable = true,
+  remoteImages = true,
 }) => {
   const markdownComponents = useMemo(() => {
     if (theme === 'dark' && size === 'xs') {
@@ -44,6 +50,10 @@ export const MessageContent: React.FC<MessageContentProps> = ({
     }
     return createMarkdownComponents({ theme, size })
   }, [theme, size])
+  const components = useMemo(
+    () => (remoteImages ? markdownComponents : { ...markdownComponents, img: ({ src, alt }: { src?: unknown; alt?: string }) => <BlockedImage src={src} alt={alt} /> }),
+    [markdownComponents, remoteImages],
+  )
 
   const tableTheme: TableTheme = theme
 
@@ -77,7 +87,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
   if (role === 'assistant' || role === 'error') {
     const displayContent = isStreaming ? removeIncompleteCitations(content) : content
     return (
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={markdownComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly]} components={components}>
         {displayContent}
       </ReactMarkdown>
     )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { hasCookieConsent } from '@/lib/cookie-consent'
 
 export function useCookieConsent() {
   const [hasConsented, setHasConsented] = useState(false)
@@ -8,8 +9,7 @@ export function useCookieConsent() {
 
   useEffect(() => {
     const checkConsent = () => {
-      const consent = localStorage.getItem('cookie-consent')
-      setHasConsented(consent === 'true')
+      setHasConsented(hasCookieConsent())
       setIsLoaded(true)
     }
 

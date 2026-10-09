@@ -272,6 +272,12 @@ export class ProjectSheetWriter {
     const paired = await this.tx.sheetRowPair.count({ where: { OR: [{ fromRowId: rowId }, { toRowId: rowId }] } })
     if (paired > 0) throw new WorkError('PAIRED')
     if (this.actor.type === 'ai' && cur.confirmed === true) throw new WorkError('FORBIDDEN', 'a confirmed row is removed only by a person')
+    if (this.actor.type === 'ai') {
+      const me = actorLabel(this.actor)
+      const events = await this.tx.workEvent.findMany({ where: { userId: this.userId, projectId: this.projectId, rowId }, select: { actor: true, action: true } })
+      const aiOnly = events.some((e) => e.action === 'insert') && events.every((e) => e.actor === me)
+      if (!aiOnly) throw new WorkError('FORBIDDEN', 'only rows you inserted and no one else touched can be removed by you — ask the person to remove this row')
+    }
     await this.assertRowWritable(meta, { before: cur.data, rowId })
     const old = await this.tx.dataSheetRow.findUniqueOrThrow({ where: { id: rowId }, select: { rowData: true, sealed: true } })
     await this.tx.dataSheetRow.delete({ where: { id: rowId } })
@@ -308,6 +314,7 @@ export class ProjectSheetWriter {
       throw e
     }
     await this.event('pair', ctx.fromMeta.id, fromRowId, null, { toRowId, kind }, ctx.usedException)
+    await this.event('pair', ctx.toMeta.id, toRowId, null, { fromRowId, kind }, ctx.usedException)
     return created
   }
 
@@ -318,6 +325,7 @@ export class ProjectSheetWriter {
     await this.assertPairWritable('unpair', ctx)
     await this.tx.sheetRowPair.delete({ where: { id: pairId } })
     await this.event('unpair', ctx.fromMeta.id, p.fromRowId, { toRowId: p.toRowId, kind: p.kind, confirmed: p.confirmed }, null, ctx.usedException)
+    await this.event('unpair', ctx.toMeta.id, p.toRowId, { fromRowId: p.fromRowId, kind: p.kind, confirmed: p.confirmed }, null, ctx.usedException)
   }
 
   async confirmPair(pairId: string): Promise<void> {
@@ -329,6 +337,7 @@ export class ProjectSheetWriter {
     if (await this.isPairLockedCtx(ctx)) throw new WorkError('LOCKED')
     await this.tx.sheetRowPair.update({ where: { id: pairId }, data: { confirmed: true } })
     await this.event('confirm', ctx.fromMeta.id, p.fromRowId, { pairId, confirmed: false }, { pairId, confirmed: true })
+    await this.event('confirm', ctx.toMeta.id, p.toRowId, { pairId, confirmed: false }, { pairId, confirmed: true })
   }
 
   private async meta(sheetId: string): Promise<SheetMeta> {

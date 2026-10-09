@@ -4,6 +4,7 @@ import { isWorkflowPubliclyAccessible } from '@/lib/chat/public-access'
 import { isAppWorkflow, pickNonAppWorkflow } from '@/lib/workflow/start-trigger'
 import { isChannelEnabledForCalendarNode, loadAgentAppsTools } from '@/lib/workflow/tools/load-agent-tools'
 import { assertServiceEntitlement } from '@/lib/entitlement'
+import { isAgentLocked } from '@/lib/agent-lock'
 import { MAX_OPEN_SLOTS, utcToIsoWithOffset, wallTimeToUtcMs } from '@/lib/calendar/slot-grid'
 import type { AIToolClient } from '@/lib/workflow/tools/types'
 import { isRealYmd } from './input'
@@ -69,10 +70,11 @@ export async function resolveBookingWidget(agentId: string): Promise<ResolvedBoo
   }
 }
 
-export async function isServiceAvailable(userId: string): Promise<boolean> {
+export async function isServiceAvailable(userId: string, agentId: string): Promise<boolean> {
   try {
     const r = await assertServiceEntitlement(userId)
-    return !r.reason
+    if (r.reason) return false
+    return !(await isAgentLocked(agentId))
   } catch {
     return false
   }

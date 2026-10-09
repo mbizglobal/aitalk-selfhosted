@@ -4,11 +4,15 @@ AI agents and workflow automation that you run on your own servers. Build workfl
 your own AI service, let the AI answer from your own documents, and use business apps (the first one prepares
 Swiss VAT returns) — with your data staying in your installation.
 
-This is the source of **AI Talk Self-hosted** and **AI Talk Enterprise** (the same software; Enterprise features
+This is the source of **AI Talk Self-hosted** and **AI Talk Business** (the same software; Business features
 are switched on with a license key). The hosted service is AI Talk Cloud at https://www.aitalk.ch.
 
-**License: source-available.** Free for your own company's internal business; selling it or offering it to others
-as a hosted service is not allowed. Read [`LICENSE`](LICENSE) and the plain-language [`LICENSE-FAQ.md`](LICENSE-FAQ.md)
+**License: source-available.** Free for your own company's internal business, and for consultants, freelancers and
+agencies who build and run it for clients — on the client's servers, in an installation dedicated to one client, or on
+your own installation as long as your clients receive outputs, not access. Letting several client companies use one
+installation you run (logins, screens, or building and changing its workflows), or running your own product for several businesses on it, needs a
+commercial license from us. Selling it as a product is not allowed.
+Read [`LICENSE`](LICENSE) and the plain-language [`LICENSE-FAQ.md`](LICENSE-FAQ.md)
 before you use it. AI Talk is not open source in the sense of the Open Source Initiative.
 
 ## What is included
@@ -29,7 +33,8 @@ AI Talk Cloud admin console. Workflows that use those steps cannot be saved in a
 You need Docker with Docker Compose and at least 5 GB of free disk for the images (more for your data). The installation has two
 containers — the app and PostgreSQL with pgvector — and stores uploaded files in a Docker volume.
 
-1. Build the image from this repository (or use an image tag you received from us):
+1. Use the published image `ghcr.io/mbizglobal/aitalk-selfhosted:<version>` (linux/amd64), or build it from this
+   repository — you must build it yourself if you add your own Work Apps:
 
    ```bash
    docker build -t aitalk-selfhosted:<version> .
@@ -47,8 +52,7 @@ containers — the app and PostgreSQL with pgvector — and stores uploaded file
    | `ENCRYPTION_SECRET` | Exactly 64 hex characters — `openssl rand -hex 32`. Keep it with your backups: without it, saved AI keys and passwords cannot be read |
    | `POSTGRES_PASSWORD` | Letters and digits only — `openssl rand -hex 24` |
    | `AITALK_IMAGE` | The image tag from step 1 |
-   | `SELFHOSTED_ADMIN_EMAILS` | Accounts that may manage AI connections and the license (comma-separated) |
-   | `SMTP_HOST`, `SMTP_FROM` (+ port, user, password) | Your mail server — for sign-up confirmation, password reset and team invitations |
+   | `SMTP_HOST`, `SMTP_FROM` (+ port, user, password) | Your mail server — for password reset and team invitations |
 
    Every other setting is optional and explained in `.env.example`.
 
@@ -62,8 +66,15 @@ containers — the app and PostgreSQL with pgvector — and stores uploaded file
    On start, the app checks its settings, the database and pgvector, and applies database changes; if a setting is
    wrong it stops and says why (`docker compose logs app`).
 
-5. Sign up with an address listed in `SELFHOSTED_ADMIN_EMAILS`, then open **Settings → AI connections** and add
-   your AI service. The AI does not answer until a connection is added and checked.
+5. The first visit shows **Create the administrator**. The account you create is the administrator and you are
+   signed in at once — an installation has one account, and sign-up closes as soon as it exists. Do this right after
+   the first start, before the address is reachable by others. Then open **Settings → AI connections** and add your
+   AI service. The AI does not answer until a connection is added and checked. Your first agent already has a
+   deployed **Work App** workflow — open it from its **Start / App** step in Agent Studio (**Open app**).
+
+6. Your team does not sign up: invite them in **Settings → Team**. When you choose a Work App in the invitation, it
+   takes the member to that app: they set a password when accepting, sign in once on the app, and sign in there from
+   then on.
 
 ### AI on the same server
 
@@ -72,6 +83,25 @@ If you have no AI service, the compose file can run open models with Ollama on t
 (`docker compose exec ollama ollama pull <model>`), and add an **OpenAI-compatible** connection with the address
 `http://ollama:11434/v1`. A model needs its own size in memory plus the context window — an 8B model with a 16K
 window needs more than 8 GB, and runs out of memory without a clear error.
+
+### Uploaded files on S3
+
+Uploaded files (documents, receipts) are kept outside the database — by default in the Docker volume `files`.
+To keep them in your own S3-compatible storage (AWS S3, MinIO, Exoscale, …) instead, set in `.env`:
+
+```bash
+FILE_STORE=s3
+S3_BUCKET=your-bucket
+S3_REGION=your-region
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+# only for storage that is not AWS:
+S3_ENDPOINT=https://s3.example.com
+S3_FORCE_PATH_STYLE=true
+```
+
+and run `docker compose up -d`. **Decide this at installation.** Files already in the volume are not moved to S3:
+if you switch later, files uploaded before the switch can no longer be opened or downloaded.
 
 ### Servers without internet
 
@@ -89,8 +119,9 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "
   && [ -s "$f.part" ] && mv "$f.part" "$f" && echo "OK $f" || { rm -f "$f.part"; echo "BACKUP FAILED"; false; }
 ```
 
-Then set `AITALK_IMAGE` to the new tag and run `docker compose up -d`. Also back up the files volume and keep
-`ENCRYPTION_SECRET` with the backups. The comments in `docker/docker-compose.yml` describe how to restore.
+Then set `AITALK_IMAGE` to the new tag and run `docker compose up -d`. Also back up the files volume (or your S3
+bucket, with `FILE_STORE=s3`) and keep `ENCRYPTION_SECRET` with the backups — the database alone lists your
+documents but does not contain the files. The comments in `docker/docker-compose.yml` describe how to restore.
 
 ### Document search with your own search server
 
@@ -98,11 +129,25 @@ Instead of the built-in pgvector search, the AI can take its sources from a sear
 set `KNOWLEDGE_STORE=http` and `KNOWLEDGE_HTTP_URL` / `KNOWLEDGE_HTTP_SECRET`. Ask us for the interface
 specification.
 
-## Enterprise
+## Work Apps
+
+A Work App is a business app your team opens like a team chat: the AI does the work in the app's sheets, people
+answer and confirm, and a period is closed with a sealed calculation. Swiss VAT is built in.
+
+You can add your own Work App as one folder in `src/work-apps/<id>/` — sheet templates, an app template with the
+AI's instructions, calculation and action modules, optional AI tools and the screen texts. The core draws the
+screens, stores the data and enforces the rules (what the AI wrote stays unconfirmed, people confirm, closed periods
+are locked). You add it with one line in `src/work-apps/custom.ts` and one in `src/work-apps/custom-meta.ts`, then
+build the image yourself (Install, step 1). Our updates never change those two files.
+
+Start with [`BUILD-A-WORK-APP.md`](BUILD-A-WORK-APP.md) and the example app in
+[`src/work-apps/example/`](src/work-apps/example/).
+
+## Business
 
 The code in [`src/ee/`](src/ee/) is part of every installation but switched off until a license key is set
 (`AITALK_LICENSE_FILE` or `AITALK_LICENSE`). Its first feature is approval of period closes in Work Apps.
-Enterprise licenses and support agreements: **support@aitalk.ch**.
+Business licenses and support agreements: **support@aitalk.ch**.
 
 ## Known limitations of this version
 

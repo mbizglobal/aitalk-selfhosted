@@ -7,6 +7,7 @@ import { APP_TEMPLATE_FEATURES, featureLabel } from '@/lib/work/app-template-fea
 import { isAppTemplateKind } from '@/lib/work/app-template-kinds'
 import type { WorkApi } from '../lib/api'
 import { errorText } from './SheetTable'
+import { useWorkPkg } from './work-pkg'
 
 interface ModuleChoice {
   id: string
@@ -18,7 +19,8 @@ interface ModuleChoice {
 }
 
 export function ModulePanel({ api, lang, projectId, kind, readOnly, onChanged }: { api: WorkApi; lang: WorkLang; projectId: string; kind: string; readOnly: boolean; onChanged: () => void }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [list, setList] = useState<ModuleChoice[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -29,7 +31,7 @@ export function ModulePanel({ api, lang, projectId, kind, readOnly, onChanged }:
     setList(r.modules)
   }, [api, projectId])
 
-  useEffect(() => { load().catch((e) => setError(errorText(lang, e))) }, [load, lang])
+  useEffect(() => { load().catch((e) => setError(errorText(lang, e, pkg))) }, [load, lang, pkg])
 
   const toggle = async (m: ModuleChoice) => {
     if (inFlight.current) return
@@ -40,7 +42,7 @@ export function ModulePanel({ api, lang, projectId, kind, readOnly, onChanged }:
       await load()
       onChanged()
     } catch (e) {
-      setError(errorText(lang, e))
+      setError(errorText(lang, e, pkg))
       await load().catch(() => {})
     } finally { inFlight.current = false; setBusy(false) }
   }

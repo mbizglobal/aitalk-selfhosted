@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useLanguage } from '@/hooks/useLanguage'
 import { getAgentStudioTranslation } from '@/lib/translations/agent-studio'
 import { APP_TEMPLATE_KINDS, isAppTemplateKind } from '@/lib/work/app-template-kinds'
+import { parseWorkLang, workKindLabel } from '@/lib/translations/work'
 import { APP_TEMPLATE_FEATURES, featureLabel } from '@/lib/work/app-template-features'
 import { useWorkflowContext } from '../../contexts/WorkflowContext'
 
@@ -40,7 +41,7 @@ export const AppStartPanel: React.FC<Props> = ({ node, updateNodeData }) => {
                 : 'border-[#3A3A3A] text-gray-300 hover:border-gray-500'
               }`}
             >
-              {k ? (t[`app_template_${k}`] || k) : (t.app_template_choose || 'Choose in the first chat')}
+              {k ? (t[`app_template_${k}`] || workKindLabel(parseWorkLang(lang), k)) : (t.app_template_choose || 'Choose in the first chat')}
             </button>
           ))}
         </div>

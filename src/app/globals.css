@@ -14,10 +14,11 @@
 
 @media (min-width: 768px) {
   .hero-section-wide {
-    height: 640px;
+    min-height: 640px;
   }
   .hero-section-wide .hero-content {
-    height: 100%;
+    height: auto;
+    min-height: 640px;
   }
 }
 

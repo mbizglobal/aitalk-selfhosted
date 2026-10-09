@@ -6,6 +6,7 @@ import { workT, type WorkLang } from '@/lib/translations/work'
 import { WorkApiError, type PairTargetRow, type SheetRow, type SheetScreen, type WorkApi } from '../lib/api'
 import { fieldInputCls } from './AppTemplateFields'
 import { errorText } from './SheetTable'
+import { useWorkPkg } from './work-pkg'
 
 interface Props {
   api: WorkApi
@@ -18,15 +19,16 @@ interface Props {
   onClose: () => void
 }
 
-function summaryText(lang: WorkLang, s: PairTargetRow['summary']): string {
+function summaryText(lang: WorkLang, s: PairTargetRow['summary'], pkg: string | null): string {
   return s
-    .map(([, v]) => (v === null || v === undefined || v === '' ? null : typeof v === 'string' ? workT(lang, `opt_${v}`, v) : String(v)))
+    .map(([, v]) => (v === null || v === undefined || v === '' ? null : typeof v === 'string' ? workT(lang, `opt_${v}`, v, pkg) : String(v)))
     .filter(Boolean)
     .join(' · ')
 }
 
 export function PairDialog({ api, lang, projectId, sheet, row, readOnly, onChanged, onClose }: Props) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const base = `/projects/${projectId}/sheets/${sheet.id}/pairs`
   const mine = sheet.pairs.filter((p) => p.fromRowId === row.id)
   const [kind, setKind] = useState(sheet.pairDefs[0]?.kind ?? '')
@@ -44,21 +46,21 @@ export function PairDialog({ api, lang, projectId, sheet, row, readOnly, onChang
       if (targets[f]) continue
       void api<{ rows: PairTargetRow[] }>('GET', `/projects/${projectId}/pair-targets?family=${encodeURIComponent(f)}`)
         .then((r) => setTargets((x) => ({ ...x, [f]: r.rows })))
-        .catch((e) => setError(errorText(lang, e)))
+        .catch((e) => setError(errorText(lang, e, pkg)))
     }
-  }, [families, targets, api, projectId, lang])
+  }, [families, targets, api, projectId, lang, pkg])
 
   const labelOf = (toRowId: string, k: string) => {
     const fam = sheet.pairDefs.find((d) => d.kind === k)?.toFamily
     const hit = fam ? targets[fam]?.find((r) => r.id === toRowId) : undefined
-    return hit ? summaryText(lang, hit.summary) : '…'
+    return hit ? summaryText(lang, hit.summary, pkg) : '…'
   }
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true); setError(null)
     try { await fn(); onChanged() } catch (e) {
-      if (e instanceof WorkApiError && e.code === 'LOCKED' && sheet.exceptions.length > 0) setError(`${errorText(lang, e)}\n${t('pair_exception_hint')}`)
-      else setError(errorText(lang, e))
+      if (e instanceof WorkApiError && e.code === 'LOCKED' && sheet.exceptions.length > 0) setError(`${errorText(lang, e, pkg)}\n${t('pair_exception_hint')}`)
+      else setError(errorText(lang, e, pkg))
       throw e
     } finally { setBusy(false) }
   }
@@ -73,7 +75,7 @@ export function PairDialog({ api, lang, projectId, sheet, row, readOnly, onChang
   const confirmPair = (pairId: string) => run(async () => { await api('POST', `${base}/${pairId}/confirm`) }).catch(() => undefined)
 
   const taken = new Set(mine.filter((p) => p.kind === kind).map((p) => p.toRowId))
-  const list = (def ? targets[def.toFamily] ?? null : null)?.filter((r) => !taken.has(r.id) && (!filter.trim() || summaryText(lang, r.summary).toLowerCase().includes(filter.trim().toLowerCase())))
+  const list = (def ? targets[def.toFamily] ?? null : null)?.filter((r) => !taken.has(r.id) && (!filter.trim() || summaryText(lang, r.summary, pkg).toLowerCase().includes(filter.trim().toLowerCase())))
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={onClose}>
@@ -121,7 +123,7 @@ export function PairDialog({ api, lang, projectId, sheet, row, readOnly, onChang
                     <li key={r.id}>
                       <button onClick={() => void pair(r.id)} disabled={busy} className="w-full flex items-center gap-2 px-2 py-2 text-left text-sm text-gray-200 hover:bg-[#232323]">
                         {r.locked && <Lock className="w-3.5 h-3.5 text-gray-500 shrink-0" />}
-                        <span className="truncate">{summaryText(lang, r.summary)}</span>
+                        <span className="truncate">{summaryText(lang, r.summary, pkg)}</span>
                       </button>
                     </li>
                   ))}

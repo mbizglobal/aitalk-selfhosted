@@ -9,6 +9,8 @@ import { extractTelegramMessage, sendTypingIndicator, sendTelegramMessage } from
 import { describeCaughtError, safeLogId, safeLogToken } from '@/lib/log-mask'
 import type { TelegramUpdate } from '@/lib/bots/telegram/types'
 import { isSelfHosted } from '@/lib/edition'
+import { assertServiceEntitlement } from '@/lib/entitlement'
+import { isAgentLocked } from '@/lib/agent-lock'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -92,6 +94,11 @@ export async function POST(
     const agent = await prisma.agent.findFirst({
       where: { agentId: workflow.agentId }
     })
+
+    if (!agent || !(await assertServiceEntitlement(agent.userId)).allowed || await isAgentLocked(agent.agentId)) {
+      console.warn(`[Telegram Webhook] ${safeLogToken(workflow.workflowId)} skipped — service blocked or agent locked`)
+      return NextResponse.json({ ok: true })
+    }
 
     const botToken = await decryptData(connection.encryptedToken)
 

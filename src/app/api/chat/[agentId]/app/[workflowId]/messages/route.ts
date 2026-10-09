@@ -14,6 +14,7 @@ import {
 import { closeWorkAppRun, openWorkAppRun } from '@/lib/work/app-scope'
 import { MAX_TURN_BYTES, MODEL_IMAGE_MIME, readTurnRequest, shownOf, turnNotes } from '@/lib/work/turn-attachments'
 import { assertServiceEntitlement } from '@/lib/entitlement'
+import { isAgentLocked, AGENT_LOCKED_CODE } from '@/lib/agent-lock'
 import { validateCPAWithCache } from '@/lib/cpa-service'
 import { ChatStreamCollector } from '@/lib/chat/stream-collector'
 import { decryptJson } from '@/lib/work/sealed'
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<P> })
     if (graphProblem) throw new WorkError('FORBIDDEN', `work app graph: ${graphProblem}`)
     const entitlement = await assertServiceEntitlement(access.userId)
     if (!entitlement.allowed) return NextResponse.json({ error: 'SERVICE_BLOCKED', reason: entitlement.reason }, { status: 403 })
+    if (await isAgentLocked(access.agentId)) return NextResponse.json({ error: AGENT_LOCKED_CODE }, { status: 403 })
     const cpa = await validateCPAWithCache(access.userId, null)
     if (!cpa.allowed) return NextResponse.json({ error: 'INSUFFICIENT_CPA' }, { status: 402 })
 

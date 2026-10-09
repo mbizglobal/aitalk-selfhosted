@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
+import '@/lib/agent-lock-test-no-db'
 import { WorkflowEngine } from './engine'
 import { WhileLoopExecutor } from './nodes/while'
 import { WorkflowContext, WorkflowNode } from './types'

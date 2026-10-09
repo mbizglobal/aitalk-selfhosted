@@ -6,6 +6,7 @@ import { workT, type WorkLang } from '@/lib/translations/work'
 import { WorkApiError, type NoteKind, type NoteList, type NoteView, type TaskSummary, type WorkApi } from '../lib/api'
 import { errorText } from './SheetTable'
 import { ConfirmDialog } from './ConfirmDialog'
+import { useWorkPkg } from './work-pkg'
 
 const KINDS: NoteKind[] = ['conclusion', 'todo', 'source']
 const inputCls = 'w-full rounded-md bg-[#2A2A2A] border border-[#3A3A3A] px-3 py-2 text-sm text-white focus:outline-none focus:border-[#E07B53]'
@@ -20,7 +21,8 @@ function NoteEditor({ lang, kind: kind0, text: text0, busy, okLabel, onSave, onC
   onSave: (kind: NoteKind, text: string) => void
   onCancel?: () => void
 }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [kind, setKind] = useState<NoteKind>(kind0)
   const [text, setText] = useState(text0)
   const ok = text.trim() !== '' && text.length <= MAX_CHARS
@@ -51,7 +53,8 @@ function NoteSection({ lang, title, help, notes, locked, lockedText, busy, onCre
   onDelete: (n: NoteView) => void
   onReview: (n: NoteView, accept: boolean) => void
 }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [editing, setEditing] = useState<{ id: string; updatedAt: string } | null>(null)
   const [draftKey, setDraftKey] = useState(0)
   return (
@@ -111,7 +114,8 @@ function NoteSection({ lang, title, help, notes, locked, lockedText, busy, onCre
 }
 
 export function NotePanel({ api, lang, projectId, task, readOnly }: { api: WorkApi; lang: WorkLang; projectId: string; task: TaskSummary | null; readOnly: boolean }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [list, setList] = useState<NoteList | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -126,16 +130,16 @@ export function NotePanel({ api, lang, projectId, task, readOnly }: { api: WorkA
     let live = true
     api<NoteList>('GET', path)
       .then((r) => { if (live) setList(r) })
-      .catch((e) => { if (live) setError(errorText(lang, e)) })
+      .catch((e) => { if (live) setError(errorText(lang, e, pkg)) })
     return () => { live = false }
-  }, [api, lang, path])
+  }, [api, lang, path, pkg])
 
   const run = async (fn: () => Promise<unknown>): Promise<boolean> => {
     if (inFlight.current) return false
     inFlight.current = true
     setBusy(true); setError(null)
     try { await fn(); await load(); return true } catch (e) {
-      setError(e instanceof WorkApiError && e.code === 'STALE' ? t('note_stale') : errorText(lang, e))
+      setError(e instanceof WorkApiError && e.code === 'STALE' ? t('note_stale') : errorText(lang, e, pkg))
       await load().catch(() => {})
       return false
     } finally { inFlight.current = false; setBusy(false) }

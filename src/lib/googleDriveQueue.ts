@@ -6,6 +6,8 @@ import { describeCaughtError } from '@/lib/log-mask'
 import { RAGProviderType } from '@/lib/rag-providers/types'
 import { PineconeClient, PineconeConnectionConfig } from '@/lib/rag-providers/clients/pinecone'
 import { getKnowledgeStore } from '@/lib/knowledge'
+import { completeWithinStorageQuota } from '@/lib/storage/quota'
+import { getErrorMessage } from '@/lib/translations/dashboard'
 
 const PINECONE_EMBEDDING_MODELS = ['llama-text-embed-v2', 'multilingual-e5-large', 'pinecone-sparse-english-v0']
 
@@ -166,16 +168,18 @@ class GoogleDriveQueue {
     queuedJob.status = 'processing'
 
     try {
-      await this.executeJob(queuedJob)
+      const outcome = await this.executeJob(queuedJob)
       queuedJob.status = 'completed'
 
-      this.sendSSEUpdate({
-        type: 'google_drive_update',
-        storageId: queuedJob.storageId,
-        agentId: queuedJob.agentId,
-        status: 'completed',
-        message: 'File successfully processed'
-      })
+      if (outcome !== 'over_limit') {
+        this.sendSSEUpdate({
+          type: 'google_drive_update',
+          storageId: queuedJob.storageId,
+          agentId: queuedJob.agentId,
+          status: 'completed',
+          message: 'File successfully processed'
+        })
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -205,7 +209,7 @@ class GoogleDriveQueue {
     }
   }
 
-  private async executeJob(job: GoogleDriveJob): Promise<void> {
+  private async executeJob(job: GoogleDriveJob): Promise<void | 'over_limit'> {
     const { storageId, fileName, content, mimeType, agentId, vectorStoreId, ragProvider } = job
 
     this.sendSSEUpdate({
@@ -233,7 +237,7 @@ class GoogleDriveQueue {
     const effectiveRagProvider = isManaged ? 'azure_ai_search' : ragProvider
 
     if (effectiveRagProvider === 'azure_ai_search' && isManaged && subscription?.managedRegion) {
-      await this.executeAzureAISearchUpload(job, subscription.managedRegion)
+      if ((await this.executeAzureAISearchUpload(job, subscription.managedRegion)) === 'over_limit') return 'over_limit'
     } else if (effectiveRagProvider === 'pinecone') {
       if (!agent.user.encryptedDataKey) {
         throw new Error('User configuration not found')
@@ -507,7 +511,7 @@ class GoogleDriveQueue {
     })
   }
 
-  private async executeAzureAISearchUpload(job: GoogleDriveJob, managedRegion: string): Promise<void> {
+  private async executeAzureAISearchUpload(job: GoogleDriveJob, managedRegion: string): Promise<void | 'over_limit'> {
     const { storageId, fileName, content, mimeType, agentId } = job
     let blobPath: string | undefined
 
@@ -574,11 +578,12 @@ class GoogleDriveQueue {
         blobPath,
       })
       const { indexName } = result.providerRef
+      const freshKey = { fileId: result.providerRef.fileId, chunkCount: result.chunkCount || 0 }
 
       const stillExists = await this.prisma.storage.findUnique({ where: { id: storageId }, select: { id: true } })
       if (!stillExists) {
         console.warn(`[GoogleDriveQueue] storage ${storageId} deleted during indexing — cleaning up chunks/blob`)
-        try { await store.deleteDoc({ agentId }, String(storageId)) } catch (e) { console.warn('[GoogleDriveQueue] chunk cleanup failed (orphan possible):', describeCaughtError(e)) }
+        try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (e) { console.warn('[GoogleDriveQueue] chunk cleanup failed (orphan possible):', describeCaughtError(e)) }
         if (blobPath) { try { const { deleteFromBlob } = await import('@/lib/managed/blob-storage'); await deleteFromBlob(managedRegion, blobPath) } catch (e) { console.warn('[GoogleDriveQueue] blob cleanup failed:', describeCaughtError(e)) } }
         return
       }
@@ -611,16 +616,37 @@ class GoogleDriveQueue {
         }
       }
 
-      await this.prisma.storage.update({
-        where: { id: storageId },
+      const overLimitMessage = getErrorMessage('api_error_storage_limit_exceeded')
+      const outcome = await completeWithinStorageQuota({
+        agentId,
+        storageId,
+        textBytes: result.textSize,
+        overLimitMessage,
+        overLimitData: {
+          ragProvider: 'azure_ai_search',
+          ragStatus: JSON.stringify({ azure_ai_search: { ...ragStatus.azure_ai_search, status: 'failed' } }),
+          blobPath: blobPath || null,
+        },
         data: {
-          status: 'completed',
           ragProvider: 'azure_ai_search',
           ragStatus: JSON.stringify(ragStatus),
           blobPath: blobPath || null,
-          ...(result.textSize !== undefined && { fileSizeBytes: result.textSize }),
-        }
+        },
+      }).catch(async (e) => {
+        try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (ce) { console.warn('[GoogleDriveQueue] chunk cleanup after failed completion (orphan possible):', describeCaughtError(ce)) }
+        throw e
       })
+
+      if (outcome === 'over_limit') {
+        try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (e) { console.warn('[GoogleDriveQueue] over-limit chunk cleanup failed (removed when the item is deleted):', describeCaughtError(e)) }
+        this.sendSSEUpdate({ type: 'google_drive_update', storageId, agentId, status: 'failed', message: overLimitMessage })
+        return 'over_limit'
+      }
+      if (outcome === 'gone') {
+        try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (e) { console.warn('[GoogleDriveQueue] chunk cleanup failed (orphan possible):', describeCaughtError(e)) }
+        if (blobPath) { try { const { deleteFromBlob } = await import('@/lib/managed/blob-storage'); await deleteFromBlob(managedRegion, blobPath) } catch (e) { console.warn('[GoogleDriveQueue] blob cleanup failed:', describeCaughtError(e)) } }
+        return
+      }
 
       this.sendSSEUpdate({
         type: 'google_drive_update',

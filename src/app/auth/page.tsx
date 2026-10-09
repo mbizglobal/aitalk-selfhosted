@@ -6,6 +6,9 @@ import { signIn, getSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useCookieConsent } from '@/hooks/useCookieConsent'
+import { AuthLanguageSwitcher } from '@/components/AuthLanguageSwitcher'
+import { useEdition } from '@/components/EditionProvider'
+import { SelfHostedFooter } from '@/components/SelfHostedFooter'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +33,8 @@ type LoginStep = 'email' | 'password' | 'passkey'
 function AuthContent() {
   const { t, currentLanguage, setLanguage } = useLanguage()
   const googleLogin = useGoogleLoginEnabled()
+  const selfHosted = useEdition() === 'selfhosted'
+  const [setupOpen, setSetupOpen] = useState(false)
   const { hasConsented, isLoaded } = useCookieConsent()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -95,7 +100,7 @@ function AuthContent() {
       return
     }
 
-    if (googleLogin && normalizedEmail.toLowerCase().endsWith('@gmail.com')) {
+    if (googleLogin && !selfHosted && normalizedEmail.toLowerCase().endsWith('@gmail.com')) {
       setError(t('auth_error_gmail_detected'))
 
       setTimeout(async () => {
@@ -202,10 +207,18 @@ function AuthContent() {
   }, [searchParams])
 
   useEffect(() => {
-    if (searchParams.get('mode') === 'signup') {
+    if (!selfHosted && searchParams.get('mode') === 'signup') {
       setIsSignUp(true)
     }
-  }, [searchParams])
+  }, [searchParams, selfHosted])
+
+  useEffect(() => {
+    if (!selfHosted) return
+    fetch('/api/auth/setup-status', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { const open = d?.setupOpen === true; setSetupOpen(open); setIsSignUp(open) })
+      .catch(() => {})
+  }, [selfHosted])
 
   useEffect(() => {
     const errorParam = searchParams.get('error')
@@ -225,6 +238,8 @@ function AuthContent() {
       setError(t('auth_error_device_limit') || 'Too many accounts created from this device')
     } else if (errorParam.includes('IP_SIGNUP_LIMIT_EXCEEDED')) {
       setError(t('auth_error_ip_limit') || 'Too many accounts created from this IP address')
+    } else if (errorParam.includes('SIGNUP_CLOSED')) {
+      setError(t('auth_selfhosted_admin_only'))
     }
   }, [searchParams, t])
 
@@ -267,7 +282,7 @@ function AuthContent() {
       return
     }
 
-    if (googleLogin && email.trim().toLowerCase().endsWith('@gmail.com')) {
+    if (googleLogin && !selfHosted && email.trim().toLowerCase().endsWith('@gmail.com')) {
       setError(t('auth_error_gmail_detected'))
 
       setTimeout(async () => {
@@ -305,7 +320,11 @@ function AuthContent() {
           return
         }
 
-        if (isSignUp && result.error.includes('USER_EXISTS_VERIFIED')) {
+        if (result.error.includes('SIGNUP_CLOSED')) {
+          setSetupOpen(false)
+          setIsSignUp(false)
+          setError(t('auth_selfhosted_admin_only'))
+        } else if (isSignUp && result.error.includes('USER_EXISTS_VERIFIED')) {
           setError(t('auth_error_user_exists_verified'))
         } else if (result.error.includes('ANONYMIZED_USER')) {
           setError(t('auth_error_anonymized_user'))
@@ -437,6 +456,13 @@ function AuthContent() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+      <AuthLanguageSwitcher />
+      {selfHosted && (
+        <div className="w-full max-w-md mb-4 text-center">
+          <div className="text-2xl font-semibold tracking-tight">AI Talk</div>
+          <div className="text-sm text-muted-foreground">{t('selfhosted_tagline')}</div>
+        </div>
+      )}
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
@@ -452,7 +478,7 @@ function AuthContent() {
             {isForgotPassword
               ? t('auth_title_forgot_password')
               : isSignUp
-                ? t('auth_title_signup')
+                ? (selfHosted && setupOpen ? t('auth_setup_title') : t('auth_title_signup'))
                 : t('auth_title_login')
             }
           </CardTitle>
@@ -460,7 +486,7 @@ function AuthContent() {
             {isForgotPassword
               ? t('auth_description_forgot_password')
               : isSignUp
-                ? t('auth_description_signup')
+                ? (selfHosted && setupOpen ? t('auth_setup_description') : t('auth_description_signup'))
                 : t('auth_description_login')
             }
           </CardDescription>
@@ -480,7 +506,7 @@ function AuthContent() {
             </Alert>
           )}
 
-          {googleLogin && !isForgotPassword && (isSignUp || loginStep === 'email') && (
+          {googleLogin && !(selfHosted && isSignUp) && !isForgotPassword && (isSignUp || loginStep === 'email') && (
           <div className="relative">
             <Button
               variant="outline"
@@ -523,7 +549,7 @@ function AuthContent() {
         </div>
           )}
 
-          {googleLogin && !isForgotPassword && (isSignUp || loginStep === 'email') && (
+          {googleLogin && !(selfHosted && isSignUp) && !isForgotPassword && (isSignUp || loginStep === 'email') && (
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <Separator className="w-full" />
@@ -712,17 +738,22 @@ function AuthContent() {
               </Button>
             ) : (
               <>
-                <Button
-                  variant="link"
-                  className="text-sm"
-                  onClick={toggleMode}
-                  disabled={isLoading}
-                >
-                  {isSignUp
-                    ? t('auth_toggle_login')
-                    : t('auth_toggle_signup')
-                  }
-                </Button>
+                {!selfHosted && (
+                  <Button
+                    variant="link"
+                    className="text-sm"
+                    onClick={toggleMode}
+                    disabled={isLoading}
+                  >
+                    {isSignUp
+                      ? t('auth_toggle_login')
+                      : t('auth_toggle_signup')
+                    }
+                  </Button>
+                )}
+                {selfHosted && !isSignUp && (
+                  <p className="text-xs text-muted-foreground px-2">{t('auth_selfhosted_admin_only')}</p>
+                )}
                 {!isSignUp && loginStep === 'password' && (
                   <div>
                     <Button
@@ -740,18 +771,21 @@ function AuthContent() {
           </div>
         </CardContent>
       </Card>
-      <div className="mt-6 text-center">
-        <Button
-          variant="outline"
-          className="text-sm"
-          onClick={() => {
-            window.location.href = window.location.origin
-          }}
-          disabled={isLoading}
-        >
-          {t('auth_back_to_home')}
-        </Button>
-      </div>
+      <SelfHostedFooter className="mt-6 w-full max-w-md" />
+      {!selfHosted && (
+        <div className="mt-6 text-center">
+          <Button
+            variant="outline"
+            className="text-sm"
+            onClick={() => {
+              window.location.href = window.location.origin
+            }}
+            disabled={isLoading}
+          >
+            {t('auth_back_to_home')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

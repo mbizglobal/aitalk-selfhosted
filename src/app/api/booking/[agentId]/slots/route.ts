@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const resolved = await resolveBookingWidget(agentId)
     if (!resolved) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: NO_STORE })
-    if (!(await isServiceAvailable(resolved.userId))) {
+    if (!(await isServiceAvailable(resolved.userId, resolved.agentId))) {
       return NextResponse.json({ ok: false, reason: 'unavailable' }, { headers: NO_STORE })
     }
 

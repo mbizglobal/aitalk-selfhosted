@@ -8,6 +8,7 @@ import { WorkApiError, type ProjectFileView, type WorkFiles } from '../lib/api'
 import { errorText } from './SheetTable'
 import { ConfirmDialog } from './ConfirmDialog'
 import { asCsv } from './ImportDialog'
+import { useWorkPkg } from './work-pkg'
 
 export const FILE_MAX_BYTES = 20 * 1024 * 1024
 export const PDF_MAX_PAGES = 10
@@ -72,7 +73,8 @@ interface Report {
 }
 
 function ReportBox({ report: r, lang, onClose }: { report: Report; lang: WorkLang; onClose: () => void }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const bad = r.failed.length > 0
   return (
     <div role="status" className={`rounded-md border px-3 py-2 text-sm space-y-1 ${bad ? 'border-amber-500/40 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5'}`}>
@@ -99,7 +101,8 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
   projectId: string
   readOnly: boolean
 }) {
-  const t = (k: string) => workT(lang, k)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [list, setList] = useState<ProjectFileView[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -116,14 +119,14 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
       if (my !== seq.current) return
       setList(l)
       setSelected((cur) => new Set([...cur].filter((id) => l.some((f) => f.id === id && !f.locked))))
-    } catch (e) { if (my === seq.current) setError(errorText(lang, e)) }
-  }, [files, projectId, lang])
+    } catch (e) { if (my === seq.current) setError(errorText(lang, e, pkg)) }
+  }, [files, projectId, lang, pkg])
 
   useEffect(() => { void load() }, [load])
 
   const uploadReason = (e: unknown): string => {
     if (e instanceof WorkApiError && e.code === 'INVALID') return e.detail?.includes('too large') ? t('files_reason_size') : t('files_reason_type')
-    return errorText(lang, e)
+    return errorText(lang, e, pkg)
   }
 
   const upload = async (picked: FileList | null) => {
@@ -163,7 +166,7 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
         r.done++
       } catch (e) {
         const code = e instanceof WorkApiError ? e.code : ''
-        r.failed.push({ name: f.name, reason: code === 'LOCKED' ? t('files_reason_locked') : code === 'IN_USE' ? t('files_reason_in_use') : errorText(lang, e) })
+        r.failed.push({ name: f.name, reason: code === 'LOCKED' ? t('files_reason_locked') : code === 'IN_USE' ? t('files_reason_in_use') : errorText(lang, e, pkg) })
       }
     }
     setDeleting(null)
@@ -223,7 +226,7 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
                       ? <span title={t('files_locked')} className="w-4 flex justify-center text-gray-500"><Lock className="w-3.5 h-3.5" /></span>
                       : <input type="checkbox" className="accent-[#E07B53] shrink-0" checked={selected.has(f.id)} disabled={busy} onChange={() => toggle(f.id)} aria-label={f.name} />
                   )}
-                  <button onClick={() => void files.open(projectId, f.id).catch((e) => setError(errorText(lang, e)))} className="flex-1 min-w-0 flex items-center gap-2 text-left">
+                  <button onClick={() => void files.open(projectId, f.id).catch((e) => setError(errorText(lang, e, pkg)))} className="flex-1 min-w-0 flex items-center gap-2 text-left">
                     <FileText className="w-4 h-4 shrink-0 text-gray-400" />
                     <span className="min-w-0">
                       <span className="block text-sm text-gray-200 truncate hover:text-white">{f.name}</span>

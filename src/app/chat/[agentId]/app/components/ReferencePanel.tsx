@@ -2,20 +2,22 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Check, Loader2 } from 'lucide-react'
-import { workT, type WorkLang } from '@/lib/translations/work'
+import { packageOfFamily, workT, type WorkLang } from '@/lib/translations/work'
 import type { ReferenceScreenItem, ReferenceScreenSheet, WorkApi } from '../lib/api'
 import { errorText } from './SheetTable'
+import { useWorkPkg } from './work-pkg'
 
-function cell(lang: WorkLang, v: unknown, options: string[] | undefined): string {
+function cell(lang: WorkLang, v: unknown, options: string[] | undefined, pkg: string | null): string {
   if (v === undefined || v === null) return ''
-  if (typeof v === 'string') return options?.includes(v) ? workT(lang, `opt_${v}`, v) : v
-  if (typeof v === 'boolean') return workT(lang, v ? 'yes' : 'no')
+  if (typeof v === 'string') return options?.includes(v) ? workT(lang, `opt_${v}`, v, pkg) : v
+  if (typeof v === 'boolean') return workT(lang, v ? 'yes' : 'no', undefined, pkg)
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
 
 function ReadOnlyTable({ lang, sheet }: { lang: WorkLang; sheet: ReferenceScreenSheet }) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = packageOfFamily(sheet.family)
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const cols = sheet.schema.columns.filter((c) => !sheet.hidden.includes(c.name))
   const rows = useMemo(() => {
     const col = sheet.dateColumn
@@ -44,7 +46,7 @@ function ReadOnlyTable({ lang, sheet }: { lang: WorkLang; sheet: ReferenceScreen
               )}
               {cols.map((c) => (
                 <td key={c.name} className={`px-3 py-2 text-gray-200 max-w-[16rem] truncate ${c.type === 'money' || c.type === 'decimal' || c.type === 'number' ? 'text-right tabular-nums' : ''}`}>
-                  {cell(lang, r.data[c.name], sheet.options[c.name])}
+                  {cell(lang, r.data[c.name], sheet.options[c.name], pkg)}
                 </td>
               ))}
             </tr>
@@ -56,7 +58,8 @@ function ReadOnlyTable({ lang, sheet }: { lang: WorkLang; sheet: ReferenceScreen
 }
 
 export function ReferencePanel({ api, lang, projectId }: { api: WorkApi; lang: WorkLang; projectId: string }) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [list, setList] = useState<ReferenceScreenItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pick, setPick] = useState<{ ref: string; sheet: string } | null>(null)
@@ -65,15 +68,15 @@ export function ReferencePanel({ api, lang, projectId }: { api: WorkApi; lang: W
     let live = true
     api<{ references: ReferenceScreenItem[] }>('GET', `/projects/${projectId}/references`)
       .then((r) => { if (!live) return; setList(r.references); const f = r.references.find((x) => x.sheets.length); setPick(f ? { ref: f.referenceId, sheet: f.sheets[0].id } : null) })
-      .catch((e) => { if (live) setError(errorText(lang, e)) })
+      .catch((e) => { if (live) setError(errorText(lang, e, pkg)) })
     return () => { live = false }
-  }, [api, projectId, lang])
+  }, [api, projectId, lang, pkg])
 
   if (error) return <p className="p-4 text-sm text-red-400 whitespace-pre-line">{error}</p>
   if (!list) return <div className="p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#E07B53]" /></div>
   if (list.length === 0) return <p className="p-6 text-sm text-gray-500">{t('ref_none')}</p>
 
-  const sheetLabel = (s: { family: string; name: string; template: string | null }) => (s.template ? t(`sheet_${s.family}`, s.name) : s.name)
+  const sheetLabel = (s: { family: string; name: string; template: string | null }) => (s.template ? workT(lang, `sheet_${s.family}`, s.name, packageOfFamily(s.family)) : s.name)
   const current = list.find((r) => r.referenceId === pick?.ref)?.sheets.find((s) => s.id === pick?.sheet) ?? null
 
   return (

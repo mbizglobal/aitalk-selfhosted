@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { FileUp, Loader2, Paperclip, X } from 'lucide-react'
 import { workT, type WorkLang } from '@/lib/translations/work'
 import type { ColumnDef, SheetRow } from '../lib/api'
+import { useWorkPkg } from './work-pkg'
 
 interface Props {
   lang: WorkLang
@@ -41,7 +42,8 @@ function toRaw(col: ColumnDef, v: unknown): string | boolean {
 }
 
 export function RowEditor({ lang, title, columns, options, refOptions, row, confirmable, busy, error, fileColumn, onUpload, onOpenFile, onSave, onClose }: Props) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [raw, setRaw] = useState<Record<string, string | boolean>>(() => Object.fromEntries(columns.map((c) => [c.name, toRaw(c, row?.data[c.name])])))
 
   const initialFile = fileColumn && typeof row?.data[fileColumn] === 'string' ? (row.data[fileColumn] as string) : null

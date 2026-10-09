@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isGoogleLoginEnabled } from '@/lib/auth/google-login'
+import { gmailMustUseGoogle } from '@/lib/auth/google-login'
+import { describeCaughtError } from '@/lib/log-mask'
 import { prisma } from '@/lib/prisma'
 import { authTokenService } from '@/lib/auth-tokens'
 import { sendPasswordResetEmailBackground } from '@/lib/background-email'
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (isGoogleLoginEnabled() && email.toLowerCase().endsWith('@gmail.com')) {
+    if (gmailMustUseGoogle(email)) {
       return NextResponse.json(
         { error: 'Gmail users should use Google Sign-In to access their account.' },
         { status: 400 }
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       })
       
     } catch (error) {
+      console.error('[forgot-password] send failed:', describeCaughtError(error))
       return NextResponse.json(
         { error: 'Failed to process password reset request. Please try again later.' },
         { status: 500 }
@@ -75,6 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
+    console.error('[forgot-password] failed:', describeCaughtError(error))
     return NextResponse.json(
       { error: 'An error occurred while processing your request.' },
       { status: 500 }

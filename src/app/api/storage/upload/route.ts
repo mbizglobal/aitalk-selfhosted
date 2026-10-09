@@ -18,6 +18,7 @@ import { HTTP_SEARCH_NO_INGEST } from '@/lib/knowledge/http'
 import { isSelfHosted } from '@/lib/edition'
 import { isBinaryFileType, isBinaryFileExtension } from '@/lib/managed/doc-intelligence'
 import { resolveRagSpaceId, RagSpaceError } from '@/lib/rag-space'
+import { storageAlreadyFull, completeWithinStorageQuota } from '@/lib/storage/quota'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
         where: { agentId, status: 'completed' },
         _sum: { fileSizeBytes: true }
       })
-      if ((currentUsage._sum.fileSizeBytes || 0) + file.size > user.subscription.storagePerAgent) {
+      if (storageAlreadyFull(currentUsage._sum.fileSizeBytes || 0, user.subscription.storagePerAgent)) {
         return NextResponse.json({
           error: getErrorMessage('api_error_storage_limit_exceeded', language),
           code: 'STORAGE_LIMIT_EXCEEDED'
@@ -1046,6 +1047,7 @@ async function processAzureAISearchFileUpload(
   language: string,
   subscription?: { docPagesPerMonth: number | null; docPagesUsed: number; docPagesMonth: number; id?: string }
 ) {
+  let blobPath: string | undefined
   try {
     const isBinary = isBinaryFileType(file.type) || isBinaryFileExtension(file.name)
     if (isBinary && subscription?.docPagesPerMonth !== null && subscription?.docPagesPerMonth !== undefined) {
@@ -1077,7 +1079,6 @@ async function processAzureAISearchFileUpload(
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
-    let blobPath: string | undefined
     try {
       const { generateBlobPath, uploadToBlob } = await import('@/lib/managed/blob-storage')
       blobPath = generateBlobPath(userId, agentId, file.name)
@@ -1106,11 +1107,14 @@ async function processAzureAISearchFileUpload(
       blobPath,
     })
     const indexName = 'indexName' in result.providerRef ? result.providerRef.indexName : undefined
+    const freshKey = 'fileId' in result.providerRef && typeof result.providerRef.fileId === 'string'
+      ? { fileId: result.providerRef.fileId, chunkCount: result.chunkCount || 0 }
+      : null
 
     const stillExists = await prisma.storage.findUnique({ where: { id: storageId }, select: { id: true } })
     if (!stillExists) {
       console.warn(`[AzureAISearch] storage ${storageId} deleted during indexing — cleaning up uploaded chunks/blob`)
-      try { await store.deleteDoc({ agentId }, String(storageId)) } catch (e) { console.warn('[AzureAISearch] chunk cleanup failed (orphan possible):', describeCaughtError(e)) }
+      try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (e) { console.warn('[AzureAISearch] chunk cleanup failed (orphan possible):', describeCaughtError(e)) }
       if (blobPath) { try { const { deleteFromBlob } = await import('@/lib/managed/blob-storage'); await deleteFromBlob(managedRegion, blobPath) } catch (e) { console.warn('[AzureAISearch] blob cleanup failed:', describeCaughtError(e)) } }
       return
     }
@@ -1134,14 +1138,21 @@ async function processAzureAISearchFileUpload(
       }
     }
 
-    await prisma.storage.update({
-      where: { id: storageId },
+    const overLimitMessage = getErrorMessage('api_error_storage_limit_exceeded', language as Parameters<typeof getErrorMessage>[1])
+    const outcome = await completeWithinStorageQuota({
+      agentId,
+      storageId,
+      textBytes: result.textSize,
+      overLimitMessage,
+      overLimitData: {
+        ragProvider: store.provider,
+        ragStatus: JSON.stringify({ [store.provider]: { ...result.providerRef, status: 'failed', region: managedRegion, createdAt: new Date().toISOString() } }),
+        blobPath: blobPath || null,
+      },
       data: {
-        status: 'completed',
         ragProvider: store.provider,
         ragStatus: JSON.stringify(ragStatus),
         blobPath: blobPath || null,
-        ...(result.textSize !== undefined && { fileSizeBytes: result.textSize }),
         processingLog: JSON.stringify({
           startTime: new Date().toISOString(),
           completedTime: new Date().toISOString(),
@@ -1154,7 +1165,21 @@ async function processAzureAISearchFileUpload(
           blobPath,
         }),
       },
+    }).catch(async (e) => {
+      try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (ce) { console.warn('[AzureAISearch] chunk cleanup after failed completion (orphan possible):', describeCaughtError(ce)) }
+      throw e
     })
+
+    if (outcome === 'over_limit') {
+      try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (e) { console.warn('[AzureAISearch] over-limit chunk cleanup failed (removed when the item is deleted):', describeCaughtError(e)) }
+      storageSSE.sendFileUploadUpdate(storageId, agentId, 'failed', overLimitMessage, overLimitMessage)
+      return
+    }
+    if (outcome === 'gone') {
+      try { await store.deleteDoc({ agentId }, String(storageId), freshKey) } catch (e) { console.warn('[AzureAISearch] chunk cleanup failed (orphan possible):', describeCaughtError(e)) }
+      if (blobPath) { try { const { deleteFromBlob } = await import('@/lib/managed/blob-storage'); await deleteFromBlob(managedRegion, blobPath) } catch (e) { console.warn('[AzureAISearch] blob cleanup failed:', describeCaughtError(e)) } }
+      return
+    }
 
     storageSSE.sendFileUploadUpdate(storageId, agentId, 'completed', isSelfHosted() ? 'File added to document search' : 'File uploaded to Azure AI Search')
 

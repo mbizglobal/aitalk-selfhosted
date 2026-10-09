@@ -89,6 +89,12 @@ export const SELFHOSTED_OFF_FEATURES: readonly EditionFeature[] = [
   },
   { name: 'Booster', verdict: 'cloud_only', jobs: ['processBoosterExpiry', 'processBoosterExpiryAlerts'] },
   {
+    name: 'App store billing',
+    verdict: 'cloud_only',
+    jobs: ['reconcileStoreSubscriptions', 'retryStoreAcknowledgements', 'retryOldContractCuts'],
+    routes: ['/api/app-api/billing', '/api/webhooks/google-play'],
+  },
+  {
     name: 'Trial',
     verdict: 'cloud_only',
     jobs: ['processTrialExpiry'],

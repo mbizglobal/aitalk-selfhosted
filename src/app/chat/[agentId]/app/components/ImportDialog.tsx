@@ -6,6 +6,7 @@ import { workStopText, workT, type WorkLang } from '@/lib/translations/work'
 import { WorkApiError, type ImportPlan, type ImportReader, type SheetImport, type WorkApi, type WorkFiles } from '../lib/api'
 import { fieldInputCls } from './AppTemplateFields'
 import { errorText } from './SheetTable'
+import { useWorkPkg } from './work-pkg'
 
 export interface ImportStart {
   fileId: string
@@ -37,7 +38,8 @@ const PREVIEW_ROWS = 50
 type Balances = Record<string, { opening: string; closing: string }>
 
 export function ImportDialog({ api, files, lang, projectId, spec, accounts = [], start, onDone, onClose }: Props) {
-  const t = (k: string, f?: string) => workT(lang, k, f)
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const [file, setFile] = useState<File | null>(null)
   const [fileId, setFileId] = useState<string | null>(start?.fileId ?? null)
   const [chosen, setChosen] = useState<Record<string, string>>(start?.accounts ?? {})
@@ -71,7 +73,7 @@ export function ImportDialog({ api, files, lang, projectId, spec, accounts = [],
       for (const g of r.output.groups) if (g.accountKey && !next[g.id]) next[g.id] = g.accountKey
       setChosen(next)
     } catch (e) {
-      if (my === seq.current) { setPlan(null); setError(errorText(lang, e)) }
+      if (my === seq.current) { setPlan(null); setError(errorText(lang, e, pkg)) }
     } finally {
       if (my === seq.current) setBusy(null)
     }
@@ -91,7 +93,7 @@ export function ImportDialog({ api, files, lang, projectId, spec, accounts = [],
     try {
       id = (await files.upload(projectId, asCsv(f), spec.fileKind)).id
     } catch (e) {
-      if (my === seq.current) { setBusy(null); setError(errorText(lang, e)) }
+      if (my === seq.current) { setBusy(null); setError(errorText(lang, e, pkg)) }
       return
     }
     if (my !== seq.current || picked.current !== f) return
@@ -120,11 +122,11 @@ export function ImportDialog({ api, files, lang, projectId, spec, accounts = [],
       if (my !== seq.current) return
       setBusy(null)
       if (e instanceof WorkApiError && e.code === 'STALE') { await makePlan(fileId, t('import_stale'), chosen, balances); return }
-      setError(errorText(lang, e))
+      setError(errorText(lang, e, pkg))
     }
   }
 
-  const problemText = (p: ImportPlan['problems'][number]) => workStopText(lang, p) ?? p.text
+  const problemText = (p: ImportPlan['problems'][number]) => workStopText(lang, p, pkg) ?? p.text
   const groups = plan?.groups ?? []
   const totalInsert = groups.reduce((n, g) => n + (g.plan?.insert.length ?? 0), 0)
   const anyProblem = !!plan && (plan.problems.length > 0 || groups.some((g) => (g.plan?.problems.length ?? 0) > 0))

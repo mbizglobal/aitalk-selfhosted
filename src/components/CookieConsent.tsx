@@ -51,13 +51,11 @@ export function CookieConsent() {
     window.dispatchEvent(new CustomEvent('cookie-consent-changed'));
   };
 
-  if (!isClient || !showBanner) {
+  if (!isClient || !showBanner || edition === 'selfhosted') {
     return null;
   }
 
-  const consentHtml = edition === 'selfhosted'
-    ? t('cookie_consent').replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, '$1')
-    : t('cookie_consent').replaceAll(
+  const consentHtml = t('cookie_consent').replaceAll(
         'href="/law/cookie-policy"',
         `href="/${currentLanguage}/law/cookie-policy"`
       );

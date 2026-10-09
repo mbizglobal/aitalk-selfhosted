@@ -29,10 +29,10 @@ const CLOUD_METADATA: Metadata = {
     },
   },
   title: "AI Voice Agent & Agentic Workflow Platform | AiTalk.ch",
-  description: "Build AI voice agents, chatbots & agentic workflows — no-code. Powered by Azure in Switzerland, Germany, Korea & the USA. Swiss data privacy guaranteed. Deploy in your region today.",
+  description: "Build AI voice agents, chatbots & agentic workflows — no-code. Powered by Microsoft Azure in Switzerland (Zurich). Swiss data privacy, no API keys, no setup.",
   openGraph: {
     title: "AiTalk.ch — AI Voice Agent in Your Country. Core Infrastructure in Switzerland.",
-    description: "Build AI voice agents, chatbots, and agentic workflows on Microsoft Azure. AI models and RAG vector databases run in your chosen region — Switzerland, Germany, Korea, or the USA; core infrastructure is in Switzerland.",
+    description: "Build AI voice agents, chatbots, and agentic workflows on Microsoft Azure. Conversations, accounts and RAG vector databases are stored in the Azure region Zurich; core infrastructure is in Switzerland.",
     url: 'https://aitalk.ch',
     siteName: 'AiTalk.ch',
     images: [
@@ -49,7 +49,7 @@ const CLOUD_METADATA: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: "AiTalk.ch — AI Voice Agent in Your Country. Core Infrastructure in Switzerland.",
-    description: "Build AI voice agents, chatbots, and agentic workflows on Microsoft Azure. AI models and RAG vector databases run in your chosen region — Switzerland, Germany, Korea, or the USA; core infrastructure is in Switzerland.",
+    description: "Build AI voice agents, chatbots, and agentic workflows on Microsoft Azure. Conversations, accounts and RAG vector databases are stored in the Azure region Zurich; core infrastructure is in Switzerland.",
     images: ['/og-image2.jpg'],
   },
   icons: {

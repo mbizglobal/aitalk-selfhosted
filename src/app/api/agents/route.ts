@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../auth/[...nextauth]/route'
 import { PrismaClient } from '@prisma/client'
 import { getApiTranslation } from '@/lib/translations'
+import { lockedAgentIdsOf } from '@/lib/agent-lock'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -27,9 +28,7 @@ export async function GET(request: NextRequest) {
       where: {
         userId: session.user.id
       },
-      orderBy: {
-        createdAt: 'asc'
-      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       include: {
         _count: {
           select: {
@@ -39,9 +38,12 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    const locked = await lockedAgentIdsOf(session.user.id)
+
     const agentsWithCount = agents.map(agent => ({
       ...agent,
-      workflowCount: agent._count.workflows
+      workflowCount: agent._count.workflows,
+      locked: locked.has(agent.agentId)
     }))
 
     return NextResponse.json({

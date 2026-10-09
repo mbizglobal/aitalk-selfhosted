@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
-import { workT, type WorkLang } from '@/lib/translations/work'
+import { packageOfFamily, workT, type WorkLang } from '@/lib/translations/work'
 
 interface SourceSheet { selector: string; family: string | null; name: string }
 interface Source { id: string; name: string; kind: string; sheets: SourceSheet[] }
@@ -27,7 +27,7 @@ function SheetChecks({ lang, sheets, value, onChange, idPrefix, disabled }: { la
         return (
           <label key={s.selector} htmlFor={id} className="inline-flex items-center gap-1.5 text-sm">
             <input id={id} type="checkbox" disabled={disabled} checked={value.includes(s.selector)} onChange={(e) => onChange(e.target.checked ? [...value, s.selector] : value.filter((x) => x !== s.selector))} />
-            {s.family ? workT(lang, `sheet_${s.family}`, s.name) : s.name}
+            {s.family ? workT(lang, `sheet_${s.family}`, s.name, packageOfFamily(s.family)) : s.name}
           </label>
         )
       })}

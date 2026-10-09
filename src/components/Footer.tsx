@@ -53,6 +53,16 @@ export function Footer() {
                   {t('footer_company')}
                 </Link>
               </li>
+              <li>
+                <a
+                  href="https://github.com/mbizglobal/aitalk-selfhosted"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-green-400 transition-colors"
+                >
+                  {t('footer_selfhosted')}
+                </a>
+              </li>
             </ul>
 
             <div className="hidden md:block mt-8">

@@ -3,7 +3,8 @@ import { WorkError } from './errors'
 import { moduleLabel, validateModuleRegistry, type ModuleRunCtx, type WorkModule } from './modules'
 import type { SheetActor } from './sheet-gate'
 import type { WorkFileDeps } from './files'
-import { workModules } from './registry'
+import { packageCoreOfModule, workModules } from './registry'
+import { entryCtx, frozenActor, moduleHandles } from './handles'
 
 export function findWorkModule(id: string, modules: readonly WorkModule[] = workModules()): WorkModule {
   const m = modules.find((x) => x.id === id)
@@ -25,6 +26,10 @@ export async function runWorkModule(deps: WorkFileDeps, req: { userId: string; p
     const wf = await deps.db.workflow.findUnique({ where: { workflowId: p.workflowId }, select: { status: true } })
     if (!wf || wf.status === 'archived') throw new WorkError('FORBIDDEN')
   }
-  const ctx: ModuleRunCtx = { deps, userId: req.userId, projectId: req.projectId, by: req.by }
+  const handles = moduleHandles(
+    { deps, userId: req.userId, projectId: req.projectId, caller: req.by, writeAs: { type: 'module', id: m.id, version: m.version } },
+    (moduleId, input, caller) => runWorkModule(deps, { userId: req.userId, projectId: req.projectId, moduleId, input, by: caller }),
+  )
+  const ctx = entryCtx(handles, packageCoreOfModule(m.id), deps, { userId: req.userId, projectId: req.projectId, by: frozenActor(req.by) }) as ModuleRunCtx
   return m.run(ctx, req.input)
 }

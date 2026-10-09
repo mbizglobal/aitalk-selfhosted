@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const resolved = await resolveBookingWidget(agentId)
     if (!resolved) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: NO_STORE })
     const [available, contactPhone, accountLocale] = await Promise.all([
-      isServiceAvailable(resolved.userId),
+      isServiceAvailable(resolved.userId, resolved.agentId),
       contactPhoneOf(resolved.agentId),
       accountLocaleOf(resolved.userId),
     ])

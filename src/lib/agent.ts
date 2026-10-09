@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { extractButtonSettings, extractChatSettings, getDefaultWidgetSettings } from './widget-settings'
 import defaultVoiceWorkflow from './default-voice-workflow.json'
-import defaultChatWorkflow from './default-chat-workflow.json'
+import { getLocalTemplate } from '@/lib/local-templates'
 import { assertWorkflowActivationAllowed, activationStatusFor } from '@/lib/entitlement'
 import { isSelfHosted } from '@/lib/edition'
 import { SELF_HOSTED_POLICY } from '@/lib/selfhosted-policy'
@@ -73,6 +73,8 @@ export async function createDefaultAgent(userId: string, language: 'en' | 'de' |
     const widgetChatSettings = extractChatSettings(widgetSettings)
 
     const initialWorkflowState = activationStatusFor(await assertWorkflowActivationAllowed(userId))
+    const workApp = isSelfHosted() ? getLocalTemplate('work-app') : null
+    if (isSelfHosted() && !workApp?.workflowJson) throw new Error('Work App template is missing (src/data/workflow-templates/work-app.json)')
 
     const result = await dbClient.$transaction(async (tx) => {
       const existingAgent = await tx.agent.findFirst({
@@ -129,9 +131,9 @@ export async function createDefaultAgent(userId: string, language: 'en' | 'de' |
         data: {
           workflowId: generateWorkflowId(),
           agentId: agentId,
-          name: translations.default_workflow_name,
-          description: translations.default_workflow_description,
-          workflowJson: JSON.stringify(isSelfHosted() ? defaultChatWorkflow : defaultVoiceWorkflow),
+          name: workApp ? workApp.name : translations.default_workflow_name,
+          description: workApp ? workApp.description : translations.default_workflow_description,
+          workflowJson: workApp ? workApp.workflowJson : JSON.stringify(defaultVoiceWorkflow),
           status: initialWorkflowState.status,
           trafficWeight: initialWorkflowState.trafficWeight,
         }

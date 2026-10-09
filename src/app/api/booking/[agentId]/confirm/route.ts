@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 async function confirmBooking(agentId: string, input: Parameters<typeof prepareBooking>[1], now: number): Promise<ReserveResult> {
   const resolved = await resolveBookingWidget(agentId)
   if (!resolved) return { ok: false, code: 'unavailable' }
-  if (!(await isServiceAvailable(resolved.userId))) return { ok: false, code: 'unavailable' }
+  if (!(await isServiceAvailable(resolved.userId, resolved.agentId))) return { ok: false, code: 'unavailable' }
   const prep = await prepareBooking(resolved, input, now)
   if (!prep.ok) return prep
   return commitBooking(resolved, input, prep.prepared, now)

@@ -68,6 +68,7 @@ import { AiConnectionsSection } from './components/AiConnectionsSection'
 import { LicenseSection, type LicenseInfo } from './components/LicenseSection'
 import { OpenAIIcon, GeminiIcon, PineconeIcon, NoneIcon, getLlmProviderIcon } from '@/components/icons/ai-providers'
 import { getRegionById } from '@/lib/managed/regions'
+import { hasCookieConsent } from '@/lib/cookie-consent'
 
 type TimeUnit = 'minute' | 'hour' | 'day'
 
@@ -473,7 +474,7 @@ export default function SettingsPage() {
     setLanguage(languageCode)
 
     try {
-      if (localStorage.getItem('cookie-consent') === 'true') {
+      if (hasCookieConsent()) {
         localStorage.setItem('preferred-language', languageCode)
       }
     } catch (error) {
@@ -1466,7 +1467,7 @@ export default function SettingsPage() {
           setLanguage(languageCode)
         }
         try {
-          if (localStorage.getItem('cookie-consent') === 'true') {
+          if (hasCookieConsent()) {
             localStorage.setItem('preferred-language', languageCode)
           }
         } catch (error) {

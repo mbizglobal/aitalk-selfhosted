@@ -8,18 +8,19 @@ import { ReferenceReader, type ComputedReference, type ReferenceReadLog } from '
 import { templateId, type SheetTemplate } from './sheet-templates'
 import type { SheetActor, WorkSheetDeps } from './sheet-gate'
 import type { WorkFileDeps } from './files'
+import type { WorkAppHandles, WorkAppScreenHandles } from './handles'
+import type { LocaleText } from './app-template-features'
 
 type Tx = Prisma.TransactionClient
 
 export type WorkModuleKind = 'read' | 'prepare' | 'calc' | 'make' | 'check'
-export type ModuleLocale = 'en' | 'de' | 'fr' | 'ko'
 export type JsonSchema = Record<string, unknown>
 
 interface WorkModuleBase {
   id: string
   version: number
-  title: Record<ModuleLocale, string>
-  description: Record<ModuleLocale, string>
+  title: LocaleText
+  description: LocaleText
   input: JsonSchema
   output: JsonSchema
   needs: string[]
@@ -39,7 +40,7 @@ export interface ActionWorkModule<Ctx = unknown> extends WorkModuleBase {
   screenRows?(ctx: ScreenRowsCtx): Promise<ScreenRows>
 }
 
-export interface ScreenRowsCtx { deps: WorkSheetDeps; userId: string; projectId: string }
+export interface ScreenRowsCtx extends WorkAppScreenHandles { deps: WorkSheetDeps; userId: string; projectId: string }
 
 export interface ScreenRowResult { status: string; diff?: string; source?: string }
 export interface ScreenRows {
@@ -49,7 +50,7 @@ export interface ScreenRows {
 
 export type WorkModule = CalcWorkModule | ActionWorkModule
 
-export interface ModuleRunCtx {
+export interface ModuleRunCtx extends WorkAppHandles {
   deps: WorkFileDeps
   userId: string
   projectId: string
@@ -60,9 +61,8 @@ export const moduleLabel = (m: Pick<WorkModuleBase, 'id' | 'version'>) => `${m.i
 
 export interface PreviewStop { code: string; params?: Record<string, string | number>; detail?: string }
 
-export function moduleStop(code: string, detail: string, params?: Record<string, string | number>): WorkError {
-  return new WorkError('MODULE_STOPPED', detail, { code, ...(params ? { params } : {}) })
-}
+import { moduleStop } from './module-stop'
+export { moduleStop }
 
 // ─────────────────────────────── needs ───────────────────────────────
 

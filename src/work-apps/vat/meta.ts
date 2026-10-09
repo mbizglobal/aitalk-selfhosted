@@ -1,5 +1,5 @@
 
-import type { WorkAppMeta } from '@/lib/work/package-meta'
+import type { WorkAppMeta } from '@/lib/work/package-api'
 import { vatI18nEn } from './i18n/en'
 import { vatI18nDe } from './i18n/de'
 import { vatI18nFr } from './i18n/fr'

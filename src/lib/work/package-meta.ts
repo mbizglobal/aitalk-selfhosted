@@ -7,7 +7,7 @@ export interface WorkAppMeta {
   id: string
   appTemplateKinds: readonly string[]
   features: Readonly<Record<string, AppTemplateFeatures>>
-  i18n: Readonly<Record<'en' | 'de' | 'fr' | 'ko', Readonly<Record<string, string>>>>
+  i18n: { readonly en: Readonly<Record<string, string>> } & Readonly<Partial<Record<'de' | 'fr' | 'ko', Readonly<Record<string, string>>>>>
 }
 
 export const WORK_APP_METAS: readonly WorkAppMeta[] = [...BUILTIN_WORK_APP_METAS, ...CUSTOM_WORK_APP_METAS]

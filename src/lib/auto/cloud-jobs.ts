@@ -24,4 +24,7 @@ export const cloudJobs = {
   processBoosterExpiry: unavailable('processBoosterExpiry'),
   processBoosterExpiryAlerts: unavailable('processBoosterExpiryAlerts'),
   processTrialExpiry: unavailable('processTrialExpiry'),
+  reconcileStoreSubscriptions: unavailable('reconcileStoreSubscriptions'),
+  retryStoreAcknowledgements: unavailable('retryStoreAcknowledgements'),
+  retryOldContractCuts: unavailable('retryOldContractCuts'),
 }

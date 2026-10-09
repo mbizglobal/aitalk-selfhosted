@@ -70,7 +70,7 @@ test('payload fields: invalid when shape is wrong even if signature matches', ()
     [{ ...base, issuedAt: undefined }, 'issued_at_invalid'],
     [{ ...base, clientCompanies: -1 }, 'client_companies_invalid'],
     [{ ...base, clientCompanies: 1.5 }, 'client_companies_invalid'],
-    [{ ...base, licensee: 'Muster AG\n[License] Enterprise — Fake' }, 'text_invalid'],
+    [{ ...base, licensee: 'Muster AG\n[License] Business — Fake' }, 'text_invalid'],
     [{ ...base, licenseId: 'L-1\r' }, 'text_invalid'],
     [{ ...base, licensee: 'A\u2028B' }, 'text_invalid'],
     [{ ...base, licensee: 'x'.repeat(201) }, 'text_invalid'],
@@ -149,7 +149,7 @@ test('zero outbound connections: no fetch or http(s) calls during verification',
 test('one log line: key text and signature never appear', () => {
   const key = issue(base)
   const line = describeLicenseState(check(key))
-  assert.match(line, /Enterprise — Muster Treuhand AG \(L-T-1\) · until 2027-10-31 · features: approval/)
+  assert.match(line, /Business — Muster Treuhand AG \(L-T-1\) · until 2027-10-31 · features: approval/)
   for (const part of key.split('.')) assert.ok(!line.includes(part))
   assert.match(describeLicenseState(check(key, '2027-11-02T00:00:00Z')), /grace .* features off on 2027-11-16/)
   assert.match(describeLicenseState({ status: 'invalid', reason: 'kid_unknown' }), /invalid key — kid_unknown/)

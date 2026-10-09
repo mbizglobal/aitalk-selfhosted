@@ -5,10 +5,11 @@ import { WorkError } from './errors'
 import { assertAiMayWrite, assertProjectWritable, lockProjectForWrite, lockTaskForWrite, type SheetActor, type WorkSheetDeps } from './sheet-gate'
 import { writeWorkEvent } from './projects'
 import { fingerprint } from './references'
+import { NOTE_KINDS } from './note-kinds'
 
 const TX_TIMEOUT_MS = 30_000
 
-export const NOTE_KINDS = ['conclusion', 'todo', 'source'] as const
+export { NOTE_KINDS }
 export type NoteKind = (typeof NOTE_KINDS)[number]
 export const MAX_NOTE_CHARS = 20_000
 

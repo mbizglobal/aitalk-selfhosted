@@ -3,6 +3,9 @@ import assert from 'node:assert/strict'
 import { APP_TEMPLATE_KINDS } from './app-template-kinds'
 import { findWorkModule } from './module-registry'
 import { appTemplates, builtinSheetTemplates } from './registry'
+import { BUILTIN_WORK_APP_METAS } from '@/work-apps/builtin-meta'
+
+const BUILTIN_KINDS = new Set(BUILTIN_WORK_APP_METAS.flatMap((m) => Object.keys(m.features)))
 
 test('app template screen settings fields = the fields the settings check accepts', () => {
   for (const b of appTemplates()) {
@@ -56,6 +59,7 @@ test('app template feature list: module entries = modules to turn on, name = mod
     const listed = f.available.filter((x) => x.module)
     assert.deepEqual(new Set(listed.map((x) => x.id)), moduleIds, `${b.kind} module features`)
     for (const x of listed) assert.deepEqual(x.label, findWorkModule(x.id).title, `${x.id} label`)
-    for (const x of [...f.available, ...f.planned]) for (const l of ['en', 'de', 'fr', 'ko'] as const) assert.ok(x.label[l], `${x.id} ${l}`)
+    const langs = BUILTIN_KINDS.has(b.kind) ? (['en', 'de', 'fr', 'ko'] as const) : (['en'] as const)
+    for (const x of [...f.available, ...f.planned]) for (const l of langs) assert.ok(x.label[l], `${x.id} ${l}`)
   }
 })

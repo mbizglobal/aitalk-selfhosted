@@ -7,8 +7,9 @@ import { anyOverlap, dateInAny, effectiveIntervals } from './sheet-periods'
 import { appTemplateOf, type AppTemplateUi, type ChecklistItem } from './app-templates'
 import type { ProjectSettings } from './projects'
 import { screenSchema, type SheetTemplate } from './sheet-templates'
-import { readFxTable, type ScreenRows, type UsedFx } from './modules'
-import { appTemplates, workModules } from './registry'
+import { readFxTable, type ScreenRows, type ScreenRowsCtx, type UsedFx } from './modules'
+import { appTemplates, packageCoreOfKind, packageCoreOfModule, workModules } from './registry'
+import { entryCtx, screenHandles } from './handles'
 import { describeCaughtError } from '@/lib/log-mask'
 
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
@@ -232,7 +233,8 @@ async function screenRowsOf(deps: WorkSheetDeps, q: { userId: string; projectId:
   const p = await deps.db.workProject.findFirst({ where: { id: q.projectId, userId: q.userId }, select: { modules: true } })
   if (!p?.modules.includes(moduleId)) return null
   try {
-    return await m.screenRows({ deps, userId: q.userId, projectId: q.projectId })
+    const handles = screenHandles({ deps, userId: q.userId, projectId: q.projectId })
+    return await m.screenRows(entryCtx(handles, packageCoreOfModule(moduleId), deps, { userId: q.userId, projectId: q.projectId }) as ScreenRowsCtx)
   } catch (e) {
     console.warn(`[work] screenRows ${moduleId}: ${describeCaughtError(e)}`)
     return null
@@ -345,7 +347,9 @@ export async function readTaskChecklist(deps: WorkSheetDeps, q: { userId: string
   if (!p) throw new WorkError('NOT_FOUND')
   const tpl = appTemplateOf(p.kind)
   if (!tpl?.checklist || !task.periodStart || !task.periodEnd) return { items: [] }
-  const items = await tpl.checklist({ deps, userId: q.userId, projectId: q.projectId, modules: p.modules }, { start: task.periodStart.toISOString().slice(0, 10), end: task.periodEnd.toISOString().slice(0, 10) })
+  const handles = screenHandles({ deps, userId: q.userId, projectId: q.projectId })
+  const ctx = entryCtx(handles, packageCoreOfKind(p.kind), deps, { userId: q.userId, projectId: q.projectId, modules: p.modules }) as ScreenRowsCtx & { modules: readonly string[] }
+  const items = await tpl.checklist(ctx, { start: task.periodStart.toISOString().slice(0, 10), end: task.periodEnd.toISOString().slice(0, 10) })
   const proposed = await deps.db.workNote.count({ where: { taskId: q.taskId, projectId: q.projectId, status: 'proposed' } })
   if (proposed > 0) items.push({ id: 'notes_proposed', state: 'todo', params: { n: proposed }, goto: 'notes' })
   return { items }

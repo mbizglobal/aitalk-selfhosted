@@ -6,7 +6,9 @@ import { normalizeWidgetLanguage } from '@/lib/widget-settings'
 import { sendVerificationEmailBackground } from '@/lib/background-email'
 import { provisionTrialUser, provisionWebTrialUser } from '@/lib/auth/provision-user'
 import { resolveActivePartner } from '@/lib/partner/resolve'
-import { getRegionByCountryCode } from '@/lib/managed/regions'
+import { CLOUD_MANAGED_REGION } from '@/lib/managed/regions'
+import { isSelfHosted } from '@/lib/edition'
+import { createFirstAdmin, hasInstallOwner } from '@/lib/auth/selfhosted-setup'
 
 const PARTNER_TRIAL_PLAN = 'starter' as const
 
@@ -30,10 +32,11 @@ export type SignupError =
   | 'DEVICE_SIGNUP_LIMIT_EXCEEDED'
   | 'IP_SIGNUP_LIMIT_EXCEEDED'
   | 'INVALID_PARTNER_CODE'
+  | 'SIGNUP_CLOSED'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export type SignupResult = { ok: true } | { ok: false; error: SignupError }
+export type SignupResult = { ok: true; adminUserId?: string } | { ok: false; error: SignupError }
 
 export async function signupCore(input: SignupInput): Promise<SignupResult> {
   const email = input.email
@@ -50,18 +53,23 @@ export async function signupCore(input: SignupInput): Promise<SignupResult> {
     throw new Error('PARTNER_CODE_AT_SIGNUP_DISALLOWED')
   }
 
+  const selfHosted = isSelfHosted()
+  if (selfHosted && (await hasInstallOwner())) return { ok: false, error: 'SIGNUP_CLOSED' }
+
   const emailHash = hashEmail(email)
   const anonymized = await prisma.anonymizationHistory.findFirst({ where: { emailHash } })
   if (anonymized) {
     return { ok: false, error: 'USER_EXISTS_VERIFIED' }
   }
 
-  const existingUser = await prisma.user.findUnique({ where: { email } })
-  if (existingUser) {
-    return { ok: false, error: existingUser.emailVerified ? 'USER_EXISTS_VERIFIED' : 'USER_EXISTS_UNVERIFIED' }
+  if (!selfHosted) {
+    const existingUser = await prisma.user.findUnique({ where: { email } })
+    if (existingUser) {
+      return { ok: false, error: existingUser.emailVerified ? 'USER_EXISTS_VERIFIED' : 'USER_EXISTS_UNVERIFIED' }
+    }
   }
 
-  const fingerprint = input.fingerprint || undefined
+  const fingerprint = selfHosted ? undefined : input.fingerprint || undefined
   const signupIp = input.signupIp || null
 
   if (fingerprint) {
@@ -70,7 +78,7 @@ export async function signupCore(input: SignupInput): Promise<SignupResult> {
       return { ok: false, error: 'DEVICE_SIGNUP_LIMIT_EXCEEDED' }
     }
   }
-  if (signupIp) {
+  if (signupIp && !selfHosted) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const sameIpCount = await prisma.user.count({
       where: { signupIp, createdAt: { gte: thirtyDaysAgo } },
@@ -91,23 +99,28 @@ export async function signupCore(input: SignupInput): Promise<SignupResult> {
   const hashedPassword = await bcrypt.hash(password, 12)
 
   let user
-  try {
-    user = await prisma.user.create({
-      data: {
-        email,
-        name: email.split('@')[0],
-        password: hashedPassword,
-        emailVerified: null,
-        signupFingerprint: fingerprint || null,
-        signupIp: signupIp || null,
-      },
-    })
-  } catch (e: any) {
-    if (e?.code === 'P2002') {
-      const dup = await prisma.user.findUnique({ where: { email } })
-      return { ok: false, error: dup?.emailVerified ? 'USER_EXISTS_VERIFIED' : 'USER_EXISTS_UNVERIFIED' }
+  if (selfHosted) {
+    user = await createFirstAdmin({ email, passwordHash: hashedPassword, signupIp })
+    if (!user) return { ok: false, error: 'SIGNUP_CLOSED' }
+  } else {
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: email.split('@')[0],
+          password: hashedPassword,
+          emailVerified: null,
+          signupFingerprint: fingerprint || null,
+          signupIp: signupIp || null,
+        },
+      })
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        const dup = await prisma.user.findUnique({ where: { email } })
+        return { ok: false, error: dup?.emailVerified ? 'USER_EXISTS_VERIFIED' : 'USER_EXISTS_UNVERIFIED' }
+      }
+      throw e
     }
-    throw e
   }
 
   const language = normalizeWidgetLanguage(input.language)
@@ -132,7 +145,7 @@ export async function signupCore(input: SignupInput): Promise<SignupResult> {
       serviceVariant: 'managed',
       trialGrantMode: 'server',
       partnerId: resolvedPartner.id,
-      managedRegion: getRegionByCountryCode(resolvedPartner.country),
+      managedRegion: CLOUD_MANAGED_REGION,
       mode: 'best_effort',
     })
   } else {
@@ -156,6 +169,8 @@ export async function signupCore(input: SignupInput): Promise<SignupResult> {
       create: { id: user.id, companyCountry: cc },
     }).catch((err) => console.error('[signup] partner country copy failed (non-fatal):', err))
   }
+
+  if (selfHosted) return { ok: true, adminUserId: user.id }
 
   try {
     const { token, hashedToken, expires } = authTokenService.generateVerificationToken(email)

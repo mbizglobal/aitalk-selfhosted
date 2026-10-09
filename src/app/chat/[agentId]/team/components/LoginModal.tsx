@@ -9,6 +9,7 @@ import { signIn } from 'next-auth/react'
 import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/browser'
 import type { TeamMemberInfo } from '../hooks/useTeamAuth'
 import { getTeamTranslation } from '@/lib/translations/team'
+import { useGoogleLoginEnabled } from '@/components/EditionProvider'
 
 type LoginStep = 'email' | 'password' | 'oauth' | 'passkey' | 'forgot-password'
 type TeamLanguage = 'en' | 'ko' | 'de' | 'fr' | 'es'
@@ -34,6 +35,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 }) => {
   const t = (key: Parameters<typeof getTeamTranslation>[1]) => getTeamTranslation(lang, key)
   const [step, setStep] = useState<LoginStep>('email')
+  const googleLogin = useGoogleLoginEnabled()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -606,7 +608,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           {step === 'oauth' && renderOAuthStep()}
           {step === 'passkey' && renderPasskeyStep()}
 
-          {step === 'email' && (
+          {step === 'email' && googleLogin && (
             <>
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">

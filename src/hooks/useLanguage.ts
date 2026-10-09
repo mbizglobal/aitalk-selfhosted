@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 import { usePathname } from 'next/navigation';
 import { translations, type Language } from '@/lib/translations';
+import { hasCookieConsent } from '@/lib/cookie-consent';
 
 // de-ch must precede de in alternation (longer prefix wins)
 const SUPPORTED_LANG_PATH_RE = /^\/(de-ch|en|de|fr|es|ko)(\/|$)/;
@@ -49,7 +50,7 @@ export function useLanguageProvider(initialLanguage?: string) {
     const initializeLanguage = async () => {
       const pathLangMatch = window.location.pathname.match(SUPPORTED_LANG_PATH_RE);
       if (pathLangMatch) {
-        const hasConsented = localStorage.getItem('cookie-consent') === 'true';
+        const hasConsented = hasCookieConsent();
         if (hasConsented) {
           localStorage.setItem('preferred-language', pathLangMatch[1]);
           document.cookie = `preferred-language=${pathLangMatch[1]}; path=/; max-age=31536000; SameSite=Lax`;
@@ -74,7 +75,7 @@ export function useLanguageProvider(initialLanguage?: string) {
       const urlLang = urlParams.get('lang') as Language;
 
       // Check localStorage only if cookie consent is given
-      const hasConsented = localStorage.getItem('cookie-consent') === 'true';
+      const hasConsented = hasCookieConsent();
       const storedLang = hasConsented ? localStorage.getItem('preferred-language') as Language : null;
 
       const serverLang = (initialLanguage as Language) || 'en';
@@ -126,7 +127,7 @@ export function useLanguageProvider(initialLanguage?: string) {
 
     setCurrentLanguage(lang);
 
-    const hasConsented = localStorage.getItem('cookie-consent') === 'true';
+    const hasConsented = hasCookieConsent();
     if (hasConsented) {
       localStorage.setItem('preferred-language', lang);
       localStorage.setItem('language-manually-set', 'true');

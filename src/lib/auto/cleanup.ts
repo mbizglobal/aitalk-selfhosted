@@ -40,7 +40,9 @@ export class AutoRun {
     this.run('sweepAiCallCpaReservations', () => this.sweepAiCallCpaReservations())
     this.run('sweepTeamSeats', () => this.sweepTeamSeats())
     this.run('sweepVoiceQuizRounds', () => this.sweepVoiceQuizRounds())
-    const tenMinuteJobs = ['cleanupStaleCallSessions', 'cleanupStaleWebVoiceSessions', 'sweepAiCallCpaReservations', 'sweepTeamSeats', 'sweepVoiceQuizRounds']
+    this.run('retryStoreAcknowledgements', () => this.retryStoreAcknowledgements())
+    this.run('retryOldContractCuts', () => this.retryOldContractCuts())
+    const tenMinuteJobs = ['cleanupStaleCallSessions', 'cleanupStaleWebVoiceSessions', 'sweepAiCallCpaReservations', 'sweepTeamSeats', 'sweepVoiceQuizRounds', 'retryStoreAcknowledgements', 'retryOldContractCuts']
     if (tenMinuteJobs.some((job) => this.jobs.has(job))) this.callSessionCleanupInterval = setInterval(
       () => {
         this.run('cleanupStaleCallSessions', () => this.cleanupStaleCallSessions())
@@ -48,6 +50,8 @@ export class AutoRun {
         this.run('sweepAiCallCpaReservations', () => this.sweepAiCallCpaReservations())
         this.run('sweepTeamSeats', () => this.sweepTeamSeats())
         this.run('sweepVoiceQuizRounds', () => this.sweepVoiceQuizRounds())
+        this.run('retryStoreAcknowledgements', () => this.retryStoreAcknowledgements())
+        this.run('retryOldContractCuts', () => this.retryOldContractCuts())
       },
       10 * 60 * 1000,
     )
@@ -91,6 +95,7 @@ export class AutoRun {
 
                       setTimeout(() => {
                         this.run('processExpiredSubscriptionGraceStart', () => this.processExpiredSubscriptionGraceStart())
+                        this.run('reconcileStoreSubscriptions', () => this.reconcileStoreSubscriptions())
 
                         setTimeout(() => {
                           this.run('processGracePeriodExpiration', () => this.processGracePeriodExpiration())
@@ -154,6 +159,7 @@ export class AutoRun {
 
                         setTimeout(() => {
                           this.run('processExpiredSubscriptionGraceStart', () => this.processExpiredSubscriptionGraceStart())
+                        this.run('reconcileStoreSubscriptions', () => this.reconcileStoreSubscriptions())
 
                           setTimeout(() => {
                             this.run('processGracePeriodExpiration', () => this.processGracePeriodExpiration())
@@ -440,6 +446,9 @@ export class AutoRun {
   async processHardFreeConversion(): Promise<void> { return cloudJobs.processHardFreeConversion() }
 
   async processTrialExpiry(): Promise<void> { return cloudJobs.processTrialExpiry() }
+  async reconcileStoreSubscriptions(): Promise<void> { return cloudJobs.reconcileStoreSubscriptions() }
+  async retryStoreAcknowledgements(): Promise<void> { return cloudJobs.retryStoreAcknowledgements() }
+  async retryOldContractCuts(): Promise<void> { return cloudJobs.retryOldContractCuts() }
 
   async processConsentLedgerExport(): Promise<void> { return cloudJobs.processConsentLedgerExport() }
 

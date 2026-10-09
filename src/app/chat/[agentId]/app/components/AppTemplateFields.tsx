@@ -3,6 +3,7 @@
 import React from 'react'
 import { workT, type WorkLang } from '@/lib/translations/work'
 import type { AppTemplateField } from '../lib/api'
+import { useWorkPkg } from './work-pkg'
 
 export const fieldInputCls = 'w-full rounded-md bg-[#2A2A2A] border border-[#3A3A3A] px-3 py-2 text-sm text-white focus:outline-none focus:border-[#E07B53]'
 
@@ -31,12 +32,13 @@ export function AppTemplateFields({ lang, prefix, fields, values, onChange, idPr
   idPrefix: string
   disabled?: boolean
 }) {
+  const pkg = useWorkPkg()
   return (
     <>
       {fields.map((f) => {
-        const label = workT(lang, `${prefix}${f.name}`, f.name)
+        const label = workT(lang, `${prefix}${f.name}`, f.name, pkg)
         const helpKey = `${prefix}${f.name}_help`
-        const help = workT(lang, helpKey, '')
+        const help = workT(lang, helpKey, '', pkg)
         const v = values[f.name] ?? ''
         return (
           <div key={f.name}>
@@ -47,7 +49,7 @@ export function AppTemplateFields({ lang, prefix, fields, values, onChange, idPr
                   {(['yes', 'no'] as const).map((o) => (
                     <label key={o} className="inline-flex items-center gap-2">
                       <input type="radio" name={`${idPrefix}-${f.name}`} checked={v === o} onChange={() => onChange(f.name, o)} className="accent-[#E07B53]" />
-                      {workT(lang, o)}
+                      {workT(lang, o, undefined, pkg)}
                     </label>
                   ))}
                 </div>

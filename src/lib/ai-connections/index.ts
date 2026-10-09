@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { AzureOpenAI, type OpenAI } from 'openai'
+import { AzureOpenAI, OpenAI } from 'openai'
 import { createChatCompletionsClient } from './chat-completions'
 import { createAnthropicClient } from './anthropic'
 import { decryptData } from '@/lib/encryption'
@@ -171,8 +171,13 @@ export function createAzureClient(c: ResolvedAiConnection): AzureOpenAI {
   })
 }
 
+function isOpenAiApi(baseUrl: string): boolean {
+  try { return new URL(baseUrl).hostname === 'api.openai.com' } catch { return false }
+}
+
 export function createConnectionClient(c: ResolvedAiConnection): OpenAI {
   if (c.kind === 'azure') return createAzureClient(c)
+  if (c.kind === 'openai_compatible' && isOpenAiApi(c.baseUrl)) return new OpenAI({ apiKey: c.apiKey, baseURL: c.baseUrl, defaultHeaders: c.headers })
   if (c.kind === 'openai_compatible') return createChatCompletionsClient(c) as unknown as OpenAI
   return createAnthropicClient(c) as unknown as OpenAI
 }

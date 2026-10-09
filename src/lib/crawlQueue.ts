@@ -124,7 +124,7 @@ class CrawlQueue {
   private ready: Promise<void>
 
   constructor(private prisma: PrismaClient) {
-    this.ready = this.recoverUnfinishedJobs()
+    this.ready = process.env.AITALK_BACKGROUND_JOBS === 'off' ? Promise.resolve() : this.recoverUnfinishedJobs()
   }
 
   private async recoverUnfinishedJobs() {

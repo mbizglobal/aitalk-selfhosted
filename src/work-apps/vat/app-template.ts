@@ -1,6 +1,5 @@
 
-import { WorkError } from '@/lib/work/errors'
-import type { AppTemplate } from '@/lib/work/app-templates'
+import { WorkError, type AppTemplate } from '@/lib/work/package-api'
 import { vatBoxesModule } from './modules/boxes'
 import { vatChecklist } from './checklist'
 import { VAT_FAMILY } from './templates'

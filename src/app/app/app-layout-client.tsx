@@ -41,12 +41,15 @@ import {
   Plug,
   Calendar,
   GraduationCap,
+  Cpu,
+  BadgeCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { UserMenu } from '@/components/user-menu'
 import { MobileMenu } from './mobile-menu'
+import { SelfHostedFooter } from '@/components/SelfHostedFooter'
 import { DashboardAssistant } from './components/DashboardAssistant/DashboardAssistant'
 import { OnboardingModal } from './components/OnboardingModal'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -74,6 +77,8 @@ function getMenuName(name: string, t: (key: string) => string): string {
     'OpenAI API Key': t('nav_openai_api_key'),
     'AI Assistant': t('nav_ai_assistant'),
     'MCP Server': t('settings_tab_mcp'),
+    'AI connections': t('settings_tab_ai_connections'),
+    'License': t('settings_tab_license'),
     'Team': t('settings_tab_team'),
     'Bots': t('settings_tab_bots'),
     'Profile': t('nav_profile'),
@@ -135,6 +140,8 @@ const navigation = [
       { name: 'AI Agent', href: '/app/settings?tab=ai-agent', icon: Bot },
       { name: 'Team', href: '/app/settings?tab=team', icon: Users },
       { name: 'MCP Server', href: '/app/settings?tab=mcp', icon: Plug },
+      { name: 'AI connections', href: '/app/settings?tab=ai-connections', icon: Cpu, selfHostedOnly: true },
+      { name: 'License', href: '/app/settings?tab=license', icon: BadgeCheck, selfHostedOnly: true },
       { name: 'Profile', href: '/app/settings?tab=profile', icon: User },
       { name: 'Security', href: '/app/settings?tab=security', icon: Lock },
       { name: 'Other', href: '/app/settings?tab=other', icon: Layers2 },
@@ -378,6 +385,11 @@ export function AppLayoutClient({
       (item: any) =>
         !(item.requiresCalendar && !hasCalendarWorkflow) && !(item.requiresVoiceQuiz && !hasVoiceQuizWorkflow),
     )
+    if (edition !== 'selfhosted') {
+      base = base.map((item) => item.subItems
+        ? { ...item, subItems: item.subItems.filter((sub: { selfHostedOnly?: boolean }) => !sub.selfHostedOnly) }
+        : item)
+    }
     if (edition === 'selfhosted') {
       return base
         .filter((item) => !offFeatureForRoute(item.href, edition))
@@ -538,6 +550,7 @@ export function AppLayoutClient({
                 })}
               </nav>
             </ScrollArea>
+            <SelfHostedFooter layout="stack" className="border-t px-6 py-4" />
           </div>
         </aside>
 

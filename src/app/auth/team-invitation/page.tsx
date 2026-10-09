@@ -109,7 +109,7 @@ function TeamInvitationContent() {
         setSuccess(true)
         setTimeout(() => {
           const teamUrl = `/chat/${data.agentId}/team${data.workflowId ? `?workflowId=${data.workflowId}` : ''}`
-          router.push(teamUrl)
+          router.push(typeof data.landingPath === 'string' && data.landingPath.startsWith('/chat/') ? data.landingPath : teamUrl)
         }, 3000)
       } else {
         setError(data.error || t('team_invitation_error_accept_failed'))

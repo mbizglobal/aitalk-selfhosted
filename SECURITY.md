@@ -20,5 +20,5 @@ Please give us reasonable time to release a fix before you publish details.
 
 ## Supported versions
 
-Security fixes are released for the latest version. Enterprise license and support agreements can include
+Security fixes are released for the latest version. Business license and support agreements can include
 fixes for older versions.

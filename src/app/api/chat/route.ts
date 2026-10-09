@@ -18,6 +18,7 @@ import { isGptReasoningFamily, replaceRetiredChatModel } from '@/lib/managed/mod
 import { MANAGED_MAX_OUTPUT_TOKENS } from '@/lib/managed/output-limit'
 import { detectStreamFailure, getStreamFailureCode } from '@/lib/workflow/nodes/ai/utils'
 import { assertServiceEntitlement } from '@/lib/entitlement'
+import { isAgentLocked, AGENT_LOCKED_MESSAGE, AGENT_LOCKED_CODE } from '@/lib/agent-lock'
 import { isSelfHosted } from '@/lib/edition'
 import { WorkflowEngine, WorkflowContext, WorkflowDebugLogEntry } from '@/lib/workflow'
 import { findReachableCycle } from '@/lib/workflow/validation'
@@ -234,6 +235,9 @@ export async function POST(request: NextRequest) {
           { error: 'Account pending approval. Enter a partner code or wait for approval.', code: 'PENDING_ACCESS' },
           { status: 403 }
         )
+      }
+      if (await isAgentLocked(cpaAgentId)) {
+        return NextResponse.json({ error: AGENT_LOCKED_MESSAGE, code: AGENT_LOCKED_CODE }, { status: 403 })
       }
       try {
         const cpaValidation = await validateCPAWithCache(userIdForCPA, cpaCache)

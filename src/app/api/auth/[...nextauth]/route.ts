@@ -1,5 +1,5 @@
 import NextAuth from 'next-auth'
-import { isGoogleLoginEnabled } from '@/lib/auth/google-login'
+import { gmailMustUseGoogle, isGoogleLoginEnabled } from '@/lib/auth/google-login'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
@@ -12,7 +12,7 @@ import { isSelfHosted } from '@/lib/edition'
 import { cookies, headers } from 'next/headers'
 import { normalizeWidgetLanguage } from '@/lib/widget-settings'
 import { hashEmail } from '@/lib/anonymization'
-import { maskEmail } from '@/lib/log-mask'
+import { describeCaughtError, maskEmail } from '@/lib/log-mask'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -56,7 +56,7 @@ const authConfig = {
         }
 
         try {
-          if (isGoogleLoginEnabled() && credentials.email.trim().toLowerCase().endsWith('@gmail.com')) {
+          if (gmailMustUseGoogle(credentials.email)) {
             throw new Error('Gmail users must use Google authentication')
           }
 
@@ -82,6 +82,14 @@ const authConfig = {
 
             if (!result.ok) {
               throw new Error(result.error)
+            }
+            if (result.adminUserId) {
+              const admin = await prisma.user.findUnique({ where: { id: result.adminUserId } }).catch((e) => {
+                console.error('[signup] first admin lookup failed:', describeCaughtError(e))
+                return null
+              })
+              if (!admin?.email) throw new Error('SIGNUP_FAILED')
+              return { id: admin.id, email: admin.email, name: admin.name ?? admin.email }
             }
             throw new Error('SIGNUP_SUCCESS')
           } else {
@@ -300,6 +308,11 @@ const authConfig = {
         } catch (error) {
           console.error('Failed to update last_login_at:', error)
         }
+      }
+
+      if (account?.provider === 'google' && isSelfHosted()) {
+        const known = user?.email ? await prisma.user.findUnique({ where: { email: user.email }, select: { emailVerified: true } }) : null
+        if (!known?.emailVerified) throw new Error('SIGNUP_CLOSED')
       }
 
       if (account?.provider === 'google' && user?.email) {

@@ -96,6 +96,9 @@ function VerifyEmailContent() {
             case 'ALREADY_VERIFIED':
               setMessage(t('verify_email_error_already'))
               break
+            case 'SIGNUP_CLOSED':
+              setMessage(t('auth_selfhosted_admin_only'))
+              break
             default:
               setMessage(t('verify_email_error_generic'))
           }

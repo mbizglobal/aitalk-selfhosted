@@ -1,4 +1,4 @@
-import { WORK_APP_CORE_API, type ActionWorkModule, type AppTemplate, type SheetTemplate, type WorkAppFactory } from '@/lib/work/package-api'
+import { type ActionWorkModule, type AppTemplate, type SheetTemplate, type WorkAppFactory } from '@/lib/work/package-api'
 import { exampleWorkAppMeta } from './meta'
 
 const items: SheetTemplate = {
@@ -35,7 +35,7 @@ const template: AppTemplate = {
 export const exampleWorkApp: WorkAppFactory = () => ({
   id: 'example',
   version: '0.0.1',
-  core: WORK_APP_CORE_API,
+  core: 1,
   meta: exampleWorkAppMeta,
   appTemplates: [template],
   sheetTemplates: [items],

@@ -22,7 +22,7 @@ const code = (fn: () => unknown) => {
 
 describe('registry', () => {
   it('the 10 VAT templates (including the reading guide) pass the registry rules - module needs point to templates present in code', () => {
-    assert.equal(builtinSheetTemplates().length, 10)
+    assert.equal(builtinSheetTemplates().filter((t) => VAT_SHEET_TEMPLATES.includes(t)).length, 10)
     validateTemplateRegistry(builtinSheetTemplates())
     validateModuleRegistry(workModules(), builtinSheetTemplates())
   })

@@ -7,6 +7,7 @@ import { Menu, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/hooks/useLanguage'
+import { SelfHostedFooter } from '@/components/SelfHostedFooter'
 
 function getMenuName(name: string, t: (key: string) => string): string {
   const menuTranslations: { [key: string]: string } = {
@@ -30,6 +31,8 @@ function getMenuName(name: string, t: (key: string) => string): string {
     'OpenAI API Key': t('nav_openai_api_key'),
     'AI Assistant': t('nav_ai_assistant'),
     'MCP Server': t('settings_tab_mcp'),
+    'AI connections': t('settings_tab_ai_connections'),
+    'License': t('settings_tab_license'),
     'Team': t('settings_tab_team'),
     'Profile': t('nav_profile'),
     'Other': t('nav_other'),
@@ -239,6 +242,7 @@ export function MobileMenu({ navigation }: MobileMenuProps) {
             )
           })}
         </nav>
+        <SelfHostedFooter layout="stack" className="border-t px-6 py-4" />
       </div>
     </>
   )

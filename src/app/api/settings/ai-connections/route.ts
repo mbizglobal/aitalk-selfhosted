@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../auth/[...nextauth]/route'
 import { isSelfHosted } from '@/lib/edition'
-import { canManageAiConnections } from '@/lib/ai-connections/admin'
+import { isInstallAdmin } from '@/lib/auth/selfhosted-setup'
 import { describeCaughtError } from '@/lib/log-mask'
 
 function isSameOrigin(request: NextRequest): boolean {
@@ -23,7 +23,7 @@ export async function GET() {
   if (!isSelfHosted()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const session = await getServerSession(authOptions as any) as any
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const canManage = canManageAiConnections(session.user.email)
+  const canManage = await isInstallAdmin(session.user)
   if (!canManage) return NextResponse.json({ success: true, canManage: false, connections: [] })
   try {
     const { listAiConnections } = await import('@/lib/ai-connections/manage')
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions as any) as any
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isSameOrigin(request)) return NextResponse.json({ error: 'Invalid origin' }, { status: 403 })
-  if (!canManageAiConnections(session.user.email)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await isInstallAdmin(session.user))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: any
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }

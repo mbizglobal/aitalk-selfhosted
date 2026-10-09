@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { RAGProviderType } from '@/lib/rag-providers/types'
+import { useEdition } from '@/components/EditionProvider'
 
 const RAG_TO_LLM_PROVIDER: Record<string, string> = {
   openai_vector_store: 'openai',
@@ -54,6 +55,7 @@ export interface DocPagesInfo {
 interface UseRagProviderReturn {
   selectedProvider: RAGProviderType
   hasApiKey: boolean | null
+  needsAiConnection: boolean
   isLoading: boolean
   configuredProviders: string[]
 
@@ -68,6 +70,7 @@ interface UseRagProviderReturn {
 export function useRagProvider(): UseRagProviderReturn {
   const [selectedProvider, setSelectedProvider] = useState<RAGProviderType>('openai_vector_store')
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null)
+  const [needsAiConnection, setNeedsAiConnection] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([])
   const [docPages, setDocPages] = useState<DocPagesInfo | null>(null)
@@ -75,8 +78,27 @@ export function useRagProvider(): UseRagProviderReturn {
   const providerInfo = SUPPORTED_RAG_PROVIDERS.find(p => p.id === selectedProvider)
   const requiredLlmProvider = RAG_TO_LLM_PROVIDER[selectedProvider] || 'openai'
 
+  const edition = useEdition()
+
   const fetchRagProvider = useCallback(async () => {
     setIsLoading(true)
+    if (edition === 'selfhosted') {
+      try {
+        const r = await fetch('/api/storage/knowledge-status', { cache: 'no-store' })
+        const d = r.ok ? await r.json() : null
+        setSelectedProvider(d?.provider ?? 'pgvector')
+        setHasApiKey(d?.uploadReady === true)
+        setNeedsAiConnection(d?.needsAiConnection === true)
+      } catch (error) {
+        console.error('Failed to fetch knowledge status:', error)
+        setHasApiKey(false)
+      } finally {
+        setConfiguredProviders([])
+        setDocPages(null)
+        setIsLoading(false)
+      }
+      return
+    }
     try {
       const response = await fetch('/api/storage/rag-provider')
 
@@ -101,7 +123,7 @@ export function useRagProvider(): UseRagProviderReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [edition])
 
   useEffect(() => {
     fetchRagProvider()
@@ -110,6 +132,7 @@ export function useRagProvider(): UseRagProviderReturn {
   return {
     selectedProvider,
     hasApiKey,
+    needsAiConnection,
     isLoading,
     configuredProviders,
     providerInfo,
@@ -135,6 +158,8 @@ export function getSupportedFileTypes(provider: RAGProviderType): string[] {
       return ['.doc', '.docx', '.json', '.md', '.pdf', '.pptx', '.txt', '.csv', '.html', '.xml']
     case 'azure_ai_search':
       return ['.txt', '.md', '.json', '.tex', '.pdf', '.docx', '.pptx', '.xlsx', '.jpg', '.png']
+    case 'pgvector':
+      return ['.txt', '.md', '.json', '.tex', '.csv', '.pdf', '.docx', '.pptx', '.xlsx', '.jpg', '.jpeg', '.png']
     case 'pinecone':
       return ['.txt', '.md', '.json']
     default:

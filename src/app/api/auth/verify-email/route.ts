@@ -5,6 +5,8 @@ import { authTokenService } from '@/lib/auth-tokens'
 import { sendWelcomeEmailBackground } from '@/lib/background-email'
 import { translations, Language } from '@/lib/translations'
 import crypto from 'crypto'
+import { verifyEmailIfSetupOpen } from '@/lib/auth/selfhosted-setup'
+import { describeCaughtError } from '@/lib/log-mask'
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,10 +68,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerified: new Date() }
-    })
+    if (!(await verifyEmailIfSetupOpen(user))) {
+      await prisma.verificationToken.delete({ where: { token: hashedToken } })
+      return NextResponse.json(
+        { success: false, error: 'SIGNUP_CLOSED' },
+        { status: 403 }
+      )
+    }
 
     await prisma.verificationToken.delete({
       where: { token: hashedToken }
@@ -111,6 +116,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error) {
+    console.error('[verify-email] failed:', describeCaughtError(error))
 
     try {
       const { searchParams } = new URL(request.url)

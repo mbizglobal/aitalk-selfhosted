@@ -60,7 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const resolved = await resolveBookingWidget(agentId)
     if (!resolved) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: NO_STORE })
-    if (!(await isServiceAvailable(resolved.userId))) return fail('unavailable')
+    if (!(await isServiceAvailable(resolved.userId, resolved.agentId))) return fail('unavailable')
 
     const settings = widgetSettingsOf(resolved.nodeData)
     if (!underHourlyLimit(resolved, now)) return fail('rate_limited', 429)

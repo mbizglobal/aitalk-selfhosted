@@ -1,11 +1,5 @@
 
-import { WorkError } from '@/lib/work/errors'
-import { decryptJson } from '@/lib/work/sealed'
-import { readProjectSheet } from '@/lib/work/sheet-gate'
-import { readProjectFile } from '@/lib/work/files'
-import { runWorkModule } from '@/lib/work/module-registry'
-import { recordWorkAppProposal } from '@/lib/work/app-scope'
-import type { WorkAppTool, WorkAppToolCtx } from '@/lib/work/package-api'
+import { WorkError, type V1WorkAppTool, type WorkAppTool, type WorkAppToolCtx } from '@/lib/work/package-api'
 import { fingerprintWith, parseRecipe, type BankRecipe } from './bank/recipe'
 import { fileBalanceRequired, type BankImportPlan } from './modules/bank-import'
 import { VAT_FAMILY } from './templates'
@@ -27,10 +21,9 @@ function list<T>(v: unknown, what: string): T[] {
 }
 
 async function savedReaders(ctx: WorkAppToolCtx): Promise<Array<{ recipeKey: string; label: string | null; bank: string; fingerprint: string; recipe: BankRecipe }>> {
-  const sheets = await ctx.deps.db.dataSheet.findMany({ where: { kind: 'project', projectId: ctx.scope.projectId, userId: ctx.userId, templateFamily: VAT_FAMILY.recipes }, select: { id: true } })
   const out: Array<{ recipeKey: string; label: string | null; bank: string; fingerprint: string; recipe: BankRecipe }> = []
-  for (const sh of sheets) {
-    const { rows } = await readProjectSheet(ctx.deps, { userId: ctx.userId, projectId: ctx.scope.projectId, sheetId: sh.id, workflowId: ctx.workflowId })
+  for (const sh of await ctx.sheets.list(VAT_FAMILY.recipes)) {
+    const { rows } = await ctx.sheets.read(sh.id)
     for (const r of rows) {
       try {
         out.push({ recipeKey: String(r.data.recipeKey), label: typeof r.data.label === 'string' ? r.data.label : null, bank: String(r.data.bank), fingerprint: String(r.data.fingerprint), recipe: parseRecipe(r.data.recipe) })
@@ -40,20 +33,19 @@ async function savedReaders(ctx: WorkAppToolCtx): Promise<Array<{ recipeKey: str
   return out
 }
 
-export const VAT_TOOLS: readonly WorkAppTool[] = [
+export const VAT_TOOLS: readonly V1WorkAppTool[] = [
   {
     def: {
       name: 'vat_peek_file',
       description: `Read the first lines of a project text file (CSV or text) as plain text — at most ${PEEK_MAX_LINES} lines and ${PEEK_MAX_CHARS} characters. Use it to see the shape of a bank statement before writing a reader. Also says which saved readers match this file.`,
       parameters: obj({ fileId: { type: 'string' }, lines: { type: 'integer', minimum: 1, maximum: PEEK_MAX_LINES } }, ['fileId']),
     },
-    async run(ctx, args) {
-      const p = ctx.project
+    async run(ctx: WorkAppToolCtx, args) {
       const fileId = str(args.fileId, 'fileId')
-      const f = await ctx.deps.db.workFile.findFirst({ where: { id: fileId, projectId: p.id, userId: ctx.userId }, select: { mimeType: true } })
+      const f = await ctx.files.info(fileId)
       if (!f) throw new WorkError('NOT_FOUND', 'file')
       if (f.mimeType !== 'text/csv' && f.mimeType !== 'text/plain') throw new WorkError('INVALID', 'only CSV or text files can be read this way — images and PDFs come with the message')
-      const { buffer, originalName } = await readProjectFile(ctx.deps, { userId: ctx.userId, fileId, actor: ctx.actor })
+      const { buffer, originalName } = await ctx.files.read(fileId)
       let text: string
       let encoding = 'utf-8'
       try { text = new TextDecoder('utf-8', { fatal: true }).decode(buffer) } catch { text = new TextDecoder('windows-1252').decode(buffer); encoding = 'windows-1252' }
@@ -99,8 +91,7 @@ export const VAT_TOOLS: readonly WorkAppTool[] = [
         label: { type: 'string', description: 'A short name for a new reader, e.g. "Wise EUR statement".' },
       }, ['fileId']),
     },
-    async run(ctx, args) {
-      const p = ctx.project
+    async run(ctx: WorkAppToolCtx, args) {
       const fileId = str(args.fileId, 'fileId')
       const given = [args.ubs === true, args.recipe !== undefined, args.recipeKey !== undefined].filter(Boolean).length
       if (given > 1) throw new WorkError('INVALID', 'give only one of ubs, recipe, recipeKey')
@@ -116,20 +107,16 @@ export const VAT_TOOLS: readonly WorkAppTool[] = [
         })
         : []
       const balances = balEntries.length ? Object.fromEntries(balEntries) as Record<string, { opening: string; closing: string }> : undefined
-      const plan = await runWorkModule(ctx.deps, {
-        userId: ctx.userId, projectId: p.id, moduleId: BANK_IMPORT_MODULE,
-        input: { step: 'plan', fileId, ...(reader ? { reader } : {}), ...(accounts ? { accounts } : {}), ...(balances ? { balances } : {}) }, by: ctx.actor,
-      }) as BankImportPlan
+      const plan = await ctx.modules.run(BANK_IMPORT_MODULE, { step: 'plan', fileId, ...(reader ? { reader } : {}), ...(accounts ? { accounts } : {}), ...(balances ? { balances } : {}) }) as BankImportPlan
       const rows = plan.groups.reduce((n, g) => n + (g.plan?.insert.length ?? 0), 0)
       const broken = plan.groups.some((g) => g.plan && (g.plan.balance.file === 'mismatch' || g.plan.balance.ledger === 'mismatch' || g.plan.problems.some((x) => x.code === 'bank_chain_broken') || (fileBalanceRequired(plan.reader, g) && !g.needsBalances)))
       let proposed = false
       if (!broken && rows > 0) {
-        const f = await ctx.deps.db.workFile.findFirst({ where: { id: fileId, projectId: p.id, userId: ctx.userId }, select: { payload: true } })
-        const fileName = f ? decryptJson<{ originalName: string }>(f.payload, await ctx.deps.dataKey(ctx.deps.db, ctx.userId)).originalName : fileId
+        const fileName = (await ctx.files.info(fileId))?.originalName ?? fileId
         const cardReader = plan.reader.type === 'ubs' ? 'ubs' as const : plan.reader.saved && plan.reader.recipeKey ? { recipeKey: plan.reader.recipeKey } : { recipe: args.recipe }
         const chosen = Object.fromEntries(plan.groups.filter((g) => g.accountKey).map((g) => [g.id, g.accountKey!]))
         const usedBalances = balances ? Object.fromEntries(plan.groups.filter((g) => g.needsBalances && balances[g.id]).map((g) => [g.id, balances[g.id]])) : {}
-        proposed = recordWorkAppProposal(ctx.scope.runId, { type: 'bank_import', module: BANK_IMPORT_MODULE, fileId, fileName, reader: cardReader, accounts: chosen, ...(Object.keys(usedBalances).length ? { balances: usedBalances } : {}), ...(label ? { label } : {}), rows, groups: plan.groups.length })
+        proposed = ctx.propose({ type: 'bank_import', module: BANK_IMPORT_MODULE, fileId, fileName, reader: cardReader, accounts: chosen, ...(Object.keys(usedBalances).length ? { balances: usedBalances } : {}), ...(label ? { label } : {}), rows, groups: plan.groups.length })
       }
       return {
         reader: plan.reader,
@@ -160,8 +147,8 @@ export const VAT_TOOLS: readonly WorkAppTool[] = [
         currencies: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string', description: 'ISO code, e.g. EUR' } },
       }, ['months', 'currencies']),
     },
-    async run(ctx, args) {
-        const months = list<unknown>(args.months, 'months').map((m) => str(m, 'month'))
+    async run(ctx: Parameters<V1WorkAppTool['run']>[0], args) {
+      const months = list<unknown>(args.months, 'months').map((m) => str(m, 'month'))
       const bad = months.find((m) => !isFxMonth(m))
       if (bad) throw new WorkError('INVALID', `month must be YYYY-MM: ${bad}`)
       if (new Set(months).size > MAX_FX_MONTHS) throw new WorkError('INVALID', `at most ${MAX_FX_MONTHS} months at a time`)
