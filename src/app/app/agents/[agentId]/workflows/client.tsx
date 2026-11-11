@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getTranslations as getAppTranslations } from '@/lib/translations/app'
 import type { AppLanguage } from '@/lib/translations/app'
@@ -10,6 +10,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, FileText, Database } from 'lucide-react'
 import { ko, enUS, de, fr, es } from 'date-fns/locale'
+import { WorkflowAppsDeleteDialog } from '@/components/work/WorkflowAppsDeleteDialog'
+import { BackupDownloadDialog } from '@/components/work/BackupDownloadDialog'
 
 // Types
 import type { WorkflowListClientProps, Workflow, DataSheet, WorkflowGroup, LimitType, AddType } from './types'
@@ -32,7 +34,7 @@ export default function WorkflowListClient({
   maxProductionLimit, maxWorkflowLimit, maxDataSheetLimit,
 }: WorkflowListClientProps) {
   const router = useRouter()
-  const { currentLanguage } = useLanguage()
+  const { currentLanguage, t: tr } = useLanguage()
   const lang = currentLanguage as AppLanguage
   const t = getAppTranslations(lang)
   const dateLocale = lang === 'ko' ? ko : lang === 'de' ? de : lang === 'fr' ? fr : lang === 'es' ? es : enUS
@@ -62,12 +64,26 @@ export default function WorkflowListClient({
   const [selectedGroupForAdd, setSelectedGroupForAdd] = useState<WorkflowGroup | null>(null)
   const [limitType, setLimitType] = useState<LimitType>('free')
   const [addType, setAddType] = useState<AddType>('workflow')
+  const [appsDeleteFor, setAppsDeleteFor] = useState<string | null>(null)
+
+  const freshList = [...initialWorkflows, ...initialWorkflowGroups.flatMap((g) => g.workflows.map((i) => i.workflow))]
+  const workAppSig = JSON.stringify(freshList.filter((w) => w.workApp).map((w) => [w.workflowId, String(w.updatedAt), w.workApp]))
+  useEffect(() => {
+    const fresh = new Map(freshList.filter((w) => w.workApp).map((w) => [w.workflowId, w]))
+    const merge = (w: Workflow): Workflow => {
+      const f = fresh.get(w.workflowId)
+      return f ? { ...w, workApp: f.workApp, workflowJson: f.workflowJson, updatedAt: f.updatedAt } : w
+    }
+    setWorkflows((prev) => prev.map(merge))
+    setWorkflowGroups((prev) => prev.map((g) => ({ ...g, workflows: g.workflows.map((i) => ({ ...i, workflow: merge(i.workflow) })) })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workAppSig])
 
   // Computed values
   const stats = useWorkflowStats({ workflows, dataSheets, workflowGroups, maxWorkflowLimit, maxDataSheetLimit })
 
   // Hooks
-  const workflowActions = useWorkflowActions({ agentId: agent.agentId, workflows, setWorkflows, workflowGroups, setWorkflowGroups, setIsLoading, setLimitType, setIsLimitDialogOpen, t })
+  const workflowActions = useWorkflowActions({ agentId: agent.agentId, workflows, setWorkflows, workflowGroups, setWorkflowGroups, setIsLoading, setLimitType, setIsLimitDialogOpen, t, sharedInUseText: (names) => tr('work_todraft_shared').replace('{names}', names.map((n) => tr('work_quote_name').replace('{name}', n)).join(', ')), onHasWorkApps: (id) => setAppsDeleteFor(id) })
   const dataSheetActions = useDataSheetActions({ agentId: agent.agentId, dataSheets, setDataSheets, setIsLoading, setLimitType, setIsLimitDialogOpen, t })
   const groupActions = useWorkflowGroupActions({ agentId: agent.agentId, workflowGroups, setWorkflowGroups, setIsLoading, t })
 
@@ -76,6 +92,10 @@ export default function WorkflowListClient({
   const handleOpenEditDialog = (workflow: Workflow) => { setSelectedWorkflowForEdit(workflow); setIsEditDialogOpen(true) }
   const handleShowSettings = (workflow: Workflow) => { setSelectedWorkflowForSettings(workflow); setIsSettingsDialogOpen(true) }
   const handleShowUrl = (workflow: Workflow) => { setSelectedWorkflowForUrl(workflow); setIsUrlDialogOpen(true) }
+  const handleDeleteWorkflow = (workflowId: string, name: string) => {
+    if (workflows.find((w) => w.workflowId === workflowId)?.workApp) setAppsDeleteFor(workflowId)
+    else void workflowActions.handleDeleteWorkflow(workflowId, name)
+  }
   const getStatusBadge = (status: string, kind?: string) => {
     if (kind === 'sub') return <Badge className="bg-pink-500 hover:bg-pink-500">Sub-workflow</Badge>
     switch (status) {
@@ -147,7 +167,7 @@ export default function WorkflowListClient({
               <WorkflowCard key={workflow.workflowId} workflow={workflow} dateLocale={dateLocale} isLoading={isLoading} isMobile={isMobile}
                 onEdit={handleEditClick} onOpenEditDialog={handleOpenEditDialog} onSettings={handleShowSettings}
                 onDownload={workflowActions.handleDownloadWorkflowJson} onClone={workflowActions.handleCloneWorkflow}
-                onDelete={workflowActions.handleDeleteWorkflow} onChangeStatus={workflowActions.handleChangeStatus}
+                onDelete={handleDeleteWorkflow} onChangeStatus={workflowActions.handleChangeStatus}
                 onShowUrl={handleShowUrl} getStatusBadge={getStatusBadge} t={t}
               />
             ))}
@@ -203,6 +223,10 @@ export default function WorkflowListClient({
         onAddSheet={(gId, sId) => groupActions.handleAddSheetToGroup(gId, sId, () => setIsAddToGroupDialogOpen(false))}
         getStatusBadge={getStatusBadge} t={t} />
       <WidgetSettingsDialog isOpen={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen} workflow={selectedWorkflowForSettings} agent={agent} t={t} />
+      <BackupDownloadDialog target={workflowActions.backupTarget} onClose={workflowActions.closeBackup} />
+      <WorkflowAppsDeleteDialog workflowId={appsDeleteFor}
+        onClose={(changed) => { setAppsDeleteFor(null); if (changed) router.refresh() }}
+        onWorkflowDeleted={(id) => setWorkflows((prev) => prev.filter((w) => w.workflowId !== id))} />
       <URLDialog isOpen={isUrlDialogOpen} onOpenChange={setIsUrlDialogOpen} workflow={selectedWorkflowForUrl}
         agentId={agent.agentId} accessMode={agent.accessMode || 'public'} t={t} />
     </div>

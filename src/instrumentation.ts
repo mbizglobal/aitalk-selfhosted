@@ -18,6 +18,20 @@ export async function register() {
       console.log('[INSTRUMENTATION] Background jobs off (AITALK_BACKGROUND_JOBS=off)')
       return
     }
+    void (async () => {
+      try {
+        const [{ prisma }, { migrateLegacyWorkApps }, { generateWorkflowId }] = await Promise.all([import('@/lib/prisma'), import('@/lib/work/app-canvas-migrate'), import('@/lib/workflow/service')])
+        const r = await migrateLegacyWorkApps(prisma, generateWorkflowId)
+        if (r.migrated.length || r.failed.length) {
+          console.log(`[INSTRUMENTATION] Work apps moved to canvases: ${r.migrated.length}${r.failed.length ? ` · failed ${r.failed.length} (${r.failed.map((f) => f.workflowId).join(', ')})` : ''}`)
+        }
+        const cloned = r.migrated.filter((m) => m.cloned?.length)
+        if (cloned.length) console.log(`[INSTRUMENTATION] Work app connections copied (Vault accounts must enter the secret again): ${cloned.map((m) => `${m.workflowId}:${m.cloned!.join('+')}`).join(', ')}`)
+      } catch (e) {
+        console.error('[INSTRUMENTATION] Work app move failed:', e instanceof Error ? e.message.slice(0, 200) : 'error')
+      }
+    })()
+
     const { startScheduler } = await import('@/lib/schedule')
     startScheduler()
     console.log('[INSTRUMENTATION] Scheduler started')

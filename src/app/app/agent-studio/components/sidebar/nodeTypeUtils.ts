@@ -7,16 +7,32 @@ export const isChatWidgetNode = (node: Node) =>
   node.data?.triggerType !== 'telegram' &&
   node.data?.triggerType !== 'pstn' &&
   node.data?.triggerType !== 'subworkflow' &&
-  node.data?.triggerType !== 'app'
+  node.data?.triggerType !== 'app' &&
+  node.data?.triggerType !== 'workEvent'
 
 export const isAppStartNode = (node: Node) =>
   node.data?.nodeType === 'start' && node.data?.triggerType === 'app'
+
+export const isWorkEventStartNode = (node: Node) =>
+  node.data?.nodeType === 'start' && node.data?.triggerType === 'workEvent'
+
+export const isWorkAppStepNode = (node: Node) =>
+  node.data?.nodeType === 'workAppStep'
+
+export const isWorkAppNode = (node: Node) =>
+  node.data?.nodeType === 'workApp'
+
+export const isWorkAppLinkNode = (node: Node) =>
+  node.data?.nodeType === 'workAppLink'
 
 export const isSubWorkflowStartNode = (node: Node) =>
   node.data?.nodeType === 'start' && node.data?.triggerType === 'subworkflow'
 
 export const isSubWorkflowToolNode = (node: Node) =>
   node.type === 'tool' && node.data?.toolType === 'subworkflow'
+
+export const isWorkInboxToolNode = (node: Node) =>
+  node.type === 'tool' && node.data?.toolType === 'workInbox'
 
 export const isScheduleNode = (node: Node) =>
   node.data?.triggerType === 'schedule' || node.data?.nodeType === 'schedule'
@@ -110,6 +126,8 @@ export const isEditableLabelNode = (node: Node) =>
   isMicrosoftCalendarNode(node) ||
   isHttpRequestNode(node) ||
   isStoreNode(node) ||
+  isWorkAppStepNode(node) ||
+  isWorkAppNode(node) ||
   isPstnNode(node) ||
   isPstnStartNode(node) ||
   isIfElseNode(node) ||

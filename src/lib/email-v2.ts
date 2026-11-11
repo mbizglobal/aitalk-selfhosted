@@ -1,5 +1,6 @@
 
 import { appTranslations } from '@/lib/translations/app'
+import { OPERATOR_PATH } from '@/lib/vendor-site'
 import { EmailClient } from '@azure/communication-email'
 import { sendRoutedEmail } from '@/lib/email-routing'
 import { isSelfHosted } from '@/lib/edition'
@@ -3830,7 +3831,7 @@ export class EmailServiceV2 {
       softFreeConvertedAt
     } = params
 
-    const consoleLink = `https://www.aitalk.ch/console/users/${userId}`
+    const consoleLink = `https://www.aitalk.ch${OPERATOR_PATH}/users/${userId}`
     const formatDate = (d: Date) => d.toISOString().split('T')[0]
 
     let subject: string
@@ -3840,8 +3841,8 @@ export class EmailServiceV2 {
 
     if (phase === 'grace') {
       const daysRemaining = 5 - daysSinceExpiry
-      subject = `[AITalk] Grace Period D+${daysSinceExpiry}: ${userEmail} (${planType})`
-      phaseLabel = `Phase 1: Grace Period (Soft Free까지 ${daysRemaining}일 남음)`
+      subject = `[AITalk] 결제 유예 → 정지 D-${daysRemaining}: ${userEmail} (${planType})`
+      phaseLabel = `1단계: 결제 유예 (서비스는 계속 · 정지까지 ${daysRemaining}일)`
       statusColor = '#f59e0b'
       actionMessage = `
         <li>결제 서비스 대시보드에서 결제 상태 확인</li>
@@ -3849,22 +3850,22 @@ export class EmailServiceV2 {
         <li>Console에서 end_date 연장 또는 유예 해제</li>
       `
     } else if (phase === 'soft_free') {
-      const softDays = softFreeConvertedAt
-        ? Math.floor((Date.now() - softFreeConvertedAt.getTime()) / (24 * 60 * 60 * 1000))
-        : 0
-      const daysToHard = 5 - softDays
-      subject = `[AITalk] ⚠️ Soft Free → Hard Free D-${daysToHard}: ${userEmail}`
-      phaseLabel = `Phase 2: Soft Free (Hard Free까지 ${daysToHard}일 — 데이터 삭제 예정!)`
+      const dayMs = 24 * 60 * 60 * 1000
+      const daysToHard = softFreeConvertedAt
+        ? Math.max(0, Math.ceil((softFreeConvertedAt.getTime() + 25 * dayMs - Date.now()) / dayMs))
+        : 25
+      subject = `[AITalk] ⚠️ 정지 → 삭제 D-${daysToHard}: ${userEmail}`
+      phaseLabel = `2단계: 정지 (삭제까지 ${daysToHard}일 — 데이터 삭제 예정!)`
       statusColor = '#ef4444'
       actionMessage = `
-        <li><strong>긴급!</strong> Hard Free 전환 시 데이터가 삭제됩니다</li>
+        <li><strong>긴급!</strong> 삭제일에 데이터가 지워집니다</li>
         <li>Managed: Azure AI Search 벡터 + Blob 전체 삭제</li>
         <li>Self: Agent 1개 외 나머지 삭제</li>
-        <li>Console에서 유료 복구하면 모든 데이터 보존됩니다</li>
+        <li>다시 결제하거나 Console에서 유료 복구하면 모든 데이터가 그대로 돌아옵니다</li>
       `
     } else {
-      subject = `[AITalk] Hard Free 전환 완료: ${userEmail}`
-      phaseLabel = 'Phase 3: Hard Free 전환 완료 (데이터 정리됨)'
+      subject = `[AITalk] 삭제 완료: ${userEmail}`
+      phaseLabel = '3단계: 삭제 완료 (데이터 정리됨)'
       statusColor = '#6b7280'
       actionMessage = `<li>데이터 정리가 완료되었습니다. 삭제된 데이터는 복구 불가합니다.</li>`
     }
@@ -3885,7 +3886,7 @@ export class EmailServiceV2 {
       <tr><td style="padding: 6px 0; color: #6b7280;">Billing</td><td style="padding: 6px 0;">${billingCycle || 'N/A'}</td></tr>
       <tr><td style="padding: 6px 0; color: #6b7280;">만료일 (end_date)</td><td style="padding: 6px 0; color: #ef4444;"><strong>${formatDate(endDate)}</strong></td></tr>
       <tr><td style="padding: 6px 0; color: #6b7280;">유예 시작일</td><td style="padding: 6px 0;">${formatDate(graceStartedAt)}</td></tr>
-      ${softFreeConvertedAt ? `<tr><td style="padding: 6px 0; color: #6b7280;">Soft Free 전환일</td><td style="padding: 6px 0;">${formatDate(softFreeConvertedAt)}</td></tr>` : ''}
+      ${softFreeConvertedAt ? `<tr><td style="padding: 6px 0; color: #6b7280;">정지일</td><td style="padding: 6px 0;">${formatDate(softFreeConvertedAt)}</td></tr>` : ''}
     </table>
 
     <div style="margin-top: 16px; padding: 12px; background: #f9fafb; border-radius: 6px;">

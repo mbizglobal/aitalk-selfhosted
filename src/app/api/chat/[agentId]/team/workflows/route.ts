@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { describeCaughtError } from '@/lib/log-mask'
 import { isTeamChatWorkflow } from '@/lib/chat/public-access'
+import { memberAccess } from '@/lib/memberAccess'
 
 function isTeamSelectable(workflowJson: unknown, agentAccessMode: string | null | undefined): boolean {
   try {
@@ -34,17 +35,25 @@ export async function GET(
     const { agentId } = await params
 
     let isOwner = false
+    let memberId: number | null = null
     const authHeader = request.headers.get('authorization')
 
-    if (authHeader?.startsWith('Bearer ')) {
+    const ownerSession = await getServerSession(authOptions as any) as any
+    if (ownerSession?.user?.id) {
+      const owned = await prisma.agent.findUnique({ where: { agentId }, select: { userId: true } })
+      if (owned && owned.userId === ownerSession.user.id) isOwner = true
+    }
+
+    if (!isOwner && authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7)
       const payload = await verifyActiveAgentMemberToken(prisma, token, agentId)
 
       if (!payload || payload.agentId !== agentId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
-    } else {
-      const session = await getServerSession(authOptions as any) as any
+      memberId = payload.memberId
+    } else if (!isOwner) {
+      const session = ownerSession
       if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
@@ -92,7 +101,10 @@ export async function GET(
       }
     })
 
-    const workflowsWithAccess = workflows.filter(wf => isTeamSelectable(wf.workflowJson, agent.accessMode)).map(wf => {
+    const access = memberId === null ? null : await memberAccess(prisma, agentId, memberId)
+    const may = (id: string) => memberId === null || (!!access && access.workflowIds.has(id))
+
+    const workflowsWithAccess = workflows.filter(wf => may(wf.workflowId) && isTeamSelectable(wf.workflowJson, agent.accessMode)).map(wf => {
       let fileInputConfig = { imageInput: false, pdfInput: false, csvInput: false }
       let teamWelcomeMessage = ''
 
@@ -144,7 +156,7 @@ export async function GET(
         where: { workflowId: requestedWorkflowId, agentId, status: 'production' },
         select: { workflowId: true, name: true, description: true, status: true, updatedAt: true, workflowJson: true }
       })
-      if (wf && isTeamSelectable(wf.workflowJson, agent.accessMode)) {
+      if (wf && may(wf.workflowId) && isTeamSelectable(wf.workflowJson, agent.accessMode)) {
         let fileInputConfig = { imageInput: false, pdfInput: false, csvInput: false }
         let teamWelcomeMessage = ''
         try {

@@ -18,6 +18,7 @@ export function useAgentInitializer(
     agent.setAgentId(resolvedAgentId)
     agent.setWorkflowId(initialWorkflow?.workflowId || null)
     agent.setWorkflowName(initialWorkflow?.name || 'Untitled Workflow')
+    agent.setSavedWorkflowName(initialWorkflow?.name || 'Untitled Workflow')
     agent.setWorkflowStatus(initialWorkflow?.status || 'draft')
     agent.setWorkflowKind(initialWorkflow?.kind === 'sub' ? 'sub' : 'main')
     agent.workflowVersionRef.current = initialWorkflow?.version ?? 1

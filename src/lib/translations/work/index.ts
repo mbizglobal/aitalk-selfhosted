@@ -3,6 +3,7 @@ import { workTranslations as ko } from './ko'
 import { workTranslations as de } from './de'
 import { workTranslations as fr } from './fr'
 import { WORK_APP_METAS, type WorkAppMeta } from '@/lib/work/package-meta'
+import { WORK_LIB_I18N } from '@/work-libs/i18n'
 
 export type WorkLang = 'en' | 'de' | 'fr' | 'ko'
 export type { WorkKey }
@@ -24,7 +25,17 @@ export function mergeWorkDict(core: Record<string, string>, l: WorkLang, metas: 
   }
   return Object.freeze(out)
 }
-const dicts: Record<WorkLang, Record<string, string>> = { en: mergeWorkDict(en, 'en'), de: mergeWorkDict(de, 'de'), fr: mergeWorkDict(fr, 'fr'), ko: mergeWorkDict(ko, 'ko') }
+export function withLibDicts(core: Record<string, string>, l: WorkLang, libs = WORK_LIB_I18N): Record<string, string> {
+  const out: Record<string, string> = { ...core }
+  for (const [lib, d] of Object.entries(libs)) {
+    for (const [k, v] of Object.entries(d[l])) {
+      if (k in out) throw new Error(`work app i18n: key ${k} from library ${lib} is already defined`)
+      out[k] = v
+    }
+  }
+  return out
+}
+const dicts: Record<WorkLang, Record<string, string>> = { en: mergeWorkDict(withLibDicts(en, 'en'), 'en'), de: mergeWorkDict(withLibDicts(de, 'de'), 'de'), fr: mergeWorkDict(withLibDicts(fr, 'fr'), 'fr'), ko: mergeWorkDict(withLibDicts(ko, 'ko'), 'ko') }
 
 export function workDict(lang: WorkLang): Readonly<Record<string, string>> {
   return dicts[lang]
@@ -41,7 +52,8 @@ function find(lang: WorkLang, key: string, pkg?: string | null): string | undefi
   return lookupWorkText(dicts[lang], dicts.en, key, pkg)
 }
 export function lookupWorkText(d: Readonly<Record<string, string>>, en: Readonly<Record<string, string>>, key: string, pkg?: string | null): string | undefined {
-  return (pkg ? d[`${pkg}.${key}`] ?? en[`${pkg}.${key}`] : undefined) ?? d[key] ?? en[key]
+  if (key.startsWith('sheet_core.')) key = `sheet_core_${key.slice('sheet_core.'.length)}`
+  return (pkg && pkg !== 'core' ? d[`${pkg}.${key}`] ?? en[`${pkg}.${key}`] : undefined) ?? d[key] ?? en[key]
 }
 
 export function packageOfKind(kind: string | null | undefined): string | null {
@@ -57,7 +69,7 @@ export function workKindLabel(lang: WorkLang, kind: string): string {
   return workT(lang, `kind_${kind}`, kind, packageOfKind(kind))
 }
 
-const PARAM_KEY: Record<string, (v: string) => string> = {
+export const PARAM_KEY: Record<string, (v: string) => string> = {
   sheet: (v) => `sheet_${v}`,
   column: (v) => `col_${v}`,
   field: (v) => `bankf_${v}`,

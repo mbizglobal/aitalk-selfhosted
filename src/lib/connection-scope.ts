@@ -47,6 +47,8 @@ export const SAVE_AS_RESERVED_KEYS = new Set<string>([
   'skipAiCallCpa', 'isTestMode',
   'isManaged', 'managedRegion',
   'isScheduledTrigger', 'scheduleRunKey', 'workflowId',
+  'isWorkEventTrigger', 'workEvent', 'flowRunId',
+  'handoff',
   '__templateVars',
   '__debugEnabled',
   'context',
@@ -54,6 +56,7 @@ export const SAVE_AS_RESERVED_KEYS = new Set<string>([
   'callerNumber',
   'voiceQuiz',
   'workScope',
+  'telegramUserId', 'telegramChatId', 'isTelegramWebhook',
   '__proto__', 'prototype', 'constructor',
 ])
 

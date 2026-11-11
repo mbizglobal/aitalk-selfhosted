@@ -185,7 +185,9 @@ export function LeftPaletteMobile({ isOpen, onClose }: LeftPaletteMobileProps) {
 
   const edition = useEdition()
   const kind: WorkflowKind = agent.workflowKind === 'sub' ? 'sub' : 'main'
-  const forKind = <T extends { id: string }>(items: readonly T[]) => filterPaletteItems(items, kind, edition)
+  const appCanvas = workflow.nodes.some((n) => n.data?.nodeType === 'workApp')
+  const hasStart = workflow.nodes.some((n) => n.data?.nodeType === 'start')
+  const forKind = <T extends { id: string }>(items: readonly T[]) => filterPaletteItems(items, kind, edition, { appCanvas, hasStart })
 
   const renderComponents = (components: any[], sectionKey: string, sectionName: string) => components.length === 0 ? null : (
     <div className="mb-2">
@@ -435,6 +437,45 @@ function createPaletteNode(
           nodeType: 'start',
           triggerType: 'app',
           showLeftHandle: false
+        },
+        selected: false
+      }
+    case 'work-event-start':
+      return {
+        id,
+        type: 'custom',
+        position,
+        data: {
+          ...baseData,
+          nodeType: 'start',
+          triggerType: 'workEvent',
+          workEvents: ['sealed'],
+          showLeftHandle: false
+        },
+        selected: false
+      }
+    case 'work-app':
+      return {
+        id,
+        type: 'custom',
+        position,
+        data: {
+          ...baseData,
+          nodeType: 'workApp',
+          ai: {},
+        },
+        selected: false
+      }
+    case 'work-app-step':
+      return {
+        id,
+        type: 'custom',
+        position,
+        data: {
+          ...baseData,
+          nodeType: 'workAppStep',
+          action: 'open_task',
+          periodDate: 'event_end',
         },
         selected: false
       }

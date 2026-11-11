@@ -33,9 +33,10 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   allowedDevOrigins: getDevOrigins(),
-  serverExternalPackages: ['pdfjs-dist'],
+  serverExternalPackages: ['pdfjs-dist', 'pdfkit', 'swissqrbill', '@napi-rs/canvas'],
   agentRules: false,
   experimental: {
+    ...(Number.isInteger(Number(process.env.AITALK_BUILD_CPUS)) && Number(process.env.AITALK_BUILD_CPUS) > 0 ? { cpus: Number(process.env.AITALK_BUILD_CPUS) } : {}),
     serverActions: {
       bodySizeLimit: '50mb',
     },

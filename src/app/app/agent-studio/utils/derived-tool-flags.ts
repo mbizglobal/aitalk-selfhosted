@@ -12,6 +12,7 @@ const TOOL_TYPE_BY_FLAG = {
   googleCalendar: 'google_calendar',
   microsoftCalendar: 'microsoft_calendar',
   subworkflow: 'subworkflow',
+  workInbox: 'workInbox',
   workApp: 'workApp',
 } as const
 

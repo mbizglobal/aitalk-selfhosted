@@ -23,7 +23,7 @@ interface LeftPaletteProps {
 export function LeftPalette({ isMobile, onDragStart, onDragEnd, activeTab, isLocked, isOverlay = false }: LeftPaletteProps) {
   const { lang } = useLanguage()
   const t = getAgentStudioTranslation(lang)
-  const { agent } = useWorkflowContext()
+  const { agent, workflow } = useWorkflowContext()
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     basic: true,
@@ -93,7 +93,9 @@ export function LeftPalette({ isMobile, onDragStart, onDragEnd, activeTab, isLoc
 
   const edition = useEdition()
   const kind: WorkflowKind = agent.workflowKind === 'sub' ? 'sub' : 'main'
-  const forKind = <T extends { id: string }>(items: readonly T[]) => filterPaletteItems(items, kind, edition)
+  const appCanvas = workflow.nodes.some((n) => n.data?.nodeType === 'workApp')
+  const hasStart = workflow.nodes.some((n) => n.data?.nodeType === 'start')
+  const forKind = <T extends { id: string }>(items: readonly T[]) => filterPaletteItems(items, kind, edition, { appCanvas, hasStart })
   const visibleComponents = activeTab === 'all'
     ? { basic: forKind(basicComponents), tools: forKind(toolComponents), inout: forKind(inOutComponents), flow: forKind(flowComponents), data: forKind(dataComponents), apps: forKind(appsComponents), etc: forKind(etcComponents) }
     : activeTab === 'basic' ? { basic: forKind(basicComponents) }

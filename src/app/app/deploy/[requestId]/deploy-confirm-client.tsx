@@ -17,7 +17,7 @@ interface Props {
   summary?: DeploySummary
 }
 
-const KNOWN_TRIGGERS = new Set(['chatWidget', 'schedule', 'pstn', 'telegram'])
+const KNOWN_TRIGGERS = new Set(['chatWidget', 'schedule', 'pstn', 'telegram', 'workEvent'])
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (

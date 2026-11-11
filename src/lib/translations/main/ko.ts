@@ -143,6 +143,9 @@ export const translations = {
 
     // Team Members & Production Workflows (Paid Plans)
     pricing_team_members: '최대 {0}명 팀 멤버',
+    pricing_companies: "회사(은행 장부) 최대 {0}곳",
+    pricing_companies_one: "회사 또는 개인 1곳(은행 장부)",
+    pricing_my_forms: "내 폼 최대 {0}개",
     pricing_production_workflows: '무제한 워크플로우, {0}개 활성',
 
     // Legacy pricing keys (keep for compatibility)
@@ -207,7 +210,7 @@ export const translations = {
     managed_azure_openai_desc: 'Microsoft Azure 에서 돌아가는 최신 OpenAI 모델 — 기업용 보안과 규정 준수.',
     managed_azure_search_desc: 'RAG 지식 검색을 위한 기업용 벡터 데이터베이스 — 스위스(Azure 취리히)에 저장됩니다.',
     managed_regions_desc: '모든 고객이 한 리전을 씁니다 — 스위스 취리히의 Microsoft Azure.',
-    pricing_starter_app_only: '모바일 앱에서만',
+    pricing_starter_app_only: '모바일 결제만',
     pricing_starter_price_eur: 'EUR 20–25',
     pricing_starter_price_chf_note: '/월 · VAT 8.1% 포함',
     pricing_starter_price_eur_note: '/월 · VAT 포함',
@@ -383,7 +386,7 @@ export const translations = {
     auth_setup_title: '관리자 만들기',
     auth_setup_description: '이 설치에는 아직 관리자가 없습니다. 지금 만드는 계정이 AI 연결 · 에이전트 · 팀 멤버를 관리합니다.',
     auth_selfhosted_admin_only: '이 로그인은 이 설치의 관리자용입니다. 직원은 초대 메일에 있는 업무 앱 링크로 들어오세요.',
-    selfhosted_tagline: '내가 통제하는 AI 에이전트',
+    selfhosted_tagline: 'AI Work Apps — 내가 통제하는 AI 업무 앱',
     selfhosted_footer_updates: '업데이트 (GitHub)',
     auth_send_reset_email: '재설정 이메일 보내기',
     auth_sending_reset_email: '재설정 이메일 발송 중...',
@@ -710,20 +713,20 @@ export const translations = {
 
     // Company Page
     company_section1_title1: '우리의 이야기',
-    company_section1_desc1: '우리의 여정은 항상 한 가지 목표를 향해왔습니다: 선구적인 기술을 통해 우리의 비즈니스 파트너(그리고 그들의 고객들)가 성공하고 견고하게 성장하도록 돕는 것입니다.',
+    company_section1_desc1: '우리는 늘 한 가지 목표를 따라왔습니다. 믿을 수 있는 기술로 비즈니스 파트너와 그 고객이 성공하고 성장하도록 돕는 것입니다.',
     company_section1_desc2: '2005년 영국에서 설립된 이후 우리는 디지털 혁신의 최전선에 있어왔습니다. 먼저 55개국 사용자에게 15억 개 이상의 모바일 게임을 제공하는 기술을 구축하여 Samsung, EA Mobile, Sega와 같은 글로벌 거대 기업의 신뢰를 얻었습니다. 이 경험은 원활한 디지털 참여의 힘을 가르쳐주었습니다.',
     company_section1_desc3: '그 성공을 바탕으로 2013년 본사를 스위스로 이전하고 인터랙티브 마케팅으로 전문성을 확장했습니다. 우리의 브랜드 미니게임(BMG) 플랫폼은 BMW와 KFC를 포함한 100개 이상의 상징적인 브랜드를 위한 고객 충성도 도구가 되어 기술을 통해 고객 관계를 심화시킬 수 있는 능력을 증명했습니다.',
-    company_section1_desc4: '오늘날 우리는 20년간의 혁신 유산을 인공지능의 미래로 향하게 합니다. 우리는 단순한 AI 챗봇을 넘어, 기업이 진정한 \'AI 에이전트(AI Agent)\'를 통해 고객 서비스와 비즈니스 자동화를 혁신할 수 있도록 지원합니다.<br><br>우리의 새로운 서비스인 AiTalk.ch는 고급 RAG(Retrieval-augmented generation) 기술과 핵심 <strong>MCP(Model Context Protocol)</strong>를 결합합니다. MCP는 다양한 API를 AI의 LLM에 연결하여, 단순한 답변을 넘어 실제 비즈니스 워크플로우를 자동화하는 강력한 자동화 서비스를 제공합니다.<br><br>스위스 바르, 추크에 본사를 둔 우리는 신뢰와 정밀성을 바탕으로 차세대 지능형 비즈니스 자동화 솔루션을 구축하는 데 전념하는 AI 전문가 팀입니다.',
+    company_section1_desc4: '이제 우리는 20년 동안 믿을 수 있는 기술을 만들어 온 경험을 AI에 쏟고 있습니다. AiTalk.ch에서 우리는 <strong>AI Work Apps</strong>를 만듭니다. 청구서, 영수증, 부가세 신고, 연말 결산처럼 손이 많이 가는 일을 AI 가 하되, 통제는 사용자 손에 있는 앱입니다. 필요한 것을 AI 에게 말하면 AI 는 손댈 수 있는 범위가 정해진 앱 안에서 일하고, 숫자는 고정된 코드가 계산하며, 확정되기 전에 사람이 확인합니다.<br><br>우리는 가장 잘 아는 일, 바로 우리 회사의 회계부터 시작했고 같은 Work App을 우리 회사들에 직접 쓰고 있습니다. 기업은 우리가 Microsoft Azure에서 운영하고 데이터를 스위스에 저장하는 AI Talk Cloud에서 쓰거나, AI Talk Self-hosted를 자기 서버에 설치해 자기 업무에 맞는 Work App을 만듭니다.<br><br>스위스 추크주 바르에 본사를 둔 우리는, 숫자가 틀리면 안 되는 일까지 믿고 맡길 수 있는 AI 를 만듭니다.',
 
     company_section1_sub1_title1: '우리의 미션',
-    company_section1_sub1_desc1: 'AI Agent 자동화 기술을 통해, 비즈니스 파트너와 그 고객의 핵심 가치가 더욱 빛나도록 돕고, 나아가 파트너의 모든 비즈니스가 형통하며 견고하게 성장하도록 기여하는 것입니다.',
+    company_section1_sub1_desc1: '손이 많이 가고 반복되는 일을 AI 가 덜어 주되, 모든 숫자와 결정은 회사가 쥐고 있게 하는 것입니다.',
 
     company_section1_sub2_title1: '우리의 핵심 가치',
     company_section1_sub2_desc1: '우리는 성실하게 행동합니다',
     company_section1_sub2_desc2: '우리는 비즈니스가 필요로 하는 파트너로서 섬깁니다',
     company_section1_sub2_desc3: '우리는 완전한 잠재력을 달성하기 위해 서로를 지원합니다',
     company_section1_sub2_desc4: '우리는 우리의 사람들, 파트너 및 커뮤니티를 존중합니다',
-    company_section1_sub2_desc5: '우리는 핵심 가치를 따르고 AiTalk.ch을 사용하여 비즈니스 결과를 창출하고 개선하려는 사명을 향해 노력합니다.',
+    company_section1_sub2_desc5: '우리는 핵심 가치를 지키며 사명을 향해 갑니다. 진짜 일을 하는 AI, 그러나 통제는 내 손에.',
 
     company_section2_title1: '우리의 서비스 및 제품',
     company_section2_desc1: '브랜드는 코딩 없이 자체적으로 HTML5 기반 브랜드 미니게임을 만들 수 있습니다. 미니게임 후 리더보드를 통해 캠페인과 프로모션이 지원되며, 사용자는 포인트를 수집하여 쿠폰을 교환할 수 있습니다.',
@@ -735,9 +738,9 @@ export const translations = {
     company_section_bmg_btn1: '더 알아보기',
 
     company_section3_title1: '소개',
-    company_section3_desc1: `M-BIZ Global은 20년간의 디지털 혁신 유산을 가진 스위스 기반 기술 회사입니다.`,
-    company_section3_desc1_5: `우리는 AiTalk.ch 와 같은 Agentic AI Solutions 을 설계해서 기업이 필요로 하는 AI Automation Service 를 지원합니다.`,
-    company_section3_desc2: `바르, 추크에 본사를 두고 우리는 기술을 통해 비즈니스의 미래를 구축하는 데 전념합니다.`,
+    company_section3_desc1: 'M-BIZ Global AG는 20년 동안 디지털 혁신을 이어 온 스위스 기술 회사입니다.',
+    company_section3_desc1_5: '우리는 회계처럼 손이 많이 가는 일을 사용자의 통제 아래 AI 가 하는 AI Work Apps를 만들고, AiTalk.ch를 운영합니다.',
+    company_section3_desc2: '스위스 추크주 바르에 본사를 두고, 믿을 수 있는 AI로 회사 업무의 미래를 만들어 갑니다.',
 
     // Legal Documents - Terms of Use (Korean additions would continue...)
     terms_dpa_link: '데이터 처리 계약',

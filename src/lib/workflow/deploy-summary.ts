@@ -2,7 +2,7 @@
 export interface DeploySummary {
   egress: Array<{
     node: string
-    kindKey: 'http' | 'smtp' | 'sendgrid' | 'telegram' | 'sms' | 'pstn' | 'aiTool' | 'mcpNode'
+    kindKey: 'http' | 'smtp' | 'sendgrid' | 'telegram' | 'sms' | 'pstn' | 'aiTool' | 'mcpNode' | 'workAppSend'
     target?: string
     toolKey?: string
   }>
@@ -24,6 +24,7 @@ const EGRESS_FIELDS: Record<string, { kindKey: DeploySummary['egress'][number]['
 const EGRESS_TOOL_KEYS = new Set([
   'sendgrid', 'telegram', 'smtp', 'sms', 'functionCalling', 'mcp', 'google_calendar', 'microsoft_calendar',
   'subworkflow',
+  'workInbox',
 ])
 
 function nodeTypeOf(node: unknown): string {
@@ -96,6 +97,16 @@ export function summarizeDeployRisk(workflowJson: string): DeploySummary {
       }
     }
 
+    if (type === 'start' && data.connections && typeof data.connections === 'object' && !Array.isArray(data.connections)) {
+      for (const [kind, slots] of Object.entries(data.connections as Record<string, unknown>)) {
+        if (!slots || typeof slots !== 'object' || Array.isArray(slots)) continue
+        for (const [slot, id] of Object.entries(slots as Record<string, unknown>)) {
+          const aiSql = kind === 'database' && !!data.dbAiSql && typeof data.dbAiSql === 'object' && (data.dbAiSql as Record<string, unknown>)[slot] === true
+          if (typeof id === 'string' && id.trim()) summary.connections.push({ node: label, ref: `connections.${kind}.${slot}${aiSql ? ' · AI SQL' : ''}`, connectionId: id })
+        }
+      }
+    }
+
     if (type === 'start') {
       const tt = typeof data.triggerType === 'string' ? data.triggerType : 'chatWidget'
       let detail: string | undefined
@@ -108,6 +119,17 @@ export function summarizeDeployRisk(workflowJson: string): DeploySummary {
       }
       summary.triggers.push({ type: tt, ...(detail ? { detail } : {}) })
     }
+  }
+
+  const byId = new Map(nodes.map((n) => [String((n as { id?: unknown })?.id ?? ''), n]))
+  const edges: unknown[] = Array.isArray((parsed as { edges?: unknown })?.edges) ? (parsed as { edges: unknown[] }).edges : []
+  for (const e of edges) {
+    const x = e as { source?: unknown; target?: unknown; sourceHandle?: unknown; data?: { inboxFamily?: unknown } }
+    if (x?.sourceHandle !== 'send') continue
+    const from = nodeLabel(byId.get(String(x.source)))
+    const to = nodeLabel(byId.get(String(x.target)))
+    const family = typeof x.data?.inboxFamily === 'string' ? x.data.inboxFamily : ''
+    summary.egress.push({ node: from, kindKey: 'workAppSend', target: shorten(`${from} → ${to}${family ? ` (${family})` : ''}`) })
   }
 
   return summary

@@ -24,6 +24,7 @@ import { WorkflowEngine, WorkflowContext, WorkflowDebugLogEntry } from '@/lib/wo
 import { findReachableCycle } from '@/lib/workflow/validation'
 import { readSubWorkflowDefinition, validateSubWorkflowArgs } from '@/lib/workflow/subworkflow'
 import { verifyTeamMember } from '@/lib/teamMemberCache'
+import { memberCanUseWorkflow } from '@/lib/memberAccess'
 import { trackWorkflowExecution } from '@/lib/analytics'
 import { describeCaughtError, safeLogId, safeLogToken } from '@/lib/log-mask'
 import { collectChatStream } from '@/lib/chat/stream-collector'
@@ -349,6 +350,10 @@ export async function POST(request: NextRequest) {
             { id: 'desc' },
           ]
         }))
+      }
+
+      if (selectedWorkflow && activeTeamMemberId !== null && !(await memberCanUseWorkflow(prisma, agent.agentId, activeTeamMemberId, selectedWorkflow.workflowId))) {
+        return NextResponse.json({ error: 'Requested workflow not found or not available', code: 'WORKFLOW_NOT_FOUND' }, { status: 404 })
       }
 
       if (selectedWorkflow && selectedWorkflow.workflowJson) {

@@ -8,3 +8,7 @@ export function isGoogleLoginEnabled(env: Record<string, string | undefined> = p
 export function gmailMustUseGoogle(email: string, env: Record<string, string | undefined> = process.env): boolean {
   return !isSelfHosted(env) && email.trim().toLowerCase().endsWith('@gmail.com')
 }
+
+export function inviteEmailRefused(email: string, env: Record<string, string | undefined> = process.env): boolean {
+  return !isSelfHosted(env) && /@(gmail|googlemail)\.com$/.test(email.trim().toLowerCase())
+}

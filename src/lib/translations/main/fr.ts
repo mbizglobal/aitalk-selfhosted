@@ -135,6 +135,9 @@ export const translations = {
 
     // Team Members & Production Workflows (Paid Plans)
     pricing_team_members: 'Jusqu\'à {0} membres d\'équipe',
+    pricing_companies: "Jusqu'à {0} entreprises (journaux bancaires)",
+    pricing_companies_one: "1 entreprise ou particulier (journal bancaire)",
+    pricing_my_forms: "Jusqu'à {0} formulaires personnalisés (Mes formulaires)",
     pricing_production_workflows: 'Workflows illimités, {0} actifs',
 
     // Pricing Plan Features (legacy)
@@ -145,20 +148,20 @@ export const translations = {
     pricing_knowledge_search: 'Recherche de connaissances disponible en privé après connexion',
     
     company_section1_title1: 'Notre Histoire',
-    company_section1_desc1: 'Notre parcours a toujours été guidé par un seul objectif : aider nos partenaires commerciaux (et leurs clients) à réussir et à croître de manière robuste grâce à des technologies pionnières.',
+    company_section1_desc1: 'Notre parcours a toujours suivi un même objectif : aider nos partenaires commerciaux — et leurs clients — à réussir et à se développer grâce à une technologie fiable.',
     company_section1_desc2: 'Depuis notre création au Royaume-Uni en 2005, nous sommes à la pointe de l\'innovation numérique. Nous avons d\'abord gagné la confiance de géants mondiaux tels que Samsung, EA Mobile et Sega en développant la technologie qui a permis de distribuer plus de 1,5 milliard de jeux mobiles à des utilisateurs dans 55 pays. Cette expérience nous a enseigné le pouvoir d\'un engagement numérique fluide.',
     company_section1_desc3: 'Forts de ce succès, nous avons déménagé notre siège social en Suisse en 2013 et étendu notre expertise au marketing interactif. Notre plateforme de mini-jeux de marque (BMG) est devenue un outil de fidélisation incontournable pour plus de 100 marques emblématiques, dont BMW et KFC, prouvant notre capacité à approfondir les relations clients par la technologie.',
-    company_section1_desc4: 'Aujourd\'hui, nous canalisons cet héritage d\'innovation de deux décennies vers l\'avenir de l\'Intelligence Artificielle. Nous allons au-delà des simples chatbots IA, permettant aux entreprises de révolutionner le service client et l\'automatisation des affaires grâce à de véritables \'Agents IA\'.<br><br>Notre nouveau service, AiTalk.ch, combine une technologie RAG (Génération Augmentée par Récupération) avancée avec le <strong>MCP (Protocole de Contexte de Modèle)</strong> principal. Le MCP connecte diverses API au LLM de l\'IA, fournissant de puissants services d\'automatisation qui vont au-delà de simples réponses pour automatiser les workflows métier réels.<br><br>Avec notre siège à Baar, Zoug, Suisse, nous sommes une équipe d\'experts en IA dédiée à la construction de la prochaine génération de solutions d\'automatisation commerciale intelligente basées sur la confiance et la précision.',
+    company_section1_desc4: 'Aujourd’hui, nous mettons deux décennies d’expérience en technologie fiable au service de l’IA. Avec AiTalk.ch, nous créons des <strong>AI Work Apps</strong> : des apps dans lesquelles l’IA effectue un travail exigeant — factures, justificatifs, décompte TVA, bouclement annuel — sous votre contrôle. Vous dites à l’IA ce dont vous avez besoin, elle travaille dans une app qui définit précisément ce à quoi elle peut accéder, un code fixe calcule les chiffres, et une personne confirme avant que quoi que ce soit ne devienne définitif.<br><br>Nous avons commencé par le travail que nous connaissons le mieux : notre propre comptabilité, et nous utilisons ces mêmes Work Apps pour nos propres sociétés. Les entreprises les utilisent dans AI Talk Cloud, exploité par nous sur Microsoft Azure avec des données stockées en Suisse — ou installent AI Talk Self-hosted sur leurs propres serveurs et créent des Work Apps pour leurs propres processus.<br><br>Basés à Baar, dans le canton de Zoug, nous construisons une IA à laquelle les entreprises peuvent confier un travail où un chiffre faux n’est pas permis.',
 
     company_section1_sub1_title1: 'Notre Mission',
-    company_section1_sub1_desc1: 'Grâce à la technologie d\'automatisation des Agents IA, nous aidons à renforcer les valeurs fondamentales de nos partenaires commerciaux et de leurs clients, et contribuons à la prospérité et à la croissance robuste des entreprises de nos partenaires.',
+    company_section1_sub1_desc1: 'Décharger les équipes du travail exigeant et répétitif grâce à l’IA — tout en laissant à l’entreprise le contrôle de chaque chiffre et de chaque décision.',
     
     company_section1_sub2_title1: 'NOS VALEURS FONDAMENTALES',
     company_section1_sub2_desc1: 'Nous agissons avec intégrité',
     company_section1_sub2_desc2: 'Nous servons en tant que partenaire dont votre entreprise a besoin',
     company_section1_sub2_desc3: 'Nous nous soutenons mutuellement pour atteindre notre plein potentiel',
     company_section1_sub2_desc4: 'Nous respectons nos collaborateurs, partenaires et communautés',
-    company_section1_sub2_desc5: 'Nous suivons nos valeurs fondamentales et travaillons vers notre mission de créer et d\'améliorer les résultats commerciaux grâce à AiTalk.ch.',
+    company_section1_sub2_desc5: 'Nous suivons nos valeurs et travaillons à notre mission : une IA qui fait un vrai travail, sous votre contrôle.',
     
     company_section2_title1: 'NOS SERVICES & PRODUITS',
     company_section2_desc1: 'Les marques peuvent créer des mini-jeux HTML5 personnalisés.',
@@ -170,9 +173,9 @@ export const translations = {
     company_section_bmg_btn1: 'En savoir plus',
     
     company_section3_title1: 'À Propos',
-    company_section3_desc1: 'M-BIZ Global est une entreprise technologique basée en Suisse, avec un héritage de deux décennies d\'innovation numérique.',
-    company_section3_desc1_5: 'Nous concevons des Agentic AI Solutions telles qu\'AiTalk.ch pour soutenir les AI Automation Services dont les entreprises ont besoin.',
-    company_section3_desc2: 'Avec notre siège à Baar, Zoug, nous nous consacrons à construire l\'avenir de l\'entreprise grâce à la technologie.',
+    company_section3_desc1: 'M-BIZ Global AG est une entreprise technologique suisse forte de deux décennies d’innovation numérique.',
+    company_section3_desc1_5: 'Nous créons des AI Work Apps — une IA qui effectue un travail exigeant comme la comptabilité, sous votre contrôle — et exploitons AiTalk.ch.',
+    company_section3_desc2: 'Basés à Baar, dans le canton de Zoug, nous construisons l’avenir du travail en entreprise : une IA digne de confiance.',
     
     // AI Providers Section
     ai_providers_section_title: 'Plan Self — Choisissez votre IA',
@@ -229,7 +232,7 @@ export const translations = {
     managed_azure_openai_desc: 'Derniers modèles OpenAI hébergés sur Microsoft Azure, avec la sécurité et la conformité entreprise.',
     managed_azure_search_desc: 'Base de données vectorielle entreprise pour la recherche RAG, stockée en Suisse (Azure Zurich).',
     managed_regions_desc: 'Une seule région pour tous les clients — Microsoft Azure à Zurich, en Suisse.',
-    pricing_starter_app_only: 'Uniquement dans l\'application mobile',
+    pricing_starter_app_only: 'Paiement mobile uniquement',
     pricing_starter_price_eur: 'EUR 20–25',
     pricing_starter_price_chf_note: '/mois · TVA 8,1 % incluse',
     pricing_starter_price_eur_note: '/mois · TVA incluse',
@@ -402,7 +405,7 @@ export const translations = {
     auth_setup_title: 'Créer l\'administrateur',
     auth_setup_description: 'Cette installation n\'a pas encore d\'administrateur. Le compte que vous créez maintenant la gère : connexions IA, agents et membres de l\'équipe.',
     auth_selfhosted_admin_only: 'Cette connexion est réservée à l\'administrateur de cette installation. Membres de l\'équipe : ouvrez le lien de la Work App dans votre e-mail d\'invitation.',
-    selfhosted_tagline: 'Agents IA sous votre contrôle',
+    selfhosted_tagline: 'AI Work Apps — sous votre contrôle',
     selfhosted_footer_updates: 'Mises à jour (GitHub)',
     auth_send_reset_email: 'Envoyer l\'email de réinitialisation',
     auth_sending_reset_email: 'Envoi de l\'email de réinitialisation...',

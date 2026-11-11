@@ -1,0 +1,44 @@
+{
+  "templateId": "work-app",
+  "name": "Blank",
+  "description": "An empty work app — you choose which app it runs in the first chat. Use it for work apps your company added.",
+  "categoryCode": "ai_assistant",
+  "complexity": "beginner",
+  "keywords": [
+    "work app",
+    "bookkeeping",
+    "vat",
+    "project",
+    "sheets"
+  ],
+  "nodeTypes": [
+    "start",
+    "workApp",
+    "end"
+  ],
+  "features": [
+    "work-app",
+    "project-sheets",
+    "image-input"
+  ],
+  "explanation": "Start / App → Work app (one node = one work app — AI gpt-6-sol, image and PDF input).\n\nDeploy it, then open the app from the Work app node (\"Open app\") — the address works like team chat (owner and invited members).\nOn deploy an empty project is created for each Work app node. The AI asks what work it is and suggests an app template (e.g. Swiss VAT); a person presses Apply.\nAdd more Work app nodes for more apps in the same workflow. Draw send / ref lines between Work app nodes, and draw the steps after an app event (closed, new inbox row …) from a node's event outputs.\nThe server adds the app template guide, the project notes and a sheet summary to the AI instructions on every turn.",
+  "i18n": {
+    "de": {
+      "name": "Leere Arbeits-App",
+      "description": "Eine leere Arbeits-App — im ersten Chat wählen Sie, welche App sie ausführt. Für Arbeits-Apps, die Ihr Unternehmen hinzugefügt hat.",
+      "explanation": "Start / App → Work App (ein Knoten = eine Arbeits-App — KI gpt-6-sol, Bild- und PDF-Eingabe).\n\nVeröffentlichen (Deploy) und dann die App über den Work-App-Knoten öffnen („App öffnen“) — die Adresse funktioniert wie der Team-Chat (Inhaber und eingeladene Mitglieder).\nBeim Veröffentlichen wird für jeden Work-App-Knoten ein leeres Projekt erstellt. Die KI fragt, um welche Arbeit es geht, und schlägt eine App-Vorlage vor (z. B. Schweizer MWST); eine Person drückt auf „Anwenden“.\nFür weitere Apps im selben Workflow weitere Work-App-Knoten hinzufügen. Sende- und Referenzlinien zwischen Work-App-Knoten ziehen und die Schritte nach einem App-Ereignis (abgeschlossen, neue Zeile im Eingang …) von den Ereignis-Ausgängen eines Knotens aus zeichnen.\nDer Server fügt den KI-Anweisungen bei jedem Schritt die Anleitung der App-Vorlage, die Projektnotizen und eine Tabellenübersicht hinzu."
+    },
+    "fr": {
+      "name": "App de travail vide",
+      "description": "Une app de travail vide — vous choisissez dans le premier chat quelle app elle exécute. Pour les apps de travail ajoutées par votre entreprise.",
+      "explanation": "Start / App → Work app (un nœud = une app de travail — IA gpt-6-sol, entrée image et PDF).\n\nDéployez-la, puis ouvrez l’app depuis le nœud Work app (« Ouvrir l’app ») — l’adresse fonctionne comme le chat d’équipe (propriétaire et membres invités).\nAu déploiement, un projet vide est créé pour chaque nœud Work app. L’IA demande de quel travail il s’agit et propose un modèle d’app (p. ex. TVA suisse) ; une personne appuie sur « Appliquer ».\nAjoutez d’autres nœuds Work app pour d’autres apps dans le même workflow. Tracez des lignes d’envoi et de référence entre les nœuds Work app, et tracez les étapes qui suivent un événement d’app (clôturée, nouvelle ligne dans la boîte de réception …) depuis les sorties d’événement d’un nœud.\nÀ chaque tour, le serveur ajoute aux instructions de l’IA le guide du modèle d’app, les notes du projet et un résumé des feuilles."
+    },
+    "ko": {
+      "name": "빈 업무 앱",
+      "description": "비어 있는 업무 앱 — 첫 대화에서 어떤 앱으로 쓸지 고릅니다. 회사가 직접 추가한 업무 앱에 씁니다.",
+      "explanation": "Start / App → Work app(노드 하나 = 업무 앱 하나 — AI gpt-6-sol, 사진 · PDF 입력).\n\n배포한 뒤 Work app 노드에서 앱을 엽니다(「앱 열기」) — 주소는 팀 채팅처럼 열립니다(주인과 초대한 멤버).\n배포하면 Work app 노드마다 빈 프로젝트가 생깁니다. AI 가 무슨 업무인지 묻고 앱템플릿(예: 스위스 부가세)을 권하면, 사람이 「적용」을 누릅니다.\n같은 워크플로에 앱을 더 두려면 Work app 노드를 더 놓습니다. Work app 노드 사이에 보내기 · 참조 선을 긋고, 앱에 일이 생긴 뒤(마감 · 접수함 새 줄 …)의 단계는 노드의 사건 출구에서 이어 그립니다.\n서버가 매 턴 AI 지시문에 앱템플릿 안내 · 프로젝트 메모 · 시트 요약을 붙입니다."
+    }
+  },
+  "sortOrder": 102,
+  "workflowJson": "{\"nodes\": [{\"id\": \"start-1\", \"type\": \"custom\", \"position\": {\"x\": 100, \"y\": 300}, \"data\": {\"label\": \"Start / App\", \"icon\": null, \"color\": \"bg-green-500\", \"showLeftHandle\": false, \"nodeType\": \"start\", \"triggerType\": \"app\"}}, {\"id\": \"app-1\", \"type\": \"custom\", \"position\": {\"x\": 400, \"y\": 280}, \"data\": {\"label\": \"Work app\", \"icon\": null, \"color\": \"bg-amber-600\", \"nodeType\": \"workApp\", \"ai\": {\"model\": \"gpt-6-sol\", \"maxTokens\": 4096, \"imageInput\": true, \"pdfInput\": true, \"includeChatHistory\": true}}}, {\"id\": \"end-1\", \"type\": \"custom\", \"position\": {\"x\": 900, \"y\": 300}, \"data\": {\"label\": \"End\", \"icon\": null, \"color\": \"bg-green-500\", \"nodeType\": \"end\"}}], \"edges\": [{\"id\": \"edge-start-app\", \"source\": \"start-1\", \"target\": \"app-1\", \"type\": \"default\", \"style\": {\"stroke\": \"#666\", \"strokeWidth\": 2}, \"markerEnd\": {\"type\": \"arrowclosed\", \"color\": \"#666\"}}, {\"id\": \"edge-app-end\", \"source\": \"app-1\", \"sourceHandle\": \"done\", \"target\": \"end-1\", \"type\": \"default\", \"style\": {\"stroke\": \"#666\", \"strokeWidth\": 2}, \"markerEnd\": {\"type\": \"arrowclosed\", \"color\": \"#666\"}}]}"
+}

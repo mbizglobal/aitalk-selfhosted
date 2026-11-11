@@ -1,3 +1,5 @@
+import type { WorkflowWorkApp } from '@/lib/work/workflow-apps'
+
 export interface Workflow {
   id: number
   workflowId: string
@@ -9,6 +11,7 @@ export interface Workflow {
   createdAt: Date
   updatedAt: Date
   kind?: string
+  workApp?: WorkflowWorkApp
 }
 
 export interface DataSheet {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { usableBoosterCpa } from '@/lib/cpa-service';
 import { hasAnyApiKey } from '@/lib/ai-providers/get-api-key';
 import { isPaymentConvertedForUser } from '@/lib/entitlement';
 import { deriveAccountLifecycle } from '@/lib/subscription/lifecycle';
@@ -117,6 +118,7 @@ export async function GET() {
     const apiKeyConfigured = isManaged ? true : hasAnyApiKey(user as any);
 
     let cpa_available = 0;
+    const usableBooster = user.subscription ? usableBoosterCpa(user.subscription) : 0;
     let cpa_total = 0;
     let has_cpa_data = false;
 
@@ -228,20 +230,20 @@ export async function GET() {
           total: cpa_total,
           has_data: has_cpa_data,
           voice_minutes: normalizedPlan.includes('free') ? null : {
-            chat: Math.floor((cpa_available + (user.subscription?.booster_cpa ?? 0)) / CPA_PER_VOICE_MINUTE),
+            chat: Math.floor((cpa_available + usableBooster) / CPA_PER_VOICE_MINUTE),
             realtime: isManaged
-              ? Math.floor((cpa_available + (user.subscription?.booster_cpa ?? 0)) / CPA_PER_REALTIME_VOICE_MINUTE)
+              ? Math.floor((cpa_available + usableBooster) / CPA_PER_REALTIME_VOICE_MINUTE)
               : null,
             realtime_mini: isManaged
-              ? Math.floor((cpa_available + (user.subscription?.booster_cpa ?? 0)) / getRealtimeCPAPerMinute('gpt-realtime-2.1-mini'))
+              ? Math.floor((cpa_available + usableBooster) / getRealtimeCPAPerMinute('gpt-realtime-2.1-mini'))
               : null,
           },
         },
         booster_data: user.subscription?.serviceVariant === 'managed' ? {
           eligible: user.subscription.status === 'active' && normalizedPlan !== 'free',
-          balance: user.subscription?.booster_cpa ?? 0,
-          total: user.subscription?.booster_total ?? 0,
-          expiresAt: user.subscription?.booster_expires_at?.toISOString() ?? null,
+          balance: usableBooster,
+          total: usableBooster > 0 ? (user.subscription?.booster_total ?? 0) : 0,
+          expiresAt: usableBooster > 0 ? (user.subscription?.booster_expires_at?.toISOString() ?? null) : null,
         } : null,
         paid_total: user.subscription?.paid_total ?? 0,
         planType: user.subscription?.planType || 'free',

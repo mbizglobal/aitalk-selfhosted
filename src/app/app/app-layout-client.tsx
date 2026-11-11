@@ -105,6 +105,9 @@ const STORAGE_TAB_SOURCE: Record<string, string | undefined> = {
 const navigation = [
   { name: 'Dashboard', href: '/app', icon: Home },
   { name: 'Workflows', href: '/app/workflows', icon: Workflow }, // ⭐ Agent Studio → Workflows
+  { name: 'Projects', href: '/app/work', icon: FolderOpen },
+  { name: 'Voice Quiz', href: '/app/voice-quiz', icon: GraduationCap, requiresVoiceQuiz: true },
+  { name: 'Bookings', href: '/app/bookings', icon: Calendar, requiresCalendar: true },
   // { name: 'Playground', href: '/app/playground', icon: MessageSquare },
   { name: 'History', href: '/app/history', icon: History },
   {
@@ -148,9 +151,6 @@ const navigation = [
       { name: 'Advanced', href: '/app/settings?tab=advanced', icon: Wrench },
     ]
   },
-  { name: 'Projects', href: '/app/work', icon: FolderOpen },
-  { name: 'Bookings', href: '/app/bookings', icon: Calendar, requiresCalendar: true },
-  { name: 'Voice Quiz', href: '/app/voice-quiz', icon: GraduationCap, requiresVoiceQuiz: true },
   { name: 'Analytics', href: '/app/analytics', icon: BarChart3 },
   { name: 'Subscription', href: '/app/subscription', icon: CreditCard },
 ]

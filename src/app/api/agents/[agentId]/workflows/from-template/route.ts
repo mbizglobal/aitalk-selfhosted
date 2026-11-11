@@ -7,6 +7,7 @@ import { createWorkflowBundle } from '@/lib/workflow/service'
 import { mergeBundleIntoTemplate } from '@/lib/workflow/bundle-template'
 import { workflowServiceErrorResponse } from '@/lib/workflow/service-rest'
 import { getLocalTemplate } from '@/lib/local-templates'
+import { getVisibleWorkAppTemplate, workAppTemplateIds } from '@/lib/work/workflow-template-catalog'
 import { describeCaughtError } from '@/lib/log-mask'
 
 function usesLocalTemplates(): boolean {
@@ -76,7 +77,9 @@ export async function POST(
     }
 
     let template: unknown = null
-    if (usesLocalTemplates()) {
+    if (workAppTemplateIds().has(templateId)) {
+      template = (getVisibleWorkAppTemplate(templateId)?.template ?? null) as unknown
+    } else if (usesLocalTemplates()) {
       template = getLocalTemplate(templateId) as unknown
     } else {
       const row = await prisma.workflowTemplate.findUnique({ where: { templateId } })

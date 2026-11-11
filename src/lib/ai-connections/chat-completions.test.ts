@@ -143,3 +143,24 @@ test('request mapping - json_schema; dropping built-in tools; tool_choice; group
   assert.deepEqual(m.slice(2).map((x) => x.role), ['tool', 'tool', 'assistant'])
   assert.throws(() => toChatMessages([{ type: 'input_file', file_id: 'x' }]), (e: any) => e.code === 'unsupported_input')
 })
+
+test('Gemini thought signature - extra_content of a tool call is sent back unchanged in the next request (streaming, single, input items)', async () => {
+  const sig = { google: { thought_signature: 'SIG-1' } }
+  const { sdk, calls } = fakeSdk([
+    [delta({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'f', arguments: '' }, extra_content: sig }] }), delta({ tool_calls: [{ index: 0, function: { arguments: '{}' } }] }), delta({}, 'tool_calls')],
+    [delta({ content: 'done' }), delta({}, 'stop')],
+  ])
+  const c = createChatCompletionsClient(conn, sdk)
+  const ev = await events(await c.responses.create({ model: 'm', input: 'hi', stream: true, tools: [{ type: 'function', name: 'f', parameters: { type: 'object' } }] }))
+  const done = ev.find((e) => e.type === 'response.completed')
+  assert.deepEqual(done.response.output.find((o: any) => o.type === 'function_call').extra_content, sig)
+  await events(await c.responses.create({ model: 'm', previous_response_id: done.response.id, input: [{ type: 'function_call_output', call_id: 'call_1', output: 'ok' }], stream: true }))
+  const assistant = calls[1].messages.find((m: any) => m.role === 'assistant')
+  assert.deepEqual(assistant.tool_calls[0].extra_content, sig)
+  const two = fakeSdk([{ choices: [{ message: { tool_calls: [{ id: 'c2', type: 'function', function: { name: 'f', arguments: '{}' }, extra_content: sig }] }, finish_reason: 'tool_calls' }] }])
+  const r: any = await createChatCompletionsClient(conn, two.sdk).responses.create({ model: 'm', input: 'hi' })
+  assert.deepEqual(r.output[0].extra_content, sig)
+  const msgs = toChatMessages([{ type: 'function_call', call_id: 'c3', name: 'f', arguments: '{}', extra_content: sig }, { type: 'function_call', call_id: 'c4', name: 'g', arguments: '{}' }])
+  assert.deepEqual((msgs[0] as any).tool_calls[0].extra_content, sig)
+  assert.equal('extra_content' in (msgs[0] as any).tool_calls[1], false)
+})

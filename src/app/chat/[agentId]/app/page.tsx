@@ -2,6 +2,7 @@
 
 import React, { use, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { signOut } from 'next-auth/react'
 import { Loader2 } from 'lucide-react'
 import { LoginModal } from '../team/components/LoginModal'
 import { useTeamAuth } from '../team/hooks/useTeamAuth'
@@ -14,8 +15,10 @@ export default function WorkAppPage({ params }: { params: Promise<{ agentId: str
   const search = useSearchParams()
   const lang = parseWorkLang(search.get('lang'))
   const workflowId = search.get('workflowId')
-  const { token, member, isLoading, isAuthenticated, isOwner, isOAuthLoading, oauthError, sessionStatus, login, logout, loginWithOAuth } = useTeamAuth(agentId)
+  const archiveProjectId = search.get('project')
+  const { token, member, isLoading, isAuthenticated, isOwner, isOAuthLoading, oauthError, sessionStatus, login, logout, loginWithOAuth, updateProfile } = useTeamAuth(agentId)
   const onAuthError = useCallback(() => logout(), [logout])
+  const ownerLogout = useCallback(() => { void signOut({ redirect: false }).then(() => logout()) }, [logout])
 
   if (isLoading) {
     return (
@@ -39,7 +42,12 @@ export default function WorkAppPage({ params }: { params: Promise<{ agentId: str
     )
   }
 
-  const who = { token: isOwner ? null : token, memberName: member?.displayName || member?.email || '', isOwner, onLogout: logout, onAuthError }
+  const who = { token: isOwner ? null : token, memberName: member?.displayName || member?.email || '', isOwner, onLogout: isOwner ? ownerLogout : logout, onAuthError, ...(isOwner ? {} : { displayName: member?.displayName ?? null, jobTitle: member?.jobTitle ?? null, onSaveProfile: updateProfile }) }
+  if (archiveProjectId) {
+    return isOwner
+      ? <WorkApp key={`archive:${archiveProjectId}`} agentId={agentId} workflowId="archive" archiveProjectId={archiveProjectId} lang={lang} {...who} />
+      : <AppList agentId={agentId} lang={lang} {...who} />
+  }
   return workflowId
     ? <WorkApp key={workflowId} agentId={agentId} workflowId={workflowId} lang={lang} {...who} />
     : <AppList agentId={agentId} lang={lang} {...who} />

@@ -9,3 +9,5 @@ export function getManagedActiveWorkflowLimit(_planType: SubscriptionPlan): numb
 export function getPlanTeamMemberLimit(_planType: SubscriptionPlan): number { return unavailable('Plan limits') }
 export function hasManagedPlanTier(_planType: SubscriptionPlan): boolean { return unavailable('Plan limits') }
 export function getManagedPlanTeamMemberLimit(_planType: SubscriptionPlan): number { return unavailable('Plan limits') }
+export function getManagedPlanCompanyLimit(_planType: SubscriptionPlan): number { return unavailable('Plan limits') }
+export function getManagedPlanFormLimit(_planType: SubscriptionPlan): number { return unavailable('Plan limits') }

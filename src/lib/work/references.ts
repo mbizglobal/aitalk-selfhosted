@@ -1,5 +1,4 @@
 
-import { createHmac } from 'crypto'
 import { Prisma, type PrismaClient } from '@prisma/client'
 import { encryptJson, decryptJson } from './sealed'
 import { WorkError } from './errors'
@@ -18,24 +17,26 @@ import {
 } from './sheet-gate'
 import { calendarDateOf, type SheetSchema } from './sheet-columns'
 import { dateInAny, effectiveIntervals, rangesOverlap, type DateRange } from './sheet-periods'
+import { isCalendarDate } from './dates'
 import { validateTemplateRegistry, type SheetTemplate } from './sheet-templates'
+import { closesLongCycle, referenceLinesOf, type ReferenceLine } from './reference-lines'
+import { isWorkAppRow } from './app-canvas'
+import { hiddenAppIds } from './app-canvas-sync'
+export { referenceLinesOf, type ReferenceLine } from './reference-lines'
 
 const TX_TIMEOUT_MS = 30_000
 const MAX_SELECTORS = 50
 type Tx = Prisma.TransactionClient
 type Db = PrismaClient | Tx
 
-function stable(v: unknown): string {
-  if (v === null || typeof v !== 'object') return JSON.stringify(v ?? null)
-  if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`
-  const o = v as Record<string, unknown>
-  return `{${Object.keys(o).filter((k) => o[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${stable(o[k])}`).join(',')}}`
-}
-
-export function fingerprint(key: Buffer, label: string, v: unknown): string {
-  return createHmac('sha256', key).update(`work.reference.${label}\0`).update(stable(v)).digest('hex')
-}
+import { fingerprint, stable } from './fingerprint'
+import { booksOf } from './shared-apps'
+export { fingerprint }
 export const rowFp = (key: Buffer, r: { sheetId: string; data: Readonly<Record<string, unknown>> }) => fingerprint(key, 'row', { s: r.sheetId, d: r.data })
+const pickCols = (data: Readonly<Record<string, unknown>>, cols: readonly string[]): Record<string, unknown> =>
+  Object.fromEntries(cols.filter((c) => data[c] !== undefined).map((c) => [c, data[c]]))
+const snapRowFp = (key: Buffer, r: { sheetId: string; data: Readonly<Record<string, unknown>> }, cols?: readonly string[]) =>
+  rowFp(key, cols ? { sheetId: r.sheetId, data: pickCols(r.data, cols) } : r)
 export const pairFp = (key: Buffer, p: { fromRowId: string; toRowId: string; kind: string; confirmed: boolean }) =>
   fingerprint(key, 'pair', { f: p.fromRowId, t: p.toRowId, k: p.kind, c: p.confirmed })
 
@@ -69,6 +70,16 @@ export interface ReferenceView {
   rows: readonly SheetRowView[]
   pairs: readonly ReferencePairView[]
   revising: readonly string[]
+  periods: readonly ReferencePeriod[]
+  sourceBooks?: readonly string[]
+}
+
+export interface ReferencePeriod {
+  taskId: string
+  start: string
+  end: string
+  status: string
+  number: number | null
 }
 
 interface SourceTask {
@@ -126,6 +137,7 @@ async function computeView(db: Db, key: Buffer, templates: readonly SheetTemplat
 
   const tasks = await sourceTasks(db, userId, ref.toProjectId)
   const dated = tasks.filter((t) => t.period)
+  const confirmedOnlyRows = !ref.includeUnconfirmed && (await db.workProject.findFirst({ where: { id: ref.toProjectId, userId }, select: { kind: true } }))?.kind === 'assembled'
   const submitted = dated.filter((t) => t.status === 'submitted')
   const scope = ref.includeUnconfirmed ? dated : submitted
   const confirmedPeriods = submitted.map((t) => t.period!)
@@ -158,7 +170,7 @@ async function computeView(db: Db, key: Buffer, templates: readonly SheetTemplat
         trace.fragments.set(r.id, hits.length ? hits.map((x) => ({ window: x.period!, range: clip(iv, x.period!)! })) : [{ window: null, range: iv }])
       }
     } else {
-      for (const r of all) { rows.push(r); trace.rowTasks.set(r.id, []) }
+      for (const r of all) { if (confirmedOnlyRows && r.confirmed !== true) continue; rows.push(r); trace.rowTasks.set(r.id, []) }
     }
   }
   const byTask = new Map(tasks.map((x) => [x.id, x]))
@@ -186,6 +198,10 @@ async function computeView(db: Db, key: Buffer, templates: readonly SheetTemplat
     revising: picked.some(({ meta }) => meta.template?.dateColumn || meta.template?.effectiveFromColumn)
       ? tasks.filter((x) => x.status === 'open' && x.number !== null).map((x) => x.id)
       : [],
+    periods: dated
+      .map((t) => ({ taskId: t.id, start: t.period!.start, end: t.period!.end, status: t.status, number: t.number }))
+      .sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0)),
+    sourceBooks: (await booksOf(db, userId, [ref.toProjectId])).get(ref.toProjectId) ?? [],
   }
   return { view, trace }
 }
@@ -198,7 +214,22 @@ function deepFreeze<T>(v: T): T {
   return v
 }
 
-export type ReferenceReadLog = Map<string, { rows: Set<string>; pairs: Set<string> }>
+export type ReferenceReadLog = Map<string, ReferenceReadEntry>
+export interface ReferenceReadEntry {
+  rows: Set<string>; pairs: Set<string>; tasks: Set<string>; cols: Map<string, Set<string> | null>
+  scopes?: Map<string, ReferenceWatchScope>; watched?: Set<string>
+}
+export interface ReferenceWatchScope { sheetId: string; dateIn: { columns: string[]; range: DateRange } }
+const emptyReadEntry = (): ReferenceReadEntry => ({ rows: new Set<string>(), pairs: new Set<string>(), tasks: new Set<string>(), cols: new Map() })
+
+export interface ReferenceRowsOptions {
+  columns?: readonly string[]
+  dateIn?: { columns: readonly string[]; range: DateRange }
+  watch?: true
+  ids?: readonly string[]
+}
+
+const MAX_ROW_IDS = 500
 
 export class ReferenceReader {
   private readonly byId: ReadonlyMap<string, ReferenceView>
@@ -207,20 +238,21 @@ export class ReferenceReader {
     this.byId = new Map(views.map((v) => [v.referenceId, deepFreeze(v)]))
   }
 
-  private note(referenceId: string, what: 'rows' | 'pairs', ids: readonly string[]): void {
+  private note(referenceId: string, what: 'rows' | 'pairs' | 'tasks', ids: readonly string[]): void {
     if (!this.log) return
-    const e = this.log.get(referenceId) ?? { rows: new Set<string>(), pairs: new Set<string>() }
+    const e = this.log.get(referenceId) ?? emptyReadEntry()
     for (const id of ids) e[what].add(id)
     this.log.set(referenceId, e)
   }
 
-  references(): Array<{ referenceId: string; sourceProjectId: string; includeUnconfirmed: boolean; selectors: readonly string[]; revising: readonly string[] }> {
+  references(): Array<{ referenceId: string; sourceProjectId: string; includeUnconfirmed: boolean; selectors: readonly string[]; revising: readonly string[]; sourceBooks: readonly string[] }> {
     return [...this.byId.values()].map((v) => ({
       referenceId: v.referenceId,
       sourceProjectId: v.sourceProjectId,
       includeUnconfirmed: v.includeUnconfirmed,
       selectors: v.selectors,
       revising: v.revising,
+      sourceBooks: v.sourceBooks ?? [],
     }))
   }
 
@@ -228,17 +260,85 @@ export class ReferenceReader {
     return this.view(referenceId).sheets
   }
 
-  rows(referenceId: string, sheetId: string): readonly SheetRowView[] {
+  rows(referenceId: string, sheetId: string, opts?: ReferenceRowsOptions): readonly SheetRowView[] {
     const v = this.view(referenceId)
-    if (!v.sheets.some((s) => s.id === sheetId)) throw new WorkError('NOT_FOUND')
-    const out = v.rows.filter((r) => r.sheetId === sheetId)
+    const sheet = v.sheets.find((s) => s.id === sheetId)
+    if (!sheet) throw new WorkError('NOT_FOUND')
+    if (opts?.watch !== undefined && (opts.watch !== true || opts.dateIn === undefined)) throw new WorkError('INVALID', 'watch needs dateIn')
+    let out = v.rows.filter((r) => r.sheetId === sheetId)
+    if (opts?.ids !== undefined) {
+      const ids = opts.ids
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_ROW_IDS || ids.some((id) => typeof id !== 'string' || id === '')) {
+        throw new WorkError('INVALID', `ids must be a list of 1 to ${MAX_ROW_IDS} row ids`)
+      }
+      if (opts.dateIn !== undefined || opts.watch !== undefined) throw new WorkError('INVALID', 'ids cannot be combined with dateIn or watch')
+      const want = new Set(ids)
+      out = out.filter((r) => want.has(r.id))
+      if (this.log) {
+        const e = this.log.get(referenceId) ?? emptyReadEntry()
+        e.watched = e.watched ?? new Set()
+        for (const row of out) e.watched.add(row.id)
+        this.log.set(referenceId, e)
+      }
+    }
+    if (!opts || (opts.columns === undefined && opts.dateIn === undefined)) {
+      this.note(referenceId, 'rows', out.map((r) => r.id))
+      this.noteCols(referenceId, out, null)
+      return out
+    }
+    const known = new Set(sheet.schema.columns.map((c) => c.name))
+    const names = (list: unknown, what: string): string[] => {
+      if (!Array.isArray(list) || list.length === 0 || list.some((c) => typeof c !== 'string' || !known.has(c))) {
+        throw new WorkError('INVALID', `${what} must be a non-empty list of columns of this sheet`)
+      }
+      return list as string[]
+    }
+    const dateIn = opts.dateIn
+    let dateCols: string[] = []
+    if (dateIn !== undefined) {
+      dateCols = names(dateIn?.columns, 'dateIn.columns')
+      const r = dateIn.range
+      if (!r || !isCalendarDate(r.start) || !isCalendarDate(r.end) || r.start > r.end) throw new WorkError('INVALID', 'dateIn.range needs { start, end } dates with start <= end')
+      out = out.filter((row) => dateCols.some((c) => { const d = row.data[c]; return isCalendarDate(d) && r.start <= d && d <= r.end }))
+    }
+    const cols = opts.columns === undefined ? null : [...new Set([...names(opts.columns, 'columns'), ...dateCols])].sort()
     this.note(referenceId, 'rows', out.map((r) => r.id))
-    return out
+    this.noteCols(referenceId, out, cols)
+    if (opts.watch && this.log) {
+      const e = this.log.get(referenceId) ?? emptyReadEntry()
+      const scope: ReferenceWatchScope = { sheetId, dateIn: { columns: [...dateCols].sort(), range: { start: dateIn!.range.start, end: dateIn!.range.end } } }
+      e.scopes = e.scopes ?? new Map()
+      e.scopes.set(stable(scope), scope)
+      e.watched = e.watched ?? new Set()
+      for (const row of out) e.watched.add(row.id)
+      this.log.set(referenceId, e)
+    }
+    return cols ? out.map((r) => deepFreeze({ ...r, data: pickCols(r.data, cols) })) : out
+  }
+
+  private noteCols(referenceId: string, rows: readonly SheetRowView[], cols: readonly string[] | null): void {
+    if (!this.log) return
+    const e = this.log.get(referenceId) ?? emptyReadEntry()
+    for (const r of rows) {
+      const had = e.cols.get(r.id)
+      if (cols === null || had === null) { e.cols.set(r.id, null); continue }
+      e.cols.set(r.id, new Set([...(had ?? []), ...cols]))
+    }
+    this.log.set(referenceId, e)
   }
 
   pairs(referenceId: string): readonly ReferencePairView[] {
     const out = this.view(referenceId).pairs
     this.note(referenceId, 'pairs', out.map((p) => p.id))
+    return out
+  }
+
+  periods(referenceId: string, range: DateRange): readonly ReferencePeriod[] {
+    if (!range || typeof range.start !== 'string' || typeof range.end !== 'string' || range.start > range.end) {
+      throw new WorkError('INVALID', 'periods needs a range { start, end } with start <= end')
+    }
+    const out = this.view(referenceId).periods.filter((p) => rangesOverlap(p, range))
+    this.note(referenceId, 'tasks', out.map((p) => p.taskId))
     return out
   }
 
@@ -290,24 +390,9 @@ async function normalizeSelectors(tx: Tx, templates: readonly SheetTemplate[], u
   return out as string[]
 }
 
-function makesCycle(edges: ReadonlyArray<{ fromProjectId: string; toProjectId: string }>, from: string, to: string): boolean {
-  const next = new Map<string, string[]>()
-  for (const e of edges) next.set(e.fromProjectId, [...(next.get(e.fromProjectId) ?? []), e.toProjectId])
-  const seen = new Set<string>()
-  const stack = [to]
-  while (stack.length) {
-    const cur = stack.pop()!
-    if (cur === from) return true
-    if (seen.has(cur)) continue
-    seen.add(cur)
-    stack.push(...(next.get(cur) ?? []))
-  }
-  return false
-}
-
-async function refEvent(tx: Tx, key: Buffer, e: { userId: string; projectId: string; action: string; detail: unknown }) {
+async function refEvent(tx: Tx, key: Buffer, e: { userId: string; projectId: string; action: string; detail: unknown; actor?: SheetActor }) {
   await tx.workEvent.create({
-    data: { userId: e.userId, projectId: e.projectId, actor: actorLabel({ type: 'human' }), action: e.action, payload: encryptJson(e.detail, key) },
+    data: { userId: e.userId, projectId: e.projectId, actor: actorLabel(e.actor ?? { type: 'human' }), action: e.action, payload: encryptJson(e.detail, key) },
   })
 }
 
@@ -323,7 +408,7 @@ export async function createProjectReference(
     await lockReferenceEnds(tx, input.userId, input.fromProjectId, input.toProjectId)
     const sheets = await normalizeSelectors(tx, deps.templates, input.userId, input.toProjectId, input.sheets)
     const edges = await tx.projectReference.findMany({ where: { userId: input.userId }, select: { fromProjectId: true, toProjectId: true } })
-    if (makesCycle(edges, input.fromProjectId, input.toProjectId)) throw new WorkError('INVALID', 'references cannot form a cycle')
+    if (closesLongCycle(edges, input.fromProjectId, input.toProjectId)) throw new WorkError('INVALID', 'references cannot form a cycle of three or more work apps')
     let ref
     try {
       ref = await tx.projectReference.create({
@@ -391,7 +476,8 @@ export interface ReferenceSnapshot {
   includeUnconfirmed: boolean
   selectors: string[]
   tasks: Array<{ id: string; status: string; number: number | null }>
-  rows: Array<{ id: string; sheetId: string; fp: string; fragments?: Array<{ window: DateRange | null; range: DateRange }> }>
+  rows: Array<{ id: string; sheetId: string; fp: string; cols?: string[]; fragments?: Array<{ window: DateRange | null; range: DateRange }>; cf?: boolean | null }>
+  scopes?: ReferenceWatchScope[]
   pairs: Array<{ id: string; fp: string }>
 }
 
@@ -409,10 +495,12 @@ export async function computeReferenceViews(tx: Tx, key: Buffer, templates: read
 
 export function snapshotsFrom(key: Buffer, computed: readonly ComputedReference[], read?: ReferenceReadLog): ReferenceSnapshot[] {
   return computed.map(({ ref, view, trace }) => {
-    const log = read ? read.get(ref.id) ?? { rows: new Set<string>(), pairs: new Set<string>() } : null
+    const log = read ? read.get(ref.id) ?? emptyReadEntry() : null
     const rows = log ? view.rows.filter((r) => log.rows.has(r.id)) : view.rows
     const rowIds = new Set(rows.map((r) => r.id))
-    const taskIds = new Set(rows.flatMap((r) => trace.rowTasks.get(r.id) ?? []))
+    const taskIds = new Set([...rows.flatMap((r) => trace.rowTasks.get(r.id) ?? []), ...(log?.tasks ?? [])])
+    const periodTasks = new Map(view.periods.map((p) => [p.taskId, { id: p.taskId, status: p.status, number: p.number }]))
+    const known = new Map<string, { id: string; status: string; number: number | null }>([...periodTasks, ...trace.tasks])
     const pairs = log
       ? trace.touchingPairs.filter((p) => log.pairs.has(p.id) || rowIds.has(p.fromRowId) || rowIds.has(p.toRowId))
       : trace.touchingPairs
@@ -421,15 +509,18 @@ export function snapshotsFrom(key: Buffer, computed: readonly ComputedReference[
       sourceProjectId: ref.toProjectId,
       includeUnconfirmed: ref.includeUnconfirmed,
       selectors: [...ref.sheets],
-      tasks: [...trace.tasks.values()]
+      tasks: [...known.values()]
         .filter((t) => taskIds.has(t.id))
         .sort((a, b) => (a.id < b.id ? -1 : 1))
         .map((t) => ({ id: t.id, status: t.status, number: t.number })),
       rows: rows.map((r) => {
         const fr = trace.fragments.get(r.id)
-        return fr ? { id: r.id, sheetId: r.sheetId, fp: rowFp(key, r), fragments: fr } : { id: r.id, sheetId: r.sheetId, fp: rowFp(key, r) }
+        const picked = log?.cols.get(r.id)
+        const cols = picked ? [...picked].sort() : undefined
+        return { id: r.id, sheetId: r.sheetId, fp: snapRowFp(key, r, cols), ...(cols ? { cols } : {}), ...(fr ? { fragments: fr } : {}), ...(log?.watched?.has(r.id) ? { cf: r.confirmed ?? null } : {}) }
       }),
       pairs: pairs.map((p) => ({ id: p.id, fp: pairFp(key, p) })),
+      ...(log?.scopes?.size ? { scopes: [...log.scopes.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, v]) => v) } : {}),
     }
   })
 }
@@ -442,6 +533,7 @@ export type ReferenceChange =
   | { type: 'task'; referenceId: string; taskId: string; was: { status: string; number: number | null }; now: { status: string; number: number | null } | null }
   | { type: 'row'; referenceId: string; rowId: string; gone: boolean }
   | { type: 'pair'; referenceId: string; pairId: string; how: 'added' | 'removed' | 'changed' }
+  | { type: 'row_added'; referenceId: string; rowId: string }
 
 async function diffSnapshot(db: Db, key: Buffer, templates: readonly SheetTemplate[], userId: string, snap: ReferenceSnapshot): Promise<{ changes: ReferenceChange[]; state: unknown }> {
   const changes: ReferenceChange[] = []
@@ -478,12 +570,14 @@ async function diffSnapshot(db: Db, key: Buffer, templates: readonly SheetTempla
       changes.push({ type: 'row', referenceId: snap.referenceId, rowId: r.id, gone: true })
       continue
     }
-    const fp = rowFp(key, now)
+    const fp = snapRowFp(key, now, r.cols)
     const iv = intervals.get(r.id)
     const frag = r.fragments?.map((f) => (iv ? (f.window ? clip(iv, f.window) : iv) : null))
-    rowState[r.id] = frag ? [fp, frag] : fp
+    const watched = 'cf' in r
+    const cfNow = now.confirmed ?? null
+    rowState[r.id] = watched ? [fp, frag ?? null, cfNow] : frag ? [fp, frag] : fp
     const fragChanged = !!r.fragments && r.fragments.some((f, i) => stable(f.range) !== stable(frag![i]))
-    if (fp !== r.fp || fragChanged) changes.push({ type: 'row', referenceId: snap.referenceId, rowId: r.id, gone: false })
+    if (fp !== r.fp || fragChanged || (watched && cfNow !== (r.cf ?? null))) changes.push({ type: 'row', referenceId: snap.referenceId, rowId: r.id, gone: false })
   }
 
   const pairsNow = ids.length
@@ -502,7 +596,22 @@ async function diffSnapshot(db: Db, key: Buffer, templates: readonly SheetTempla
   for (const id of nowPairFp.keys()) if (!snapPairFp.has(id)) changes.push({ type: 'pair', referenceId: snap.referenceId, pairId: id, how: 'added' })
   const pairState = Object.fromEntries([...nowPairFp].sort(([a], [b]) => (a < b ? -1 : 1)))
 
-  return { changes, state: { r: snap.referenceId, t: taskState, w: rowState, p: pairState } }
+  let addedState: Record<string, unknown> | undefined
+  if (snap.scopes?.length) {
+    addedState = {}
+    const { view } = await computeView(db, key, templates, userId, { id: snap.referenceId, fromProjectId: '', toProjectId: snap.sourceProjectId, sheets: snap.selectors, includeUnconfirmed: snap.includeUnconfirmed })
+    const had = new Set(snap.rows.filter((r) => 'cf' in r).map((r) => r.id))
+    const seenAdded = new Set<string>()
+    for (const sc of snap.scopes) {
+      const added = view.rows
+        .filter((row) => row.sheetId === sc.sheetId && !had.has(row.id) && sc.dateIn.columns.some((c) => { const d = row.data[c]; return isCalendarDate(d) && sc.dateIn.range.start <= d && d <= sc.dateIn.range.end }))
+        .sort((a, b) => (a.id < b.id ? -1 : 1))
+      for (const row of added) if (!seenAdded.has(row.id)) { seenAdded.add(row.id); changes.push({ type: 'row_added', referenceId: snap.referenceId, rowId: row.id }) }
+      addedState[stable(sc)] = added.map((row) => [row.id, rowFp(key, row), row.confirmed ?? null])
+    }
+  }
+
+  return { changes, state: { r: snap.referenceId, t: taskState, w: rowState, p: pairState, ...(addedState ? { a: addedState } : {}) } }
 }
 
 async function currentSubmissionOf(db: Db, userId: string, taskId: string) {
@@ -559,7 +668,9 @@ export async function acknowledgeReferenceChanges(deps: WorkSheetDeps, input: { 
     if (!peek) throw new WorkError('INVALID', 'the task is not submitted')
     const sources = (decryptJson<{ references?: ReferenceSnapshot[] }>(peek.result, key).references ?? []).map((r) => r.sourceProjectId)
     for (const id of [...new Set([t.projectId, ...sources])].sort()) {
-      if (id === t.projectId) await lockProjectForWrite(tx, input.userId, id)
+      if (id === t.projectId) {
+        if ((await lockProjectForWrite(tx, input.userId, id)).appClosed) throw new WorkError('APP_CLOSED')
+      }
       else await tx.$queryRaw`SELECT id FROM work_project WHERE id = ${id} AND user_id = ${input.userId} FOR SHARE`
     }
     const sub = await currentSubmissionOf(tx, input.userId, input.taskId)
@@ -581,4 +692,76 @@ export async function acknowledgeReferenceChanges(deps: WorkSheetDeps, input: { 
       },
     })
   }, { timeout: TX_TIMEOUT_MS })
+}
+
+export async function syncReferenceLinesLocked(
+  tx: Tx,
+  ctx: { key: Buffer; templates: readonly SheetTemplate[] },
+  input: { userId: string; workflowId: string; workflowJson: unknown },
+): Promise<void> {
+  const hidden = await hiddenAppIds(tx, input.workflowId)
+  const { lines, problems } = referenceLinesOf(input.workflowJson, (nodeId) => hidden.get(nodeId)?.workflowId)
+  if (problems.length) throw new WorkError('INVALID', `reference line ${problems[0].edgeId}: ${problems[0].message}`)
+  const owned = await tx.projectReference.findMany({ where: { userId: input.userId, createdByWorkflowId: input.workflowId } })
+  if (!lines.length && !owned.length) return
+  await lockAccountForReferenceChange(tx, input.userId)
+  const by: SheetActor = { type: 'flow', workflowId: input.workflowId }
+
+  const appProject = async (edgeId: string, wid: string): Promise<string> => {
+    const w = await tx.workflow.findFirst({ where: { workflowId: wid, kind: { in: ['main', 'app'] }, agent: { userId: input.userId } }, select: { status: true, kind: true, workflowJson: true } })
+    if (!w || !isWorkAppRow(w)) throw new WorkError('INVALID', `reference line ${edgeId}: the work app does not exist in this account`)
+    if (w.status !== 'production') throw new WorkError('INVALID', `reference line ${edgeId}: deploy the work app first`)
+    const p = await tx.workProject.findFirst({ where: { workflowId: wid, userId: input.userId }, select: { id: true } })
+    if (!p) throw new WorkError('INVALID', `reference line ${edgeId}: open the work app once first`)
+    return p.id
+  }
+
+  const resolved: Array<{ l: ReferenceLine; from: string; to: string }> = []
+  for (const l of lines) resolved.push({ l, from: await appProject(l.edgeId, l.readerWorkflowId), to: await appProject(l.edgeId, l.sourceWorkflowId) })
+  const wanted = new Set(resolved.map((x) => `${x.from}->${x.to}`))
+  for (const r of owned) {
+    if (wanted.has(`${r.fromProjectId}->${r.toProjectId}`)) continue
+    await tx.projectReference.delete({ where: { id: r.id } })
+    await refEvent(tx, ctx.key, { userId: input.userId, projectId: r.fromProjectId, action: 'reference_delete', detail: { referenceId: r.id, to: r.toProjectId, sheets: r.sheets, byWorkflow: input.workflowId }, actor: by })
+  }
+
+  for (const { l, from, to } of resolved) {
+    await lockReferenceEnds(tx, input.userId, from, to)
+    let sheets: string[]
+    try {
+      sheets = await normalizeSelectors(tx, ctx.templates, input.userId, to, l.sheets)
+    } catch (e) {
+      if (e instanceof WorkError) throw new WorkError('INVALID', `reference line ${l.edgeId}: ${e.detail || 'choose the sheets to read'}`)
+      throw e
+    }
+    const cur = await tx.projectReference.findUnique({ where: { fromProjectId_toProjectId: { fromProjectId: from, toProjectId: to } } })
+    if (!cur) {
+      const all = await tx.projectReference.findMany({ where: { userId: input.userId }, select: { fromProjectId: true, toProjectId: true } })
+      if (closesLongCycle(all, from, to)) throw new WorkError('INVALID', `reference line ${l.edgeId}: references cannot form a cycle of three or more work apps`)
+      const ref = await tx.projectReference.create({ data: { userId: input.userId, fromProjectId: from, toProjectId: to, sheets, includeUnconfirmed: l.includeUnconfirmed, createdByWorkflowId: input.workflowId } })
+      await refEvent(tx, ctx.key, { userId: input.userId, projectId: from, action: 'reference_create', detail: { referenceId: ref.id, to, sheets, includeUnconfirmed: ref.includeUnconfirmed, byWorkflow: input.workflowId }, actor: by })
+      continue
+    }
+    if (cur.createdByWorkflowId === null) continue
+    if (cur.createdByWorkflowId !== input.workflowId) {
+      const owner = await tx.workflow.findUnique({ where: { workflowId: cur.createdByWorkflowId }, select: { status: true, name: true } })
+      if (owner?.status === 'production') throw new WorkError('DUPLICATE', `reference line ${l.edgeId}: this pair is already connected by the workflow "${owner.name}"`)
+    }
+    const same = cur.createdByWorkflowId === input.workflowId && cur.includeUnconfirmed === l.includeUnconfirmed && cur.sheets.length === sheets.length && cur.sheets.every((x, i) => x === sheets[i])
+    if (same) continue
+    await tx.projectReference.update({ where: { id: cur.id }, data: { sheets, includeUnconfirmed: l.includeUnconfirmed, createdByWorkflowId: input.workflowId } })
+    await refEvent(tx, ctx.key, { userId: input.userId, projectId: from, action: 'reference_update', detail: { referenceId: cur.id, before: { sheets: cur.sheets, includeUnconfirmed: cur.includeUnconfirmed, byWorkflow: cur.createdByWorkflowId }, after: { sheets, includeUnconfirmed: l.includeUnconfirmed, byWorkflow: input.workflowId } }, actor: by })
+  }
+}
+
+export async function deleteOwnedReferencesLocked(tx: Tx, key: Buffer, input: { userId: string; workflowId: string }): Promise<number> {
+  const owned = await tx.projectReference.findMany({ where: { userId: input.userId, createdByWorkflowId: input.workflowId } })
+  if (!owned.length) return 0
+  await lockAccountForReferenceChange(tx, input.userId)
+  const by: SheetActor = { type: 'flow', workflowId: input.workflowId }
+  for (const r of owned) {
+    await tx.projectReference.delete({ where: { id: r.id } })
+    await refEvent(tx, key, { userId: input.userId, projectId: r.fromProjectId, action: 'reference_delete', detail: { referenceId: r.id, to: r.toProjectId, sheets: r.sheets, byWorkflow: input.workflowId, reason: 'workflow_deleted' }, actor: by })
+  }
+  return owned.length
 }

@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { createDefaultAgent } from '@/lib/agent'
+import { completeDefaultWorkApp, createDefaultAgent } from '@/lib/agent'
 import { getTimezoneByLanguage, getTimeFormatByLanguage } from '@/lib/timezone-helper'
 import type { WidgetLanguage } from '@/lib/widget-settings'
 import type { SubscriptionPlan, ServiceVariant } from '@prisma/client'
@@ -132,6 +132,7 @@ export async function provisionTrialUser(input: ProvisionUserInput): Promise<Pro
       },
     })
   })
+  if (!input.skipAgent) await completeDefaultWorkApp(input.userId)
 
   return { warnings }
 }
@@ -253,6 +254,7 @@ export async function upgradePendingToTrial(input: {
     if (!hasAgent) {
       await createDefaultAgent(input.userId, input.language, prisma)
     }
+    await completeDefaultWorkApp(input.userId)
   } catch (e) {
     console.error('[upgradePendingToTrial] default agent creation failed (non-fatal):', e)
   }

@@ -45,6 +45,8 @@ export const TEMPLATE_READABLE_FIELDS: ReadonlySet<string> = new Set([
   //
   'callerNumber',
   'voiceQuiz',
+  'workEvent',
+  'handoff',
 ])
 
 const UNSAFE_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])

@@ -3,8 +3,9 @@ import type { OpenAI } from 'openai'
 import type { McpClient } from '../mcp'
 import type { TelegramMcpClient } from '@/lib/mcp/telegram'
 import type { AIToolClient } from '../../tools'
+import { WebSearchTally } from '@/lib/work/web-search-log'
 import type { AiCallReservation } from '../../ai-call-cpa'
-import { detectStreamFailure } from './utils'
+import { detectStreamFailure, isRateLimitError } from './utils'
 import { reconcileFunctionCallId, type StreamedFunctionCall } from './function-call-ids'
 import { describeCaughtError, safeLogDigest, safeLogFields, safeLogToken } from '@/lib/log-mask'
 import { makeToolTraceEntry, type ToolTraceEntry } from './tool-trace'
@@ -53,7 +54,8 @@ export function createToolExecutor(opts: {
   traceNodeId?: string
 }): ToolExecutor {
   const { mcpClient, mcpToolsMap, appsToolClients } = opts
-  const doneCalls = new Map<string, string>()
+  const doneCalls = new Map<string, { output: string; seq: number }>()
+  let executedSeq = 0
   const recordTrace = (name: string, args: string, output: string) => {
     const entry = opts.traceSink ? makeToolTraceEntry(name, args, output, opts.traceNodeId) : null
     if (entry) opts.traceSink!.push(entry)
@@ -84,8 +86,10 @@ export function createToolExecutor(opts: {
         }
 
         const key = `${fc.name}\u0000${argsParsed ? stableStringify(args) : fc.arguments}`
-        const previous = doneCalls.get(key)
-        if (previous !== undefined) {
+        const done = doneCalls.get(key)
+        const previous = done?.output
+        const rerun = !!done && isApps && done.seq !== executedSeq && !!appsToolClients!.get(fc.name)!.rerunnable?.(fc.name, args, done.output)
+        if (previous !== undefined && !rerun) {
           if (process.env.NODE_ENV !== 'production') {
             console.log(`[ChatTools] ${kind === 'mcp' ? `#${safeLogDigest(fc.name)}` : safeLogToken(fc.name)} — same call again this turn, not executed`)
           }
@@ -112,7 +116,8 @@ export function createToolExecutor(opts: {
               console.log(`[ChatTools] ${safeLogToken(fc.name)}(fields=[${safeLogFields(args)}]) → ${String(resultText ?? '').length} chars`)
             }
           }
-          doneCalls.set(key, resultText)
+          executedSeq++
+          doneCalls.set(key, { output: resultText, seq: executedSeq })
           recordTrace(fc.name, fc.arguments, resultText)
           outputs.push({ call_id: fc.id, output: resultText })
           onToolCall({ kind, name: fc.name, args, status: 'success', durationMs: Date.now() - startedAt, resultText })
@@ -122,6 +127,7 @@ export function createToolExecutor(opts: {
           } else {
             console.error(`[AI Node] Apps tool ${safeLogToken(fc.name)} failed:`, describeCaughtError(err))
           }
+          executedSeq++
           const output = `Error: ${err?.message}`
           recordTrace(fc.name, fc.arguments, output)
           outputs.push({ call_id: fc.id, output })
@@ -140,6 +146,7 @@ export function buildFollowUpConfig(
   previousResponseId: string | null,
   toolOutputs: ToolOutput[],
   toolChoice: 'auto' | 'none',
+  webSearchesSoFar = 0,
 ): any {
   const { model, maxTokens, temperature } = nodeData
   const config: any = {
@@ -152,8 +159,11 @@ export function buildFollowUpConfig(
     stream: true,
   }
   if (requestConfig.tools) {
-    config.tools = requestConfig.tools
-    config.tool_choice = toolChoice
+    const tools = webSearchesSoFar >= WEB_SEARCH_STOP_AFTER ? requestConfig.tools.filter((t: any) => t?.type !== 'web_search' && t?.type !== 'web_search_preview') : requestConfig.tools
+    if (tools.length) {
+      config.tools = tools
+      config.tool_choice = toolChoice
+    }
   }
   config.text = requestConfig.text
   config.reasoning = requestConfig.reasoning
@@ -174,11 +184,17 @@ interface RoundResult {
   completed: boolean
   incompleteReason: string | null
   failure: StreamFailure | null
+  web: WebSearchTally
+  webCarried: number
 }
+
+const roundWebSearches = (r: RoundResult): number => r.web.count + r.webCarried
+
+export const WEB_SEARCH_STOP_AFTER = 5
 
 const newRoundResult = (): RoundResult => ({
   text: '', sawOutput: false, functionCalls: [], responseId: null, usage: null,
-  completed: false, incompleteReason: null, failure: null,
+  completed: false, incompleteReason: null, failure: null, web: new WebSearchTally(), webCarried: 0,
 })
 
 async function consumeRound(stream: AsyncIterable<any>, r: RoundResult, onTextDelta?: (delta: string) => void): Promise<void> {
@@ -186,6 +202,7 @@ async function consumeRound(stream: AsyncIterable<any>, r: RoundResult, onTextDe
   const callMap = new Map<string, StreamedFunctionCall>()
 
   for await (const chunk of stream) {
+    r.web.onChunk(chunk)
     const failure = detectStreamFailure(chunk)
     if (failure) { r.failure = failure; break }
 
@@ -245,13 +262,14 @@ export interface ToolLoopResult {
 export async function runToolFollowUps(p: {
   openai: OpenAI
   requestConfig: any
+  initialWebSearches?: number
   nodeData: { model: string; maxTokens?: number; temperature?: number }
   reserve: () => Promise<AiCallReservation>
   executor: ToolExecutor
   responseId: string | null
   functionCalls: StreamedFunctionCall[]
   onTextDelta?: (delta: string, roundStart: boolean) => void
-  onRoundDone?: (info: { round: number; durationMs: number; usage: Usage | null; incompleteReason: string | null }) => void
+  onRoundDone?: (info: { round: number; durationMs: number; usage: Usage | null; incompleteReason: string | null; webSearches: number }) => void
   now?: () => number
   limits?: { maxRounds: number; deadlineMs: number; rateLimitWaitsMs?: readonly number[] }
   sleep?: (ms: number) => Promise<void>
@@ -264,6 +282,7 @@ export async function runToolFollowUps(p: {
     finalText: '', responseId: p.responseId, usage: null, incompleteReason: null, failure: null, stoppedBy: 'done',
   }
   let pending = p.functionCalls
+  let webSearchesSoFar = p.initialWebSearches ?? 0
 
   for (let round = 1; pending.length > 0; round++) {
     if (round > maxRounds) {
@@ -286,23 +305,25 @@ export async function runToolFollowUps(p: {
         let rateLimited = false
         try {
           const stream = await p.openai.responses.create(
-            buildFollowUpConfig(p.requestConfig, p.nodeData, out.responseId, toolOutputs, lastRound ? 'none' : 'auto'),
+            buildFollowUpConfig(p.requestConfig, p.nodeData, out.responseId, toolOutputs, lastRound ? 'none' : 'auto', webSearchesSoFar + r.webCarried),
           ) as unknown as AsyncIterable<any>
           await consumeRound(stream, r, delta => { p.onTextDelta?.(delta, first); first = false })
           rateLimited = r.failure?.code === 'rate_limit_exceeded' && !r.sawOutput
         } catch (e) {
-          if (!waits.length || (e as { status?: number }).status !== 429 || r.sawOutput) throw e
+          if (!waits.length || !isRateLimitError(e) || r.sawOutput) throw e
           rateLimited = true
           r.failure = detectStreamFailure({ type: 'error', code: 'rate_limit_exceeded', message: '' })
         }
         if (!rateLimited || attempt >= waits.length || now() - startedAt + waits[attempt] > deadlineMs) break
         console.warn(`[AI Node] Tool loop: rate limited — retry ${attempt + 1}/${waits.length} after ${waits[attempt]}ms`)
         await (p.sleep ?? ((ms: number) => new Promise((res) => setTimeout(res, ms))))(waits[attempt])
+        const carried = roundWebSearches(r)
         Object.assign(r, newRoundResult())
+        r.webCarried = carried
       }
 
       if (r.failure) {
-        if (!r.completed && r.failure.usageInputTokens != null) reservation.settle(r.failure.usageInputTokens, r.failure.usageOutputTokens)
+        if (!r.completed && r.failure.usageInputTokens != null) reservation.settle(r.failure.usageInputTokens, r.failure.usageOutputTokens, roundWebSearches(r))
         out.failure = r.failure
         break
       }
@@ -316,7 +337,8 @@ export async function runToolFollowUps(p: {
       }
       out.incompleteReason = r.incompleteReason
       if (r.text.trim()) out.finalText = r.text
-      p.onRoundDone?.({ round, durationMs: now() - roundStartedAt, usage: r.usage, incompleteReason: r.incompleteReason })
+      webSearchesSoFar += roundWebSearches(r)
+      p.onRoundDone?.({ round, durationMs: now() - roundStartedAt, usage: r.usage, incompleteReason: r.incompleteReason, webSearches: roundWebSearches(r) })
 
       pending = r.functionCalls
       if (lastRound) {
@@ -326,7 +348,8 @@ export async function runToolFollowUps(p: {
       }
     } finally {
       try {
-        if (r.completed) reservation.settle(r.usage?.input_tokens, r.usage?.output_tokens)
+        if (r.completed) reservation.settle(r.usage?.input_tokens, r.usage?.output_tokens, roundWebSearches(r))
+        else if (roundWebSearches(r) > 0) reservation.settle(r.failure?.usageInputTokens, r.failure?.usageOutputTokens, roundWebSearches(r))
       } finally {
         reservation.finalize(r.sawOutput)
       }

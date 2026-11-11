@@ -1,4 +1,5 @@
 
+import { FORM_FILE_COLUMN, FORM_MORE_FILES_COLUMN } from './myforms'
 import crypto from 'crypto'
 import { Prisma, type PrismaClient, type WorkFile } from '@prisma/client'
 import { decryptBuffer, encryptBuffer } from '@/lib/encryption'
@@ -6,15 +7,15 @@ import { decryptJson, encryptJson } from './sealed'
 import { blobRef } from '@/lib/managed/blob-storage'
 import { describeCaughtError } from '@/lib/log-mask'
 import { WorkError } from './errors'
-import { assertProjectWritable, lockProjectForWrite, lockTaskForWrite, type SheetActor, type WorkSheetDeps } from './sheet-gate'
-import { findTemplate } from './sheet-templates'
+import { actorLabel, assertProjectWritable, lockProjectForWrite, lockTaskForWrite, type SheetActor, type WorkSheetDeps } from './sheet-gate'
+import { findTemplate, templateFileColumns, templateId } from './sheet-templates'
 import { writeWorkEvent } from './projects'
 import { isSelfHosted } from '@/lib/edition'
 import { LOCAL_REGION } from '@/lib/file-store'
 
 export const WORK_FILE_MAX_BYTES = 20 * 1024 * 1024
-export type WorkFileKind = 'receipt' | 'bank_csv' | 'report' | 'page_image' | 'other'
-const KINDS: ReadonlySet<string> = new Set(['receipt', 'bank_csv', 'report', 'page_image', 'other'])
+export type WorkFileKind = 'receipt' | 'bank_csv' | 'report' | 'page_image' | 'invoice' | 'other'
+const KINDS: ReadonlySet<string> = new Set(['receipt', 'bank_csv', 'report', 'page_image', 'invoice', 'other'])
 const TX_TIMEOUT_MS = 30_000
 
 export interface WorkBlobStore {
@@ -35,6 +36,8 @@ export const ALLOWED_MIME: ReadonlySet<string> = new Set([
   'image/heic',
   'text/csv',
   'text/plain',
+  'application/xml',
+  'text/xml',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ])
 
@@ -51,7 +54,9 @@ export function looksLike(mime: string, b: Buffer): boolean {
     case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
       return head(4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) && b.includes('[Content_Types].xml') && b.includes('xl/workbook')
     case 'text/csv':
-    case 'text/plain': return !b.includes(0)
+    case 'text/plain':
+    case 'application/xml':
+    case 'text/xml': return !b.includes(0)
     default: return false
   }
 }
@@ -71,6 +76,8 @@ export function workFileBlobPath(userId: string, projectId: string, sha256: stri
   return `${userId}/project/${projectId}/file/${date}_${rand}_${sha256.slice(0, 8)}.bin`
 }
 
+export const workStorageRegion = (db: PrismaClient, userId: string) => managedRegion(db, userId)
+
 async function managedRegion(db: PrismaClient, userId: string): Promise<string> {
   if (isSelfHosted()) return LOCAL_REGION
   const sub = await db.subscription.findUnique({ where: { id: userId }, select: { managedRegion: true } }) // Subscription.id = userId
@@ -87,14 +94,28 @@ export interface SaveWorkFileInput {
   buffer: Buffer
   parentFileId?: string | null
   actor: SheetActor
+  maxBytes?: number
 }
 
-export async function saveProjectFile(deps: WorkFileDeps, input: SaveWorkFileInput): Promise<{ file: WorkFile; created: boolean }> {
+export interface PreparedWorkFile {
+  userId: string
+  projectId: string
+  kind: WorkFileKind
+  mimeType: string
+  sizeBytes: number
+  sha256: string
+  region: string
+  blobPath: string
+  originalName: string
+  parentFileId: string | null
+}
+
+export async function prepareProjectFile(deps: WorkFileDeps, input: SaveWorkFileInput): Promise<{ existing: WorkFile } | { prepared: PreparedWorkFile }> {
   const { db, blob } = deps
   const { userId, projectId, buffer } = input
   if (!KINDS.has(input.kind)) throw new WorkError('INVALID', 'unknown file kind')
   const mimeType = input.mimeType.split(';')[0].trim().toLowerCase()
-  if (buffer.length > WORK_FILE_MAX_BYTES) throw new WorkError('INVALID', 'file too large')
+  if (buffer.length > (input.maxBytes ?? WORK_FILE_MAX_BYTES)) throw new WorkError('INVALID', 'file too large')
   if (buffer.length === 0 || !ALLOWED_MIME.has(mimeType) || !looksLike(mimeType, buffer)) throw new WorkError('INVALID', 'file type not accepted')
 
   const project = await db.workProject.findFirst({ where: { id: projectId, userId }, select: { status: true, workflowId: true, workflowLinkedAt: true } })
@@ -103,7 +124,7 @@ export async function saveProjectFile(deps: WorkFileDeps, input: SaveWorkFileInp
 
   const sha256 = sha256Hex(buffer)
   const existing = await db.workFile.findUnique({ where: { projectId_sha256: { projectId, sha256 } } })
-  if (existing) return { file: existing, created: false }
+  if (existing) return { existing }
 
   if (input.parentFileId != null) {
     const parent = await db.workFile.findFirst({ where: { id: input.parentFileId, projectId, userId }, select: { id: true, parentFileId: true } })
@@ -115,36 +136,55 @@ export async function saveProjectFile(deps: WorkFileDeps, input: SaveWorkFileInp
   const key = await deps.dataKey(db, userId)
   const blobPath = workFileBlobPath(userId, projectId, sha256)
   await blob.upload(region, blobPath, encryptBuffer(buffer, key), 'application/octet-stream')
+  return {
+    prepared: {
+      userId, projectId, kind: input.kind, mimeType, sizeBytes: buffer.length, sha256, region, blobPath,
+      originalName: input.originalName, parentFileId: input.parentFileId ?? null,
+    },
+  }
+}
 
+export async function insertPreparedFile(tx: Prisma.TransactionClient, key: Buffer, p: PreparedWorkFile, actor: SheetActor): Promise<{ file: WorkFile; created: boolean }> {
+  const had = await tx.workFile.findUnique({ where: { projectId_sha256: { projectId: p.projectId, sha256: p.sha256 } } })
+  if (had) return { file: had, created: false }
+  const file = await tx.workFile.create({
+    data: {
+      projectId: p.projectId, userId: p.userId, kind: p.kind, parentFileId: p.parentFileId,
+      blobRegion: p.region, blobPath: p.blobPath, mimeType: p.mimeType, sizeBytes: p.sizeBytes, sha256: p.sha256,
+      payload: encryptJson({ originalName: p.originalName }, key),
+    },
+  })
+  await writeWorkEvent(tx, key, { userId: p.userId, projectId: p.projectId, fileId: file.id, actor, action: 'file_upload' })
+  return { file, created: true }
+}
+
+export async function discardPreparedFile(deps: Pick<WorkFileDeps, 'blob'>, p: PreparedWorkFile): Promise<void> {
   try {
-    const file = await db.$transaction(async (tx) => {
-      assertProjectWritable(await lockProjectForWrite(tx, userId, projectId))
-      const f = await tx.workFile.create({
-        data: {
-          projectId, userId, kind: input.kind, parentFileId: input.parentFileId ?? null,
-          blobRegion: region, blobPath, mimeType, sizeBytes: buffer.length, sha256,
-          payload: encryptJson({ originalName: input.originalName }, key),
-        },
-      })
-      await writeWorkEvent(tx, key, { userId, projectId, fileId: f.id, actor: input.actor, action: 'file_upload' })
-      return f
+    await deps.blob.delete(p.region, p.blobPath)
+  } catch (cleanupError) {
+    console.error(`[work] 보상 삭제 실패 — 고아 blob ${blobRef(p.blobPath)}:`, describeCaughtError(cleanupError))
+  }
+}
+
+export async function saveProjectFile(deps: WorkFileDeps, input: SaveWorkFileInput): Promise<{ file: WorkFile; created: boolean }> {
+  const r = await prepareProjectFile(deps, input)
+  if ('existing' in r) return { file: r.existing, created: false }
+  const p = r.prepared
+  try {
+    const key = await deps.dataKey(deps.db, input.userId)
+    const out = await deps.db.$transaction(async (tx) => {
+      assertProjectWritable(await lockProjectForWrite(tx, input.userId, input.projectId))
+      return insertPreparedFile(tx, key, p, input.actor)
     }, { timeout: TX_TIMEOUT_MS })
-    return { file, created: true }
+    if (!out.created) await discardPreparedFile(deps, p)
+    return out
   } catch (error) {
-    try {
-      await blob.delete(region, blobPath)
-    } catch (cleanupError) {
-      console.error(`[work] 보상 삭제 실패 — 고아 blob ${blobRef(blobPath)}:`, describeCaughtError(cleanupError))
-    }
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      const winner = await db.workFile.findUnique({ where: { projectId_sha256: { projectId, sha256 } } })
-      if (winner) return { file: winner, created: false }
-    }
+    await discardPreparedFile(deps, p)
     throw error
   }
 }
 
-export async function readProjectFile(deps: WorkFileDeps, input: { userId: string; fileId: string; actor: SheetActor }) {
+export async function readProjectFile(deps: WorkFileDeps, input: { userId: string; fileId: string; actor: SheetActor; mergeReadMs?: number }) {
   const { db } = deps
   const file = await db.workFile.findFirst({ where: { id: input.fileId, userId: input.userId } })
   if (!file) throw new WorkError('NOT_FOUND')
@@ -153,7 +193,14 @@ export async function readProjectFile(deps: WorkFileDeps, input: { userId: strin
   const buffer = decryptBuffer(sealed, key)
   if (buffer.length !== file.sizeBytes || sha256Hex(buffer) !== file.sha256) throw new WorkError('INTEGRITY')
   const { originalName } = decryptJson<{ originalName: string }>(file.payload, key)
-  await db.$transaction((tx) => writeWorkEvent(tx, key, { userId: input.userId, projectId: file.projectId, fileId: file.id, actor: input.actor, action: 'file_read' }))
+  await db.$transaction(async (tx) => {
+    if (input.mergeReadMs) {
+      const since = new Date(Date.now() - input.mergeReadMs)
+      const recent = await tx.workEvent.findFirst({ where: { userId: input.userId, fileId: file.id, action: 'file_read', actor: actorLabel(input.actor), createdAt: { gte: since } }, select: { id: true } })
+      if (recent) return
+    }
+    await writeWorkEvent(tx, key, { userId: input.userId, projectId: file.projectId, fileId: file.id, actor: input.actor, action: 'file_read' })
+  })
   return { file, buffer, originalName }
 }
 
@@ -234,6 +281,8 @@ export interface ProjectFileView {
   uploadedAt: string
   pages: number
   locked: boolean
+  lockReason?: 'proof' | 'record'
+  reported?: number
 }
 
 export async function listProjectFiles(deps: WorkFileDeps, q: { userId: string; projectId: string }): Promise<ProjectFileView[]> {
@@ -253,7 +302,20 @@ export async function listProjectFiles(deps: WorkFileDeps, q: { userId: string; 
     select: { id: true, parentFileId: true },
   })
   const locked = new Set(lockedRows.map((r) => r.parentFileId ?? r.id))
+  const record = new Set<string>()
+  const sheets = await deps.db.dataSheet.findMany({ where: { kind: 'project', projectId: q.projectId, userId: q.userId, template: { not: null } }, select: { id: true, template: true } })
+  for (const sh of sheets) {
+    for (const col of deps.templates.find((t) => templateId(t) === sh.template)?.recordFiles ?? []) {
+      const hits = await deps.db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT DISTINCT (row_data::jsonb ->> ${col}) AS id FROM data_sheet_rows
+        WHERE sheet_id = ${sh.id} AND project_id = ${q.projectId} AND user_id = ${q.userId} AND kind = 'project'
+          AND (row_data::jsonb ->> ${col}) IN (${Prisma.join(ids)})`)
+      for (const h of hits) if (h.id) record.add(h.id)
+    }
+  }
   const key = await deps.dataKey(deps.db, q.userId)
+  const { openReportNumbers } = await import('./reports')
+  const reported = isSelfHosted() ? new Map<string, number>() : await openReportNumbers(deps.db, { userId: q.userId, fileIds: ids })
   return files.map((f) => ({
     id: f.id,
     name: decryptJson<{ originalName: string }>(f.payload, key).originalName,
@@ -262,20 +324,55 @@ export async function listProjectFiles(deps: WorkFileDeps, q: { userId: string; 
     sizeBytes: f.sizeBytes,
     uploadedAt: f.uploadedAt.toISOString(),
     pages: f._count.derived,
-    locked: locked.has(f.id),
+    locked: locked.has(f.id) || record.has(f.id),
+    ...(locked.has(f.id) ? { lockReason: 'proof' as const } : record.has(f.id) ? { lockReason: 'record' as const } : {}),
+    ...(reported.has(f.id) ? { reported: reported.get(f.id) } : {}),
   }))
 }
 
 async function rowsPointingTo(tx: Prisma.TransactionClient, deps: WorkFileDeps, userId: string, projectId: string, fileIds: string[]): Promise<boolean> {
   const sheets = await tx.dataSheet.findMany({ where: { kind: 'project', projectId, userId, template: { not: null } }, select: { id: true, template: true } })
-  for (const s of sheets) {
-    const col = findTemplate(deps.templates, s.template!).ui?.file
-    if (!col) continue
+  const formSheets = await tx.workForm.findMany({ where: { projectId, userId }, select: { sheetId: true } })
+  if (formSheets.length) {
     const hit = await tx.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
       SELECT COUNT(*) AS n FROM data_sheet_rows
-      WHERE sheet_id = ${s.id} AND project_id = ${projectId} AND user_id = ${userId} AND kind = 'project'
-        AND (row_data::jsonb ->> ${col}) IN (${Prisma.join(fileIds)})`)
+      WHERE sheet_id IN (${Prisma.join(formSheets.map((f) => f.sheetId))}) AND project_id = ${projectId} AND user_id = ${userId} AND kind = 'project'
+        AND ((row_data::jsonb ->> ${FORM_FILE_COLUMN}) IN (${Prisma.join(fileIds)}) OR string_to_array(row_data::jsonb ->> ${FORM_MORE_FILES_COLUMN}, ',') && ARRAY[${Prisma.join(fileIds)}]::text[])`)
     if (Number(hit[0]?.n ?? 0) > 0) return true
+  }
+  const asm = await tx.workProject.findFirst({ where: { id: projectId, userId, kind: 'assembled' }, select: { id: true } })
+  if (asm) {
+    const { readSpec, specSheetName, docFileColumn } = await import('./assembled')
+    const spec = (await readSpec(tx, await deps.dataKey(deps.db, userId), { userId, projectId }))?.spec
+    if (spec?.tables.some((t) => t.docs?.some((d) => !d.hidden && d.letterhead && fileIds.includes(d.letterhead.file)))) return true
+    for (const t of spec?.tables ?? []) {
+      const sh = await tx.dataSheet.findFirst({ where: { kind: 'project', projectId, userId, template: null, name: specSheetName(t.key) }, select: { id: true } })
+      if (!sh) continue
+      const cols = [FORM_FILE_COLUMN, ...(t.docs ?? []).filter((d) => !d.hidden).map((d) => docFileColumn(d.key))]
+      const one = Prisma.join(cols.map((c) => Prisma.sql`(row_data::jsonb ->> ${c}) IN (${Prisma.join(fileIds)})`), ' OR ')
+      const hit = await tx.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) AS n FROM data_sheet_rows
+        WHERE sheet_id = ${sh.id} AND project_id = ${projectId} AND user_id = ${userId} AND kind = 'project'
+          AND (${one} OR string_to_array(row_data::jsonb ->> ${FORM_MORE_FILES_COLUMN}, ',') && ARRAY[${Prisma.join(fileIds)}]::text[])`)
+      if (Number(hit[0]?.n ?? 0) > 0) return true
+    }
+  }
+  for (const s of sheets) {
+    for (const col of templateFileColumns(findTemplate(deps.templates, s.template!))) {
+      const hit = await tx.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) AS n FROM data_sheet_rows
+        WHERE sheet_id = ${s.id} AND project_id = ${projectId} AND user_id = ${userId} AND kind = 'project'
+          AND (row_data::jsonb ->> ${col}) IN (${Prisma.join(fileIds)})`)
+      if (Number(hit[0]?.n ?? 0) > 0) return true
+    }
+    const more = findTemplate(deps.templates, s.template!).ui?.moreFiles
+    if (more) {
+      const hit = await tx.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
+        SELECT COUNT(*) AS n FROM data_sheet_rows
+        WHERE sheet_id = ${s.id} AND project_id = ${projectId} AND user_id = ${userId} AND kind = 'project'
+          AND string_to_array(row_data::jsonb ->> ${more}, ',') && ARRAY[${Prisma.join(fileIds)}]::text[]`)
+      if (Number(hit[0]?.n ?? 0) > 0) return true
+    }
   }
   return false
 }
@@ -287,21 +384,29 @@ export async function deleteProjectFile(deps: WorkFileDeps, input: { userId: str
   const key = await deps.dataKey(deps.db, input.userId)
   const blobs = await deps.db.$transaction(async (tx) => {
     assertProjectWritable(await lockProjectForWrite(tx, input.userId, f.projectId))
-    const files = await tx.workFile.findMany({
-      where: { projectId: f.projectId, OR: [{ id: input.fileId }, { parentFileId: input.fileId }] },
-      select: { id: true, blobRegion: true, blobPath: true },
-    })
-    if (!files.some((x) => x.id === input.fileId)) throw new WorkError('NOT_FOUND')
-    const ids = files.map((x) => x.id)
-    const lockedUse = await tx.workTaskFile.count({ where: { fileId: { in: ids }, task: { status: { in: ['submitted', 'awaiting'] } } } })
-    const proofs = await tx.workSubmissionFile.count({ where: { fileId: { in: ids } } })
-    if (lockedUse > 0 || proofs > 0) throw new WorkError('LOCKED')
-    if (await rowsPointingTo(tx, deps, input.userId, f.projectId, ids)) throw new WorkError('IN_USE')
-    await tx.workTaskFile.deleteMany({ where: { fileId: { in: ids } } })
-    await tx.workFile.delete({ where: { id: input.fileId } })
-    await writeWorkEvent(tx, key, { userId: input.userId, projectId: f.projectId, fileId: input.fileId, actor: input.actor, action: 'file_delete', detail: { derived: ids.length - 1 } })
-    return files
+    return removeFileInTx(tx, deps, key, { userId: input.userId, projectId: f.projectId, fileId: input.fileId, actor: input.actor })
   }, { timeout: TX_TIMEOUT_MS })
+  return deleteFileBlobs(deps, blobs)
+}
+
+export async function removeFileInTx(tx: Prisma.TransactionClient, deps: WorkFileDeps, key: Buffer, input: { userId: string; projectId: string; fileId: string; actor: SheetActor }) {
+  const files = await tx.workFile.findMany({
+    where: { projectId: input.projectId, OR: [{ id: input.fileId }, { parentFileId: input.fileId }] },
+    select: { id: true, blobRegion: true, blobPath: true },
+  })
+  if (!files.some((x) => x.id === input.fileId)) throw new WorkError('NOT_FOUND')
+  const ids = files.map((x) => x.id)
+  const lockedUse = await tx.workTaskFile.count({ where: { fileId: { in: ids }, task: { status: { in: ['submitted', 'awaiting'] } } } })
+  const proofs = await tx.workSubmissionFile.count({ where: { fileId: { in: ids } } })
+  if (lockedUse > 0 || proofs > 0) throw new WorkError('LOCKED')
+  if (await rowsPointingTo(tx, deps, input.userId, input.projectId, ids)) throw new WorkError('IN_USE')
+  await tx.workTaskFile.deleteMany({ where: { fileId: { in: ids } } })
+  await tx.workFile.delete({ where: { id: input.fileId } })
+  await writeWorkEvent(tx, key, { userId: input.userId, projectId: input.projectId, fileId: input.fileId, actor: input.actor, action: 'file_delete', detail: { derived: ids.length - 1 } })
+  return files
+}
+
+export async function deleteFileBlobs(deps: WorkFileDeps, blobs: ReadonlyArray<{ blobRegion: string; blobPath: string }>): Promise<{ blobErrors: number }> {
   let blobErrors = 0
   for (const b of blobs) {
     try {

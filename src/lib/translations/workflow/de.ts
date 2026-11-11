@@ -29,7 +29,7 @@ export const translations = {
 
     // File errors
     file_upload_failed: 'Datei-Upload fehlgeschlagen.',
-    file_too_large: 'Dateigröße überschreitet das Maximum.',
+    file_too_large: 'Dateigrösse überschreitet das Maximum.',
     unsupported_file_type: 'Nicht unterstützter Dateityp.',
 
     // General errors

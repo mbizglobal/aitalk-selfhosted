@@ -15,6 +15,7 @@ export const exampleAppTemplate: AppTemplate = {
     'Expenses arrive as CSV files (date,description,amount) in the Files tab: run the module example.import-csv with the fileId. Single expenses the person tells you: add them with work_insert_rows.',
     'Every row stays unconfirmed until the person confirms it. Never confirm rows yourself.',
     'The month total comes only from the calculation module example.total — preview it, never add up amounts yourself. example_summary only counts rows (all months) and unconfirmed rows.',
+    'To send the total of a closed month by email, use example_send_total with the address the person gave. It makes a card; the person presses Send.',
   ].join('\n'),
   parseSettings(raw) {
     if (raw !== undefined && raw !== null && (typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).length)) throw new WorkError('INVALID', 'this app has no settings')

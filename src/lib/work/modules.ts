@@ -32,12 +32,15 @@ export interface CalcWorkModule extends WorkModuleBase {
   run(ctx: CalcModuleCtx, input: unknown): Promise<unknown>
   preview?(ctx: CalcModuleCtx, input: unknown): Promise<{ confirmed: unknown; draft: unknown | null; draftStopped?: PreviewStop; unconfirmed: number | null }>
   prepare?(db: PrismaClient, period: { start: string; end: string }): Promise<void>
+  fetchFxMonthly?: true
 }
 
 export interface ActionWorkModule<Ctx = unknown> extends WorkModuleBase {
   kind: Exclude<WorkModuleKind, 'calc'>
   run(ctx: Ctx, input: unknown): Promise<unknown>
   screenRows?(ctx: ScreenRowsCtx): Promise<ScreenRows>
+  screenFilter?(ctx: ScreenRowsCtx): Promise<ScreenFilter>
+  screenChoices?(ctx: ScreenRowsCtx): Promise<ScreenChoices>
 }
 
 export interface ScreenRowsCtx extends WorkAppScreenHandles { deps: WorkSheetDeps; userId: string; projectId: string }
@@ -46,7 +49,11 @@ export interface ScreenRowResult { status: string; diff?: string; source?: strin
 export interface ScreenRows {
   virtual: Array<{ key: string; data: Record<string, unknown> } & ScreenRowResult>
   notes: Record<string, ScreenRowResult>
+  cells?: Record<string, Record<string, string | number | null>>
 }
+
+export interface ScreenFilter { options: Array<{ value: string; label?: string; rows: string[] }> }
+export type ScreenChoices = Record<string, Array<{ value: string; label?: string; hints?: string[] }>>
 
 export type WorkModule = CalcWorkModule | ActionWorkModule
 
@@ -124,6 +131,7 @@ export interface FxTable {
 export interface CalcModuleCtx {
   readonly project: { readonly id: string; readonly kind: string; readonly settings: Readonly<Record<string, unknown>> }
   readonly task: { readonly id: string; readonly period: DateRange | null }
+  readonly mode: 'preview' | 'submit'
   periodRows(family: string): readonly ReadRow[]
   effectiveRows(family: string): readonly ReadRow[]
   effectiveRowAt(family: string, date: string): ReadRow | null
@@ -200,11 +208,13 @@ export interface CalcCtxOptions {
   globalFamilies: readonly string[]
   references: readonly ComputedReference[]
   templates: readonly SheetTemplate[]
+  mode?: 'preview' | 'submit'
 }
 
 export class SubmitReadCtx implements CalcModuleCtx {
   readonly project: CalcModuleCtx['project']
   readonly task: CalcModuleCtx['task']
+  readonly mode: CalcModuleCtx['mode']
   private readonly allowed: ReadonlySet<string>
   private readonly readRows = new Map<string, ReadRow>()
   private readonly readPairs = new Map<string, ReadPair>()
@@ -216,6 +226,7 @@ export class SubmitReadCtx implements CalcModuleCtx {
   constructor(private readonly o: CalcCtxOptions) {
     this.project = Object.freeze({ id: o.project.id, kind: o.project.kind, settings: Object.freeze({ ...o.project.settings }) })
     this.task = Object.freeze({ id: o.task.id, period: o.task.period ? Object.freeze({ ...o.task.period }) : null })
+    this.mode = o.mode ?? 'submit'
     const fams = new Set<string>()
     for (const need of o.module.needs.map(parseNeed)) {
       const t = o.templates.find((x) => x.name === need.name)

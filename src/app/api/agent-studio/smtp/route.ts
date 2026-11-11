@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { encryptData, decryptData } from '@/lib/encryption'
 import nodemailer from 'nodemailer'
 import { getProviderById } from '@/lib/email/providers'
+import { describeCaughtError } from '@/lib/log-mask'
+import { mailConnectTarget, mailErrorCode, MAIL_ERROR_TEXT, type MailErrorCode } from '@/lib/edition-connect'
 
 interface SmtpConfig {
   host: string
@@ -115,7 +117,8 @@ export async function POST(request: NextRequest) {
     if (!testResult.success) {
       return NextResponse.json({
         success: false,
-        error: testResult.error
+        error: testResult.error,
+        code: testResult.code
       }, { status: 400 })
     }
 
@@ -303,25 +306,24 @@ async function testSmtpConnection(
   user: string,
   password: string,
   secure?: boolean
-): Promise<{ success: boolean; error?: string }> {
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: secure ?? (port === 465),
-    auth: {
-      user,
-      pass: password
-    }
-  })
-
+): Promise<{ success: boolean; error?: string; code?: MailErrorCode }> {
   try {
+    const target = await mailConnectTarget(host)
+    const transporter = nodemailer.createTransport({
+      ...target,
+      port,
+      secure: secure ?? (port === 465),
+      auth: {
+        user,
+        pass: password
+      }
+    })
     await transporter.verify()
 
     return { success: true }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'Failed to connect to SMTP server'
-    }
+  } catch (error) {
+    const code = mailErrorCode(error)
+    console.error('[SMTP] connection test failed:', code, describeCaughtError(error))
+    return { success: false, error: MAIL_ERROR_TEXT[code], code }
   }
 }

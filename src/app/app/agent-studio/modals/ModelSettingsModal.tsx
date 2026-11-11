@@ -51,6 +51,9 @@ export function ModelSettingsModal() {
   const { lang } = useLanguage()
   const t = getAgentStudioTranslation(lang)
   const selfHosted = useEdition() === 'selfhosted'
+  const [shConns, setShConns] = useState<Array<{ id: string; name: string; isDefault: boolean; defaultModel: string; models: string[] }> | null>(null)
+  const [shConnId, setShConnId] = useState('')
+  const [shModel, setShModel] = useState('')
 
   const activeAiNode = useMemo(
     () =>
@@ -289,6 +292,18 @@ export function ModelSettingsModal() {
     checkApiKeyStatus()
   }, [ui.showModelSettingsModal, selectedProvider, isManaged])
 
+  useEffect(() => {
+    if (!selfHosted || !ui.showModelSettingsModal) return
+    setShConnId(typeof activeAiNode?.data?.aiConnectionId === 'string' ? activeAiNode.data.aiConnectionId : '')
+    setShModel(typeof activeAiNode?.data?.aiConnectionModel === 'string' ? activeAiNode.data.aiConnectionModel : '')
+    let alive = true
+    fetch('/api/settings/ai-connections?for=studio')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setShConns(Array.isArray(d?.connections) ? d.connections : []) })
+      .catch(() => { if (alive) setShConns([]) })
+    return () => { alive = false }
+  }, [selfHosted, ui.showModelSettingsModal, activeAiNode?.id])
+
   const updateSelectedAiNodeData = (data: any) => {
     if (activeAiNode) {
       nodeHandlers.updateNodeData(activeAiNode.id, data)
@@ -313,6 +328,11 @@ export function ModelSettingsModal() {
       if (selectedProvider === 'gemini') {
         data.topK = topK
       }
+    }
+
+    if (selfHosted) {
+      data.aiConnectionId = shConnId || null
+      data.aiConnectionModel = shModel || null
     }
 
     updateSelectedAiNodeData(data)
@@ -471,9 +491,33 @@ export function ModelSettingsModal() {
           })()}
 
           {selfHosted ? (
-            <div className="p-3 bg-[#1A1A1A] rounded-lg border border-gray-700 text-sm text-gray-200">
-              {t.model_installation_ai_connection || 'Installation AI connection'}
-            </div>
+            (() => {
+              const conns = shConns ?? []
+              const conn = shConnId ? conns.find((c) => c.id === shConnId) : conns.find((c) => c.isDefault)
+              const models = conn?.models ?? []
+              const selectCls = 'w-full px-4 py-3 border border-[#3A3A3A] rounded-md bg-[#3A3A3A] text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary'
+              return (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-200 mb-2 block">{t.model_installation_ai_connection || 'Installation AI connection'}</label>
+                    <select className={selectCls} value={shConnId} onChange={(e) => { setShConnId(e.target.value); setShModel('') }} disabled={shConns === null}>
+                      <option value="">{(t.model_sh_default_connection || 'Default connection')}{conns.find((c) => c.isDefault) ? ` — ${conns.find((c) => c.isDefault)!.name}` : ''}</option>
+                      {conns.filter((c) => !c.isDefault).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {shConnId && !conns.some((c) => c.id === shConnId) && <option value={shConnId}>{t.model_sh_unavailable || 'not available'}</option>}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-200 mb-2 block">{t.model}</label>
+                    <select className={selectCls} value={shModel} onChange={(e) => setShModel(e.target.value)} disabled={shConns === null || !conn}>
+                      <option value="">{(t.model_sh_default_model || 'Default model')}{conn ? ` — ${conn.defaultModel}` : ''}</option>
+                      {models.filter((m) => m !== conn?.defaultModel).map((m) => <option key={m} value={m}>{m}</option>)}
+                      {shModel && !models.includes(shModel) && <option value={shModel}>{shModel} — {t.model_sh_unavailable || 'not available'}</option>}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">{t.model_sh_hint || 'Lists the text models chosen for this connection in Settings → AI connections.'}</p>
+                  </div>
+                </div>
+              )
+            })()
           ) : (
           <>
           {/* Provider Selection */}

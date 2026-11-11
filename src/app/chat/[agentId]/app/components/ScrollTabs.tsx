@@ -7,13 +7,14 @@ export interface TabItem {
   key: string
   label: string
   title?: string
+  icon?: React.ReactNode
   active: boolean
   onClick: () => void
 }
 
 const tabCls = (on: boolean) => `shrink-0 px-3 py-2 text-sm rounded-t-md border-b-2 whitespace-nowrap ${on ? 'border-[#E07B53] text-white' : 'border-transparent text-gray-400 hover:text-white'}`
 
-export function ScrollTabs({ items, prevLabel, nextLabel }: { items: TabItem[]; prevLabel: string; nextLabel: string }) {
+export function ScrollTabs({ items, pinned, extra, prevLabel, nextLabel }: { items: TabItem[]; pinned?: TabItem; extra?: React.ReactNode; prevLabel: string; nextLabel: string }) {
   const rowRef = useRef<HTMLDivElement>(null)
   const [edges, setEdges] = useState({ left: false, right: false })
   const activeKey = items.find((x) => x.active)?.key
@@ -84,7 +85,8 @@ export function ScrollTabs({ items, prevLabel, nextLabel }: { items: TabItem[]; 
 
   const arrow = 'absolute top-0 bottom-0 z-10 flex items-center px-1 text-gray-300 hover:text-white'
   return (
-    <div className="relative border-b border-[#2A2A2A] min-w-0">
+    <div className="flex items-stretch border-b border-[#2A2A2A] min-w-0">
+    <div className="relative flex-1 min-w-0">
       <div ref={rowRef} onScroll={update} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}
         className={`flex gap-1 overflow-x-auto px-3 pt-2 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${edges.left || edges.right ? 'cursor-grab active:cursor-grabbing' : ''}`}>
         {items.map((x) => (
@@ -101,6 +103,13 @@ export function ScrollTabs({ items, prevLabel, nextLabel }: { items: TabItem[]; 
           <ChevronRight className="w-4 h-4" />
         </button>
       )}
+    </div>
+    {extra}
+    {pinned && (
+      <div className="shrink-0 flex pt-2 pr-2 border-l border-[#2A2A2A]">
+        <button data-tab={pinned.key} onClick={pinned.onClick} className={`${tabCls(pinned.active)} ${pinned.icon ? 'px-2.5' : ''}`} title={pinned.title ?? pinned.label} aria-label={pinned.label} aria-pressed={pinned.active}>{pinned.icon ?? pinned.label}</button>
+      </div>
+    )}
     </div>
   )
 }

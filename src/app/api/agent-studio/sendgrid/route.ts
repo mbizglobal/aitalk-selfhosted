@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
-import { encryptData, decryptData } from '@/lib/encryption'
+import { encryptData } from '@/lib/encryption'
+
+function readFrom(serviceConfig: string | null | undefined): { fromEmail: string; fromName: string } {
+  try {
+    const c = serviceConfig ? JSON.parse(serviceConfig) : {}
+    return { fromEmail: typeof c?.fromEmail === 'string' ? c.fromEmail : '', fromName: typeof c?.fromName === 'string' ? c.fromName : '' }
+  } catch {
+    return { fromEmail: '', fromName: '' }
+  }
+}
+const FROM_RE = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,12 +46,15 @@ export async function GET(request: NextRequest) {
       },
       select: {
         id: true,
-        encryptedToken: true
+        encryptedToken: true,
+        serviceConfig: true
       }
     })
 
     return NextResponse.json({
-      hasApiKey: !!(connection?.encryptedToken)
+      hasApiKey: !!(connection?.encryptedToken),
+      connectionId: connection?.id ?? null,
+      ...readFrom(connection?.serviceConfig)
     })
   } catch (error) {
     console.error('SendGrid GET error:', error)
@@ -60,12 +73,18 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
     const body = await request.json()
     const { agentId, apiKey } = body
+    const hasFrom = typeof body.fromEmail === 'string' || typeof body.fromName === 'string'
+    const fromEmail = typeof body.fromEmail === 'string' ? body.fromEmail.trim().slice(0, 254) : undefined
+    const fromName = typeof body.fromName === 'string' ? body.fromName.trim().slice(0, 100) : undefined
 
-    if (!agentId || !apiKey) {
+    if (!agentId || (!apiKey && !hasFrom)) {
       return NextResponse.json(
         { error: 'agentId and apiKey are required' },
         { status: 400 }
       )
+    }
+    if (fromEmail && !FROM_RE.test(fromEmail)) {
+      return NextResponse.json({ error: 'Invalid from address' }, { status: 400 })
     }
 
     const agent = await prisma.agent.findFirst({
@@ -76,8 +95,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    const encryptedToken = await encryptData(apiKey)
-
     const existing = await prisma.workflowConnection.findFirst({
       where: {
         agentId,
@@ -85,13 +102,22 @@ export async function POST(request: NextRequest) {
         provider: 'sendgrid'
       }
     })
+    if (!existing && !apiKey) {
+      return NextResponse.json({ error: 'agentId and apiKey are required' }, { status: 400 })
+    }
+
+    const encryptedToken = apiKey ? await encryptData(apiKey) : undefined
+    const prev = readFrom(existing?.serviceConfig)
+    const serviceConfig = hasFrom
+      ? JSON.stringify({ fromEmail: fromEmail ?? prev.fromEmail, fromName: fromName ?? prev.fromName })
+      : undefined
 
     if (existing) {
       await prisma.workflowConnection.update({
         where: { id: existing.id },
         data: {
-          encryptedToken,
-          status: 'active',
+          ...(encryptedToken ? { encryptedToken, status: 'active' as const } : {}),
+          ...(serviceConfig !== undefined ? { serviceConfig } : {}),
           updatedAt: new Date()
         }
       })
@@ -104,6 +130,7 @@ export async function POST(request: NextRequest) {
           label: 'SendGrid',
           authType: 'api_key',
           encryptedToken,
+          ...(serviceConfig !== undefined ? { serviceConfig } : {}),
           status: 'active'
         }
       })

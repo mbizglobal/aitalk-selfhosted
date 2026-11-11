@@ -1,22 +1,23 @@
 import { NextRequest } from 'next/server';
+import { isSelfHosted } from '@/lib/edition';
 import { VENDOR_ADMIN_IPV4_RANGES, VENDOR_ADMIN_IPV6_PREFIXES } from '@/lib/vendor-network';
 
+export function clientIpFromHeaders(
+  headers: Pick<Headers, 'get'>,
+  opts: { trustForwarded?: boolean } = {},
+): string {
+  const trusted = headers.get('x-aitalk-client-ip')?.trim();
+  if (trusted) return trusted;
+  const trustForwarded = opts.trustForwarded ?? (process.env.NODE_ENV !== 'production' || isSelfHosted());
+  if (trustForwarded) {
+    const first = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return headers.get('x-real-ip')?.trim() || '127.0.0.1';
+}
+
 export function getClientIP(request: NextRequest): string {
-  // Try various headers to get the real IP
-  const forwarded = request.headers.get('x-forwarded-for');
-  const realIP = request.headers.get('x-real-ip');
-  if (forwarded) {
-    // x-forwarded-for can contain multiple IPs, get the first one
-    const ips = forwarded.split(',').map(ip => ip.trim());
-    return ips[0];
-  }
-  
-  if (realIP) {
-    return realIP;
-  }
-  
-  // Fallback to localhost
-  return '127.0.0.1';
+  return clientIpFromHeaders(request.headers);
 }
 
 const ADMIN_ALLOWED_RANGES = VENDOR_ADMIN_IPV4_RANGES;

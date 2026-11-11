@@ -1,23 +1,26 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Users, User, Plus, RefreshCw, Trash2, AlertCircle, ExternalLink } from 'lucide-react'
+import { Users, User, Plus, RefreshCw, Trash2, AlertCircle, ExternalLink, Pencil } from 'lucide-react'
 import Link from 'next/link'
+import { AccessChecklist, MemberAccessDialog, shownOrder, type AccessOption } from './MemberAccessDialog'
 
 interface TeamMember {
   id: number
   email: string
   displayName: string | null
+  jobTitle: string | null
   authMethod: string
   status: string
   joinedAt: string
   lastSeenAt: string | null
   planSuspendedAt: string | null
+  accessCount: number
+  sameAsOwner: boolean
 }
 
 interface TeamInvitation {
@@ -56,13 +59,36 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
 
   // Production workflows state
   const [productionWorkflows, setProductionWorkflows] = useState<ProductionWorkflow[]>([])
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('')
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(true)
+  const [accessFor, setAccessFor] = useState<TeamMember | null>(null)
+  const [renaming, setRenaming] = useState<{ id: number; value: string; title: string; busy: boolean } | null>(null)
+  const saveRename = async () => {
+    if (!agentId || !renaming || renaming.busy) return
+    const name = renaming.value.trim()
+    if (!name) return
+    setRenaming({ ...renaming, busy: true })
+    try {
+      const r = await fetch(`/api/agents/${encodeURIComponent(agentId)}/team/members/${renaming.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: name, jobTitle: renaming.title.trim() }) })
+      if (!r.ok) throw new Error(String(r.status))
+      setRenaming(null)
+      await fetchTeamMembers(true)
+    } catch {
+      setRenaming((x) => (x ? { ...x, busy: false } : x))
+      setTeamMessage(t('settings_team_rename_failed'))
+      setIsTeamError(true)
+      setTimeout(() => setTeamMessage(''), 4000)
+    }
+  }
+  const [inviteOptions, setInviteOptions] = useState<{ workApps: AccessOption[]; teamChats: AccessOption[] } | 'failed' | null>(null)
+  const [invitePicked, setInvitePicked] = useState<Set<string>>(new Set())
+  const firstOption = inviteOptions && inviteOptions !== 'failed' ? shownOrder(inviteOptions).find((o) => invitePicked.has(o.workflowId)) ?? null : null
+  const firstPicked = firstOption?.workflowId ?? null
+  const accessLabel = (count: number) => t('settings_team_access_label_some').replace('{n}', String(count))
 
   // Fetch team members
-  const fetchTeamMembers = useCallback(async () => {
+  const fetchTeamMembers = useCallback(async (quiet = false) => {
     if (!agentId) return
-    setIsLoadingTeam(true)
+    if (!quiet) setIsLoadingTeam(true)
     try {
       const invitationsResponse = await fetch(`/api/agents/${agentId}/team/invitations`)
       if (invitationsResponse.ok) {
@@ -105,10 +131,6 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
             name: wf.name
           }))
         setProductionWorkflows(prodWorkflows)
-        // Auto-select if only one workflow
-        if (prodWorkflows.length === 1) {
-          setSelectedWorkflowId(prodWorkflows[0].workflowId)
-        }
       }
     } catch (error) {
       console.error('Failed to fetch workflows:', error)
@@ -117,30 +139,34 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
     }
   }, [agentId])
 
+  const optionsSeq = useRef(0)
+  const fetchInviteOptions = useCallback(async () => {
+    const my = ++optionsSeq.current
+    setInviteOptions(null)
+    setInvitePicked(new Set())
+    if (!agentId) return
+    try {
+      const o = (await loadOptions(agentId)).options
+      if (my === optionsSeq.current) setInviteOptions(o)
+    } catch { if (my === optionsSeq.current) setInviteOptions('failed') }
+  }, [agentId])
+
   // Load team members and workflows on mount
   useEffect(() => {
+    void fetchInviteOptions()
     if (agentId) {
       fetchTeamMembers()
       fetchProductionWorkflows()
     } else {
       setIsLoadingWorkflows(false)
     }
-  }, [agentId, fetchTeamMembers, fetchProductionWorkflows])
+  }, [agentId, fetchTeamMembers, fetchProductionWorkflows, fetchInviteOptions])
 
   const handleInviteTeamMember = async () => {
     if (!agentId || !teamInviteEmail.trim()) return
 
-    // Check if production workflow exists
-    if (productionWorkflows.length === 0) {
-      setTeamMessage(t('settings_team_no_production_workflow') || 'Please create and publish a workflow first')
-      setIsTeamError(true)
-      setTimeout(() => setTeamMessage(''), 5000)
-      return
-    }
-
-    // Check if workflow is selected (for multiple workflows)
-    if (productionWorkflows.length > 1 && !selectedWorkflowId) {
-      setTeamMessage(t('settings_team_select_workflow') || 'Please select a workflow')
+    if (!firstPicked) {
+      setTeamMessage(t('settings_team_access_pick_one'))
       setIsTeamError(true)
       setTimeout(() => setTeamMessage(''), 3000)
       return
@@ -156,13 +182,9 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
     }
 
     setIsInviting(true)
+    const screen = optionsSeq.current
     setTeamMessage('')
     setIsTeamError(false)
-
-    // Determine workflowId to send
-    const workflowIdToSend = productionWorkflows.length === 1
-      ? productionWorkflows[0].workflowId
-      : selectedWorkflowId
 
     try {
       const response = await fetch(`/api/agents/${agentId}/team/invitations`, {
@@ -170,12 +192,14 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: teamInviteEmail.trim(),
-          workflowId: workflowIdToSend
+          workflowId: firstPicked,
+          access: { workflowIds: [...invitePicked] }
         })
       })
 
       const result = await response.json()
 
+      if (optionsSeq.current !== screen) return
       if (response.ok) {
         const failed = result.emailSent === false
         setTeamMessage(failed
@@ -183,6 +207,7 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
           : (t('settings_team_invite_sent') || 'Invitation sent successfully'))
         setIsTeamError(failed)
         setTeamInviteEmail('')
+        setInvitePicked(new Set())
         fetchTeamMembers()
       } else {
         setTeamMessage(result.error || t('settings_team_invite_failed') || 'Failed to send invitation')
@@ -250,28 +275,17 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
   const handleResendInvitation = async (email: string, invitationId: number) => {
     if (!agentId || resendingId !== null) return
 
-    // Check if production workflow exists
-    if (productionWorkflows.length === 0) {
-      setTeamMessage(t('settings_team_no_production_workflow') || 'Please create and publish a workflow first')
-      setIsTeamError(true)
-      setTimeout(() => setTeamMessage(''), 5000)
-      return
-    }
-
-    // Determine workflowId to send
-    const workflowIdToSend = productionWorkflows.length === 1
-      ? productionWorkflows[0].workflowId
-      : selectedWorkflowId || productionWorkflows[0].workflowId
-
     setResendingId(invitationId)
+    const screen = optionsSeq.current
 
     try {
       const response = await fetch(`/api/agents/${agentId}/team/invitations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, workflowId: workflowIdToSend })
+        body: JSON.stringify({ email })
       })
 
+      if (optionsSeq.current !== screen) return
       if (response.ok) {
         const result = await response.json()
         const failed = result.emailSent === false
@@ -375,37 +389,20 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
         <Card>
           <CardContent className="pt-4">
             <div className="flex flex-col gap-3">
-              {/* Workflow Selection (only if multiple production workflows) */}
-              {productionWorkflows.length > 1 && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-muted-foreground">
-                    {t('settings_team_select_workflow_label') || 'Select initial workflow'}
-                  </label>
-                  <Select
-                    value={selectedWorkflowId}
-                    onValueChange={setSelectedWorkflowId}
-                    disabled={isInviting}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={t('settings_team_workflow_placeholder') || 'Choose a workflow...'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productionWorkflows.map((wf) => (
-                        <SelectItem key={wf.workflowId} value={wf.workflowId}>
-                          {wf.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Single workflow indicator */}
-              {productionWorkflows.length === 1 && (
-                <div className="text-sm text-muted-foreground">
-                  {t('settings_team_using_workflow') || 'Using workflow'}: <span className="font-medium">{productionWorkflows[0].name}</span>
-                </div>
-              )}
+              <div className="space-y-2 rounded-md border p-3 max-h-72 overflow-y-auto scrollbar-thin">
+                <p className="text-sm font-medium">{t('settings_team_access_title')}</p>
+                {inviteOptions === 'failed' ? (
+                  <div className="flex items-center gap-2 text-xs text-destructive">
+                    <span>{t('settings_team_access_load_failed')}</span>
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => void fetchInviteOptions()}>{t('settings_team_access_retry')}</Button>
+                  </div>
+                ) : inviteOptions
+                  ? <AccessChecklist options={inviteOptions} picked={invitePicked} onChange={setInvitePicked} disabled={isInviting || seatsFull} t={t} />
+                  : <p className="text-xs text-muted-foreground">{t('loading')}</p>}
+                {firstOption && (
+                  <p className="text-xs text-muted-foreground">{t('settings_team_access_first').replace('{name}', firstOption.name)}</p>
+                )}
+              </div>
 
               {/* Email and Invite Button */}
               <div className="flex flex-col sm:flex-row gap-2">
@@ -420,7 +417,7 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
                       handleInviteTeamMember()
                     }
                   }}
-                  disabled={isInviting || productionWorkflows.length === 0 || seatsFull}
+                  disabled={isInviting || seatsFull}
                   className="flex-1"
                 />
                 <Button
@@ -428,8 +425,7 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
                   disabled={
                     isInviting ||
                     !teamInviteEmail.trim() ||
-                    productionWorkflows.length === 0 ||
-                    (productionWorkflows.length > 1 && !selectedWorkflowId) ||
+                    !firstPicked ||
                     seatsFull
                   }
                   size="default"
@@ -470,14 +466,38 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
                     <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{member.displayName || member.email}</p>
+                    <div className="min-w-0">
+                      {renaming?.id === member.id ? (
+                        <form className="flex flex-wrap items-center gap-1" onSubmit={(e) => { e.preventDefault(); void saveRename() }} onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null) }}>
+                          <Input autoFocus value={renaming.value} maxLength={50} autoComplete="off" disabled={renaming.busy}
+                            onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                            className="h-8 w-48 text-sm" placeholder={t('settings_team_rename')} aria-label={t('settings_team_rename')} />
+                          <Input value={renaming.title} maxLength={50} autoComplete="off" disabled={renaming.busy}
+                            onChange={(e) => setRenaming({ ...renaming, title: e.target.value })}
+                            className="h-8 w-48 text-sm" placeholder={t('settings_team_job_title')} aria-label={t('settings_team_job_title')} />
+                          <Button type="submit" size="sm" className="h-8 px-2 text-xs" disabled={renaming.busy || !renaming.value.trim()}>{t('settings_team_access_save')}</Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={renaming.busy} onClick={() => setRenaming(null)}>{t('cancel')}</Button>
+                        </form>
+                      ) : (
+                        <p className="text-sm font-medium flex items-center gap-1">
+                          <span className="truncate">{member.displayName || member.email}</span>
+                          <span className="shrink-0 text-xs font-normal text-muted-foreground">· {member.jobTitle || t('settings_team_job_title_default')}</span>
+                          <button type="button" onClick={() => setRenaming({ id: member.id, value: member.displayName ?? '', title: member.jobTitle ?? '', busy: false })}
+                            className="p-1 text-muted-foreground hover:text-foreground" title={t('settings_team_rename')} aria-label={t('settings_team_rename')}>
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                        </p>
+                      )}
                       {member.displayName && (
                         <p className="text-xs text-muted-foreground">{member.email}</p>
                       )}
+                      {member.sameAsOwner && <p className="text-xs text-amber-600">{t('settings_team_same_as_owner')}</p>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-8 px-6 text-xs" onClick={() => setAccessFor(member)} title={t('settings_team_access_title')}>
+                      {accessLabel(member.accessCount)}
+                    </Button>
                     <Badge
                       variant={member.status === 'active' ? 'default' : member.planSuspendedAt ? 'destructive' : 'secondary'}
                       className="text-xs"
@@ -566,6 +586,33 @@ export default function TeamTab({ agentId, t }: TeamTabProps) {
           </>
         )}
       </CardContent>
+      {accessFor && agentId && (
+        <MemberAccessDialog
+          title={`${t('settings_team_access_title')} — ${accessFor.displayName || accessFor.email}`}
+          t={t}
+          load={() => loadAccess(agentId, accessFor.id)}
+          onSave={async (v) => { await putAccess(agentId, accessFor.id, { add: v.add, remove: v.remove }); await fetchTeamMembers(true) }}
+          onClose={() => setAccessFor(null)}
+        />
+      )}
     </Card>
   )
+}
+
+async function loadAccess(agentId: string, memberId: number) {
+  const r = await fetch(`/api/agents/${encodeURIComponent(agentId)}/team/members/${memberId}/access`)
+  if (!r.ok) throw new Error(String(r.status))
+  const d = await r.json()
+  return { options: d.options, value: { workflowIds: d.workflowIds } }
+}
+
+async function putAccess(agentId: string, memberId: number, v: { add: string[]; remove: string[] }) {
+  const r = await fetch(`/api/agents/${encodeURIComponent(agentId)}/team/members/${memberId}/access`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })
+  if (!r.ok) throw new Error(String(r.status))
+}
+
+async function loadOptions(agentId: string): Promise<{ options: { workApps: AccessOption[]; teamChats: AccessOption[] } }> {
+  const r = await fetch(`/api/agents/${encodeURIComponent(agentId)}/team/access-options`)
+  if (!r.ok) throw new Error(String(r.status))
+  return { options: (await r.json()).options }
 }

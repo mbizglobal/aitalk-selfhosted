@@ -267,7 +267,7 @@ export const AiNodePanel: React.FC<Props> = ({ node, updateNodeData }) => {
           <div className="flex flex-col items-start gap-1 flex-1 min-w-0 overflow-hidden">
             <div className="flex items-center gap-2 max-w-full">
               {edition === 'selfhosted' ? (
-                <span className="text-sm font-medium truncate">{t.model_installation_ai_connection || 'Installation AI connection'}</span>
+                <span className="text-sm font-medium truncate">{typeof data.aiConnectionModel === 'string' && data.aiConnectionModel ? data.aiConnectionModel : (t.model_installation_ai_connection || 'Installation AI connection')}</span>
               ) : isManaged ? (
                 <>
                   {/* Managed: Azure OpenAI */}

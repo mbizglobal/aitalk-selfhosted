@@ -2,6 +2,7 @@
 import { prisma } from '@/lib/prisma'
 import { findEditionOffParts } from '@/lib/workflow/edition-guard'
 import { getLocalTemplates } from '@/lib/local-templates'
+import { getVisibleWorkAppTemplate, visibleWorkAppTemplates, workAppTemplateIds } from '@/lib/work/workflow-template-catalog'
 import { TEMPLATE_MANIFESTS, NOT_CREATABLE } from './template-manifests'
 import { validateManifestAgainstTemplate, type TemplateManifest } from './template-params'
 
@@ -85,20 +86,29 @@ function includedInEdition(t: McpTemplate): boolean {
 }
 
 export async function listMcpTemplates(): Promise<McpTemplate[]> {
+  const codeIds = [...workAppTemplateIds()]
+  const code = visibleWorkAppTemplates().map(e => ({ sortOrder: e.template.sortOrder, t: toMcpTemplate(e.template as unknown as RawTemplateRow) }))
+  const merge = (general: Array<{ sortOrder: number; t: McpTemplate }>) =>
+    [...general.filter(x => includedInEdition(x.t)), ...code].sort((a, b) => a.sortOrder - b.sortOrder).map(x => x.t)
   if (!isProd()) {
-    return getLocalTemplates().map(t => toMcpTemplate(t as unknown as RawTemplateRow)).filter(includedInEdition)
+    return merge(getLocalTemplates().filter(t => !codeIds.includes(t.templateId)).map(t => ({ sortOrder: t.sortOrder, t: toMcpTemplate(t as unknown as RawTemplateRow) })))
   }
   const rows = await prisma.workflowTemplate.findMany({
+    where: { templateId: { notIn: codeIds } },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     select: {
-      templateId: true, name: true, description: true,
+      templateId: true, name: true, description: true, sortOrder: true,
       categoryCode: true, complexity: true, nodeTypes: true, workflowJson: true,
     },
   })
-  return rows.map(r => toMcpTemplate({ ...r, complexity: String(r.complexity) })).filter(includedInEdition)
+  return merge(rows.map(r => ({ sortOrder: r.sortOrder, t: toMcpTemplate({ ...r, complexity: String(r.complexity) }) })))
 }
 
 export async function getMcpTemplate(templateId: string): Promise<McpTemplate | null> {
+  if (workAppTemplateIds().has(templateId)) {
+    const e = getVisibleWorkAppTemplate(templateId)
+    return e ? toMcpTemplate(e.template as unknown as RawTemplateRow) : null
+  }
   if (!isProd()) {
     const t = getLocalTemplates().find(t => t.templateId === templateId)
     const tpl = t ? toMcpTemplate(t as unknown as RawTemplateRow) : null

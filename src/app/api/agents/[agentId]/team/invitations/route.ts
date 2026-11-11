@@ -1,12 +1,11 @@
-import { getAppBaseUrl } from '@/lib/app-url'
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { getServerSession } from 'next-auth'
-import { randomBytes } from 'crypto'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { emailService } from '@/lib/email'
 import { getApiTranslation } from '@/lib/translations'
-import { assertSeatForInvitation, lockAgentSeats, TeamSeatLimitError } from '@/lib/teamSeats'
+import { lockAgentSeats, TeamSeatLimitError } from '@/lib/teamSeats'
+import { InviteEmailRefusedError, normalizeInviteEmail, sendInvitationMail, writeInvitation } from '@/lib/team/invitations'
+import { parseInviteAccess } from '@/lib/team/member-access-options'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -17,10 +16,6 @@ const prisma = globalForPrisma.prisma ?? new PrismaClient({
 })
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase()
-}
 
 export async function GET(
   request: NextRequest,
@@ -110,14 +105,6 @@ export async function POST(
         id: true,
         userId: true,
         agentId: true,
-        title: true,
-        accessMode: true,
-        user: {
-          select: {
-            name: true,
-            email: true
-          }
-        }
       }
     })
 
@@ -130,8 +117,8 @@ export async function POST(
     }
 
     const body = await request.json()
-    const email = typeof body.email === 'string' ? normalizeEmail(body.email) : null
-    const workflowId = typeof body.workflowId === 'string' ? body.workflowId : null
+    const email = typeof body.email === 'string' ? normalizeInviteEmail(body.email) : null
+    const workflowId = typeof body.workflowId === 'string' && body.workflowId.trim() ? body.workflowId.trim() : undefined
     const expiresInHours = typeof body.expiresInHours === 'number' && body.expiresInHours > 0
       ? Math.min(body.expiresInHours, 24 * 7)
       : 72
@@ -140,51 +127,28 @@ export async function POST(
       return NextResponse.json({ error: t('api_error_valid_email_required') }, { status: 400 })
     }
 
-    const token = randomBytes(24).toString('hex')
-    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
+    const access = body.access === undefined
+      ? undefined
+      : parseInviteAccess(body.access, new Set((await prisma.workflow.findMany({ where: { agentId: agent.agentId }, select: { workflowId: true } })).map((w) => w.workflowId)))
+    if (access === null) {
+      return NextResponse.json({ error: 'INVALID' }, { status: 400 })
+    }
 
     let invitation
 
     try {
-      invitation = await prisma.$transaction(async (tx) => {
-        await assertSeatForInvitation(tx, agent.agentId, email)
-
-        const existing = await tx.agentMemberInvitation.findFirst({
-          where: {
-            agentAgentId: agent.agentId,
-            email,
-            status: 'pending'
-          }
-        })
-
-        if (existing) {
-          return tx.agentMemberInvitation.update({
-            where: { id: existing.id },
-            data: {
-              token,
-              expiresAt,
-              invitedByUserId: session.user.id,
-              workflowId,
-              createdAt: new Date(),
-              acceptedAt: null,
-              status: 'pending'
-            }
-          })
-        }
-
-        return tx.agentMemberInvitation.create({
-          data: {
-            agentAgentId: agent.agentId,
-            email,
-            token,
-            expiresAt,
-            invitedByUserId: session.user.id,
-            workflowId,
-            status: 'pending'
-          }
-        })
-      })
+      invitation = (await prisma.$transaction((tx) => writeInvitation(tx, {
+        agentAgentId: agent.agentId,
+        email,
+        invitedByUserId: session.user.id,
+        workflowId,
+        expiresInHours,
+        ...(access ? { access: { set: access.workflowIds } } : {}),
+      }))).invitation
     } catch (seatError) {
+      if (seatError instanceof InviteEmailRefusedError) {
+        return NextResponse.json({ error: t('api_error_team_invite_gmail') }, { status: 400 })
+      }
       if (seatError instanceof TeamSeatLimitError) {
         return NextResponse.json({
           error: t('api_error_team_member_limit_reached'),
@@ -196,42 +160,7 @@ export async function POST(
       throw seatError
     }
 
-    if (agent.accessMode !== 'team') {
-      await prisma.agent.update({
-        where: { agentId: agent.agentId },
-        data: { accessMode: 'team' }
-      })
-    }
-
-    let emailSent = true
-
-    try {
-      const baseUrl = getAppBaseUrl()
-      const inviterName = agent.user.name || agent.user.email || 'Unknown'
-
-      let workflowTitle = agent.title // fallback to agent title
-      if (workflowId) {
-        const workflow = await prisma.workflow.findUnique({
-          where: { workflowId },
-          select: { name: true }
-        })
-        if (workflow?.name) {
-          workflowTitle = workflow.name
-        }
-      }
-
-      await emailService.sendTeamInvitationEmail(
-        invitation.email,
-        workflowTitle,
-        invitation.token,
-        baseUrl,
-        inviterName,
-        'en'
-      )
-    } catch (emailError) {
-      emailSent = false
-      console.error('Failed to send invitation email:', emailError)
-    }
+    const emailSent = await sendInvitationMail(prisma, { agentAgentId: agent.agentId, invitation, workflowId: invitation.workflowId })
 
     return NextResponse.json({
       emailSent,

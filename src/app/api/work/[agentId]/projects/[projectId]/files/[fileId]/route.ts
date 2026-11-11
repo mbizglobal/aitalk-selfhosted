@@ -4,14 +4,16 @@ import { describeCaughtError } from '@/lib/log-mask'
 import { WORK_ERROR_STATUS, WorkError } from '@/lib/work/errors'
 import { defaultWorkFileDeps, deleteProjectFile, readProjectFile } from '@/lib/work/files'
 import { workRoute } from '@/lib/work/http'
+import { deleteDocumentFromFiles } from '@/lib/work/screen-writes'
 import { resolveWorkTeamAccess, assertTeamProject } from '@/lib/work/team-access'
 
 const INLINE = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
 
-export const DELETE = workRoute<{ agentId: string; projectId: string; fileId: string }>('file.delete', async (_req, { access, deps }, p) => {
+export const DELETE = workRoute<{ agentId: string; projectId: string; fileId: string }>('file.delete', async (req, { access, deps }, p) => {
   await assertTeamProject(access, p.projectId)
   const owned = await deps.db.workFile.findFirst({ where: { id: p.fileId, projectId: p.projectId, userId: access.userId, parentFileId: null }, select: { id: true } })
   if (!owned) throw new WorkError('NOT_FOUND')
+  if (req.nextUrl.searchParams.get('document') === '1') return { ok: true, ...(await deleteDocumentFromFiles(deps, { userId: access.userId, projectId: p.projectId, actor: access.actor }, p.fileId)) }
   await deleteProjectFile(deps, { userId: access.userId, fileId: p.fileId, actor: access.actor })
   return { ok: true }
 })

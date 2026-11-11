@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       include: {
         _count: {
           select: {
-            workflows: true
+            workflows: { where: { kind: { not: 'app' } } }
           }
         }
       }

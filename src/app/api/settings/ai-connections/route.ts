@@ -19,10 +19,19 @@ function isSameOrigin(request: NextRequest): boolean {
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const optStr = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!isSelfHosted()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const session = await getServerSession(authOptions as any) as any
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (request.nextUrl.searchParams.get('for') === 'studio') {
+    try {
+      const { listAiConnectionChoices } = await import('@/lib/ai-connections/manage')
+      return NextResponse.json({ success: true, connections: await listAiConnectionChoices() })
+    } catch (e) {
+      console.error('[ai-connections] studio list failed:', describeCaughtError(e))
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+  }
   const canManage = await isInstallAdmin(session.user)
   if (!canManage) return NextResponse.json({ success: true, canManage: false, connections: [] })
   try {
@@ -57,8 +66,10 @@ export async function POST(request: NextRequest) {
     return {
       name: str(body?.name), kind: str(body?.kind) as any, baseUrl: str(body?.baseUrl), apiKey: str(body?.apiKey),
       ...(headers !== undefined ? { headers } : {}),
-      apiVersion: optStr(body?.apiVersion), textModel: str(body?.textModel), imageModel: optStr(body?.imageModel),
+      apiVersion: optStr(body?.apiVersion), textModel: str(body?.textModel),
+      ...(Array.isArray(body?.textModels) ? { textModels: body.textModels } : {}), imageModel: optStr(body?.imageModel),
       embeddingModel: optStr(body?.embeddingModel), maxOutputTokens: max,
+      ...(typeof body?.thinkingOff === 'boolean' ? { thinkingOff: body.thinkingOff } : {}),
     }
   }
 
@@ -69,6 +80,7 @@ export async function POST(request: NextRequest) {
       case 'delete': if (!id) break; await m.deleteAiConnection(id); return NextResponse.json({ success: true })
       case 'setDefault': if (!id) break; await m.setDefaultAiConnection(id); return NextResponse.json({ success: true })
       case 'check': if (!id) break; return NextResponse.json({ success: true, check: await m.checkAiConnection(id) })
+      case 'models': return NextResponse.json({ success: true, models: await m.listProviderModels({ id: id || null, kind: str(body?.kind) as any, baseUrl: str(body?.baseUrl), apiKey: str(body?.apiKey) }) })
     }
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   } catch (e) {

@@ -6,7 +6,7 @@ import { APP_TEMPLATE_FEATURES, featureLabel } from '@/lib/work/app-template-fea
 import { isAppTemplateKind } from '@/lib/work/app-template-kinds'
 import { packageOfKind, workT, type WorkLang } from '@/lib/translations/work'
 import type { AppTemplatePeriodRule, AppTemplateScreen } from '../lib/api'
-import { AppTemplateFields, fieldsComplete, fieldsToValues, type FieldValues } from './AppTemplateFields'
+import { AppTemplateFields, fieldsComplete, fieldsToValues, valuesToFields, type FieldValues } from './AppTemplateFields'
 import { WorkPkg } from './work-pkg'
 
 const inputCls = 'w-full rounded-md bg-[#2A2A2A] border border-[#3A3A3A] px-3 py-2 text-sm text-white focus:outline-none focus:border-[#E07B53]'
@@ -33,16 +33,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   )
-}
-
-function valuesToFields(fields: readonly AppTemplateScreen['ui']['settings'][number][], v: Record<string, unknown>): FieldValues {
-  const out: FieldValues = {}
-  for (const f of fields) {
-    const x = v[f.name]
-    if (x === undefined || x === null) continue
-    out[f.name] = f.type === 'boolean' ? (x === true ? 'yes' : x === false ? 'no' : '') : String(x)
-  }
-  return out
 }
 
 export function ApplyTemplateDialog({ lang, appTemplate, settings, busy, error, onApply, onClose }: { lang: WorkLang; appTemplate: AppTemplateScreen; settings: Record<string, unknown>; busy: boolean; error: string | null; onApply: (settings: Record<string, unknown>, modules: string[] | undefined) => void; onClose: () => void }) {

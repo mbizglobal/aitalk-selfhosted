@@ -1,5 +1,6 @@
 
 import { ImapFlow } from 'imapflow'
+import { mailConnectTarget } from '@/lib/edition-connect'
 import { maskEmail } from '@/lib/log-mask'
 import { BaseNodeExecutor, NodeExecutionResult } from './base'
 import { WorkflowNode, WorkflowContext } from '../types'
@@ -140,7 +141,7 @@ async function getOrCreateConnection(
   }
 
   const client = new ImapFlow({
-    host: config.host,
+    ...(await mailConnectTarget(config.host)),
     port: config.port,
     secure: config.port === 993,
     auth: authCredentials.accessToken
@@ -366,7 +367,7 @@ export class ImapNodeExecutor extends BaseNodeExecutor {
     const folder = rawFolder || 'INBOX'
 
     const client = new ImapFlow({
-      host: config.host,
+      ...(await mailConnectTarget(config.host)),
       port: config.port,
       secure: config.port === 993,
       auth: authCredentials.accessToken
@@ -685,7 +686,7 @@ export class ImapNodeExecutor extends BaseNodeExecutor {
     }
 
     const client = new ImapFlow({
-      host: config.host,
+      ...(await mailConnectTarget(config.host)),
       port: config.port,
       secure: config.port === 993,
       auth: authCredentials.accessToken
@@ -759,7 +760,7 @@ export class ImapNodeExecutor extends BaseNodeExecutor {
     }
 
     const client = new ImapFlow({
-      host: config.host,
+      ...(await mailConnectTarget(config.host)),
       port: config.port,
       secure: config.port === 993,
       auth: authCredentials.accessToken
@@ -898,7 +899,7 @@ export class ImapNodeExecutor extends BaseNodeExecutor {
     }
 
     const client = new ImapFlow({
-      host: config.host,
+      ...(await mailConnectTarget(config.host)),
       port: config.port,
       secure: config.port === 993,
       auth: authCredentials.accessToken
@@ -997,7 +998,7 @@ export class ImapNodeExecutor extends BaseNodeExecutor {
     authCredentials: { user: string; pass?: string; accessToken?: string }
   ): Promise<ImapResult> {
     const client = new ImapFlow({
-      host: config.host,
+      ...(await mailConnectTarget(config.host)),
       port: config.port,
       secure: config.port === 993,
       auth: authCredentials.accessToken

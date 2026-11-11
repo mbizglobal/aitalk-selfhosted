@@ -6,11 +6,12 @@ import { McpClient } from '../mcp'
 import { TelegramMcpClient } from '@/lib/mcp/telegram'
 import { AIToolClient } from '../../tools'
 import { saveTempData } from '../../temp-storage'
-import { extractPureJson, detectStreamFailure } from './utils'
+import { extractPureJson, detectStreamFailure, isRateLimitError } from './utils'
 import { reconcileFunctionCallId } from './function-call-ids'
 import { reserveCpaForAiCall, type AiCallReservation } from '../../ai-call-cpa'
 import { describeCaughtError, safeLogToken } from '@/lib/log-mask'
 import { WORK_APP_TOOL_LIMITS, createToolExecutor, runToolFollowUps } from './tool-loop'
+import { recordWorkWebSearches, WebSearchTally } from '@/lib/work/web-search-log'
 
 export async function createOpenAIStreamResponse(
   openai: OpenAI,
@@ -49,6 +50,8 @@ export async function createOpenAIStreamResponse(
       let fullContent = ''
       let responseId: string | null = null
       let usageData: any = null
+      let initialWebSearches = 0
+      const webTally = new WebSearchTally()
 
       if (context.chatSummaryUpdate) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({
@@ -89,10 +92,11 @@ export async function createOpenAIStreamResponse(
 
         const responseStream = response as unknown as AsyncIterable<any>
         for await (const chunk of responseStream) {
+          webTally.onChunk(chunk)
           const failure = detectStreamFailure(chunk)
           if (failure) {
             streamFailure = failure
-            if (failure.usageInputTokens != null) initialReservation.settle(failure.usageInputTokens, failure.usageOutputTokens)
+            if (failure.usageInputTokens != null) initialReservation.settle(failure.usageInputTokens, failure.usageOutputTokens, webTally.count)
             break
           }
           if (chunk.type === 'response.output_text.delta' && chunk.delta) {
@@ -139,8 +143,12 @@ export async function createOpenAIStreamResponse(
               responseId = chunk.response.id
               usageData = chunk.response.usage
 
-              initialReservation.settle(chunk.response.usage?.input_tokens, chunk.response.usage?.output_tokens)
-              if (context.workScope) console.log(`[work-ai] round 0 in=${chunk.response.usage?.input_tokens ?? '?'} out=${chunk.response.usage?.output_tokens ?? '?'}`)
+              initialWebSearches = webTally.count
+              initialReservation.settle(chunk.response.usage?.input_tokens, chunk.response.usage?.output_tokens, initialWebSearches)
+              if (context.workScope) {
+                console.log(`[work-ai] round 0 in=${chunk.response.usage?.input_tokens ?? '?'} out=${chunk.response.usage?.output_tokens ?? '?'}`)
+                void recordWorkWebSearches(context, initialWebSearches, 0)
+              }
 
               if (chunk.response.output && Array.isArray(chunk.response.output)) {
 
@@ -250,7 +258,7 @@ export async function createOpenAIStreamResponse(
         if (streamFailure) {
           console.error(`[Workflow] OpenAI stream failed before tools: code=${streamFailure.code ?? '-'} resp=${streamFailure.responseId ?? '-'} (${streamFailure.message.length} chars)`)
           await closeMcpQuietly()
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error', ...(streamFailure.code === 'rate_limit_exceeded' ? { code: 'RATE_LIMITED' } : {}) })}\n\n`))
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
           return
@@ -284,13 +292,16 @@ export async function createOpenAIStreamResponse(
           const loop = await runToolFollowUps({
             openai,
             requestConfig,
+            initialWebSearches,
             nodeData: { model, maxTokens, temperature },
             reserve: () => reserveCpaForAiCall(context, model),
             executor,
             ...(context.workScope ? {
               limits: WORK_APP_TOOL_LIMITS,
-              onRoundDone: (i: { round: number; durationMs: number; usage: { input_tokens: number; output_tokens: number } | null; incompleteReason: string | null }) =>
-                console.log(`[work-ai] round ${i.round} in=${i.usage?.input_tokens ?? '?'} out=${i.usage?.output_tokens ?? '?'} ${i.durationMs}ms${i.incompleteReason ? ` incomplete=${i.incompleteReason}` : ''}`),
+              onRoundDone: (i: { round: number; durationMs: number; usage: { input_tokens: number; output_tokens: number } | null; incompleteReason: string | null; webSearches: number }) => {
+                console.log(`[work-ai] round ${i.round} in=${i.usage?.input_tokens ?? '?'} out=${i.usage?.output_tokens ?? '?'} ${i.durationMs}ms${i.incompleteReason ? ` incomplete=${i.incompleteReason}` : ''}`)
+                void recordWorkWebSearches(context, i.webSearches, i.round)
+              },
             } : {}),
             responseId,
             functionCalls,
@@ -316,7 +327,7 @@ export async function createOpenAIStreamResponse(
 
         if (streamFailure) {
           console.error(`[Workflow] OpenAI stream failed: code=${streamFailure.code ?? '-'} resp=${streamFailure.responseId ?? '-'} (${streamFailure.message.length} chars)`)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`))
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Stream error', ...(streamFailure.code === 'rate_limit_exceeded' ? { code: 'RATE_LIMITED' } : {}) })}\n\n`))
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
           return
@@ -362,6 +373,7 @@ export async function createOpenAIStreamResponse(
         const errorMsg = error?.message || 'Unknown error'
         const isAuthError = error?.code === 'invalid_api_key' || error?.status === 401
         const isCpaError = error?.code === 'INSUFFICIENT_CPA'
+        const isRateLimit = isRateLimitError(error)
         if (isAuthError || isCpaError) {
           console.warn(`[Workflow] OpenAI stream stopped: ${describeCaughtError(error)}`)
         } else {
@@ -372,12 +384,13 @@ export async function createOpenAIStreamResponse(
           : isCpaError
             ? 'Insufficient CPA balance.'
             : 'Stream error'
-        const errorData = `data: ${JSON.stringify({ error: userError })}\n\n`
+        const errorData = `data: ${JSON.stringify({ error: userError, ...(isRateLimit ? { code: 'RATE_LIMITED' } : isCpaError ? { code: 'INSUFFICIENT_CPA' } : {}) })}\n\n`
         controller.enqueue(encoder.encode(errorData))
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         controller.close()
       } finally {
         if (keepAlive) clearInterval(keepAlive)
+        if (webTally.count > 0) initialReservation.settle(undefined, undefined, webTally.count)
         initialReservation.finalize(sawOutput)
         await closeMcpQuietly()
       }

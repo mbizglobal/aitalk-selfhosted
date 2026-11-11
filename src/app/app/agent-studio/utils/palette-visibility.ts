@@ -15,6 +15,8 @@ export const PALETTE_ITEM_NODE_KIND: Readonly<Record<string, string>> = {
   'pstn-start': 'start:channel',
   schedule: 'start:channel',
   'app-start': 'start:channel',
+  'work-event-start': 'start:channel',
+  'work-app': 'workApp',
   'subworkflow-start': 'start:sub',
   ai: 'ai',
   end: 'end',
@@ -30,6 +32,7 @@ export const PALETTE_ITEM_NODE_KIND: Readonly<Record<string, string>> = {
   // Data
   'data-sheets': 'dataSheets',
   store: 'store',
+  'work-app-step': 'workAppStep',
   // Apps
   sendgrid: 'sendgrid',
   telegram: 'telegram',
@@ -62,6 +65,7 @@ const PALETTE_START_TRIGGER: Readonly<Record<string, string>> = {
   'pstn-start': 'pstn',
   schedule: 'schedule',
   'app-start': 'app',
+  'work-event-start': 'workEvent',
 }
 
 export function isPaletteItemInEdition(id: string, edition: Edition): boolean {
@@ -71,8 +75,14 @@ export function isPaletteItemInEdition(id: string, edition: Edition): boolean {
   return !nodeKind || !offFeatureFor('nodeKinds', nodeKind, edition)
 }
 
-export function filterPaletteItems<T extends { id: string }>(items: readonly T[], kind: WorkflowKind, edition: Edition = 'cloud'): T[] {
-  return items.filter((item) => isPaletteItemVisible(item.id, kind) && isPaletteItemInEdition(item.id, edition))
+export const APP_CANVAS_HIDDEN_PALETTE_ITEMS: ReadonlySet<string> = new Set([
+  'chat-widget', 'telegram-start', 'pstn-start', 'schedule', 'app-start', 'work-event-start',
+  'wait', 'pstn', 'work-app-step', 'subworkflow',
+])
+
+export function filterPaletteItems<T extends { id: string }>(items: readonly T[], kind: WorkflowKind, edition: Edition = 'cloud', opts: { appCanvas?: boolean; hasStart?: boolean } = {}): T[] {
+  return items.filter((item) => isPaletteItemVisible(item.id, kind) && isPaletteItemInEdition(item.id, edition)
+    && !(opts.appCanvas && APP_CANVAS_HIDDEN_PALETTE_ITEMS.has(item.id) && (item.id !== 'app-start' || opts.hasStart)))
 }
 
 export const LOOP_TOOL_NODE_KIND: Readonly<Record<string, string>> = {
@@ -88,7 +98,8 @@ export const LOOP_TOOL_NODE_KIND: Readonly<Record<string, string>> = {
   sendgrid: 'sendgrid',
 }
 
-export function isLoopToolAllowedForKind(loopToolType: string, kind: WorkflowKind): boolean {
+export function isLoopToolAllowedForKind(loopToolType: string, kind: WorkflowKind, opts: { appCanvas?: boolean } = {}): boolean {
+  if (opts.appCanvas && LOOP_TOOL_NODE_KIND[loopToolType] === 'wait') return false
   if (kind !== SUB_WORKFLOW_KIND) return true
   const nodeKind = LOOP_TOOL_NODE_KIND[loopToolType]
   if (!nodeKind) return true

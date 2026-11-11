@@ -362,6 +362,7 @@ export const translations = {
     agent_studio_unsaved_changes: 'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir sin guardar?',
 
     // Auth Error - Anonymized User
+    auth_error_member_use_password: 'This email is a team member. Please sign in with your email and password.',
     auth_error_anonymized_user: 'Las cuentas eliminadas no pueden volver a registrarse. Para consultas, por favor contacte a support@aitalk.ch',
 
     // MCP - Email Template
@@ -902,11 +903,8 @@ export const translations = {
     workflow_create: 'Crear',
     workflow_creating: 'Creando...',
     workflow_back: 'Atrás',
-    workflow_step_select_title: 'Crear nuevo workflow',
     workflow_step_blank_title: 'Workflow vacío',
-    workflow_step_blank_desc: 'Empezar desde cero',
     workflow_step_template_title: 'Desde plantilla',
-    workflow_step_template_desc: 'Usar una plantilla prediseñada',
     workflow_template_search: 'Buscar plantillas...',
     workflow_template_all_categories: 'Todas las categorías',
     workflow_template_no_results: 'No se encontraron plantillas',

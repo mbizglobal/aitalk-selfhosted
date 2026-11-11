@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { encryptData, decryptData } from '@/lib/encryption'
+import { mergeHttpCred, urlHint } from '@/lib/work/http-target'
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
         authType: parsed.authType || 'none',
         authHeaderName: parsed.authHeaderName || '',
         connectionId: connection.id,
+        urlHint: typeof parsed.url === 'string' ? urlHint(parsed.url) : '',
       })
     } catch {
       return NextResponse.json({ hasCredentials: true, authType: 'unknown' })
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id
     const body = await request.json()
-    const { agentId, nodeId, credentials } = body
+    const { agentId, nodeId, credentials, workApp, url } = body
 
     if (!agentId || !nodeId || !credentials) {
       return NextResponse.json(
@@ -91,8 +93,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    const encryptedToken = await encryptData(JSON.stringify(credentials))
-
     const existing = await prisma.workflowConnection.findFirst({
       where: {
         agentId,
@@ -102,7 +102,23 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const dbAuthType = credentials.authType === 'bearer' ? 'bearer' : 'api_key'
+    let toSave: Record<string, unknown> = credentials
+    if (workApp === true) {
+      if (typeof credentials !== 'object' || Array.isArray(credentials) || (url !== undefined && url !== null && typeof url !== 'string')) {
+        return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+      }
+      let old: Record<string, unknown> = {}
+      if (existing?.encryptedToken) {
+        try { const v = JSON.parse(await decryptData(existing.encryptedToken)); if (v && typeof v === 'object') old = v } catch { }
+      }
+      const merged = mergeHttpCred(old, credentials, url)
+      if ('error' in merged) return NextResponse.json({ error: merged.error }, { status: 400 })
+      toSave = merged.cred
+    }
+
+    const encryptedToken = await encryptData(JSON.stringify(toSave))
+
+    const dbAuthType = toSave.authType === 'bearer' ? 'bearer' : 'api_key'
 
     if (existing) {
       await prisma.workflowConnection.update({

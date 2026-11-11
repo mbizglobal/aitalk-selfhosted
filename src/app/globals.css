@@ -172,6 +172,27 @@ strong {
   scrollbar-color: #666666 #2a2a2a;
 }
 
+.scrollbar-soft::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-soft::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-soft::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+.scrollbar-soft::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .scrollbar-soft {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+}
+
 /* Light mode scrollbar */
 :root .scrollbar-thin::-webkit-scrollbar-track,
 .light .scrollbar-thin::-webkit-scrollbar-track {

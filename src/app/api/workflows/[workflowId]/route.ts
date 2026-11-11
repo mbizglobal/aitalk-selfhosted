@@ -93,7 +93,8 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      workflow: result.workflow
+      workflow: result.workflow,
+      ...(result.appNotes ? { appNotes: result.appNotes } : {}),
     })
 
   } catch (error) {

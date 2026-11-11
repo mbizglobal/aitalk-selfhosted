@@ -45,8 +45,10 @@ export class SendGridToolClient implements AIToolClient {
       }
     }
 
-    if (overrides?.fromEmail && !this.fromEmail) this.fromEmail = overrides.fromEmail
-    if (overrides?.fromName && !this.fromName) this.fromName = overrides.fromName
+    const nodeFrom = typeof overrides?.fromEmail === 'string' ? overrides.fromEmail.trim() : ''
+    const nodeName = typeof overrides?.fromName === 'string' ? overrides.fromName.trim() : ''
+    if (nodeFrom) this.fromEmail = nodeFrom
+    if (nodeName) this.fromName = nodeName
     if (overrides?.toEmail) this.defaultToEmail = overrides.toEmail
   }
 

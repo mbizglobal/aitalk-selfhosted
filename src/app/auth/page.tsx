@@ -228,6 +228,8 @@ function AuthContent() {
       setError(t('auth_error_user_exists_verified'))
     } else if (errorParam === 'USER_EXISTS_UNVERIFIED') {
       setError(t('auth_error_user_exists_unverified'))
+    } else if (errorParam.includes('MEMBER_USE_PASSWORD')) {
+      setError(t('auth_error_member_use_password'))
     } else if (errorParam === 'ANONYMIZED_USER') {
       setError(t('auth_error_anonymized_user'))
     } else if (errorParam === 'CredentialsSignin') {

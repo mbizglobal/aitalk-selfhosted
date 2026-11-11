@@ -300,6 +300,7 @@ export const useUIState = () => {
         setShowWhileToolsModal(true)
         break
       case 'sendGridBody':
+      case 'smtpBody':
         setShowSendGridBodyModal(true)
         break
       case 'jsonOptions':

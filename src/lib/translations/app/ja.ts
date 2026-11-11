@@ -322,6 +322,7 @@ export const translations = {
 
     agent_studio_unsaved_changes: '未保存の変更があります。保存せずに離れてもよいですか？',
 
+    auth_error_member_use_password: 'This email is a team member. Please sign in with your email and password.',
     auth_error_anonymized_user: '削除されたアカウントは再登録できません。お問い合わせは support@aitalk.ch までご連絡ください。',
 
     email_subject_support_request: 'からのサポートリクエスト',
@@ -807,11 +808,8 @@ export const translations = {
     workflow_create: '作成',
     workflow_creating: '作成中...',
     workflow_back: '戻る',
-    workflow_step_select_title: '新しいワークフローを作成',
     workflow_step_blank_title: '空白のワークフロー',
-    workflow_step_blank_desc: 'ゼロから始める',
     workflow_step_template_title: 'テンプレートから',
-    workflow_step_template_desc: '事前構築されたテンプレートを使用',
     workflow_template_search: 'テンプレートを検索...',
     workflow_template_all_categories: 'すべてのカテゴリ',
     workflow_template_no_results: 'テンプレートが見つかりません',

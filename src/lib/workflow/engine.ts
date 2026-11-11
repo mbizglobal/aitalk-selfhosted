@@ -48,6 +48,7 @@ export class WorkflowEngine {
       onNodeComplete?: (log: WorkflowDebugLogEntry) => void
       channel?: 'pstn' | 'web_voice' | 'chat_widget' | 'test'
       debugEnabled?: boolean
+      shouldContinue?: () => Promise<boolean>
     }
   ): Promise<WorkflowExecutionResult> {
     const execChannel = options?.channel
@@ -102,6 +103,9 @@ export class WorkflowEngine {
       nodeType: WorkflowNode['type'],
       ctx: WorkflowContext
     ): Promise<NodeExecutionResult> => {
+      if (options?.shouldContinue && !(await options.shouldContinue())) {
+        return { context: keepOwner(ctx), debug: { status: 'error', error: 'stopped — this run is no longer running', input: {}, output: {} } }
+      }
       const result = await this.executeNode(node, nodeType, keepOwner(ctx))
       return result?.context ? { ...result, context: keepOwner(result.context) } : result
     }
@@ -222,7 +226,9 @@ export class WorkflowEngine {
           calendarMulti: false,
           subworkflow: false,
           workApp: false,
+          workInbox: false,
         }
+        const workInboxes: Array<{ targetWorkflowId: string; inboxFamily: string }> = []
         const subWorkflowIds: string[] = []
         const allowSubWorkflowTools = !((data.subWorkflowDepth ?? 0) >= 1)
 
@@ -324,6 +330,12 @@ export class WorkflowEngine {
               subWorkflowIds.push(id)
               selectedTools.subworkflow = true
             }
+          }
+
+          if (toolNode?.type === 'tool' && toolNode?.data?.toolType === 'workInbox') {
+            const t = typeof toolNode.data.targetWorkflowId === 'string' ? toolNode.data.targetWorkflowId.trim() : ''
+            const f = typeof toolNode.data.inboxFamily === 'string' ? toolNode.data.inboxFamily.trim() : ''
+            if (t && f) workInboxes.push({ targetWorkflowId: t, inboxFamily: f })
           }
 
           if (toolNode?.type === 'tool' && toolNode?.data?.toolType === 'workApp') {
@@ -444,10 +456,14 @@ export class WorkflowEngine {
           }
         }
 
+        if (workInboxes.length > 1) console.warn(`[Workflow] ${workInboxes.length} work inbox tools on one AI node — none is loaded (one per AI node)`)
+        if (workInboxes.length === 1) selectedTools.workInbox = true
+
         currentNode!.data = {
           ...currentNode!.data,
           selectedTools,
           subWorkflowIds,
+          workInbox: workInboxes.length === 1 ? workInboxes[0] : null,
         }
 
         const miniAppEdges = edges.filter(e => e.source === currentNode!.id && e.sourceHandle === 'miniapps')
@@ -606,7 +622,7 @@ export class WorkflowEngine {
       } else {
         nextEdge = edges.find(e =>
           e.source === currentNode!.id &&
-          (!e.sourceHandle || (e.sourceHandle !== 'tools' && e.sourceHandle !== 'loop' && e.sourceHandle !== 'miniapps'))
+          (!e.sourceHandle || (e.sourceHandle !== 'tools' && e.sourceHandle !== 'loop' && e.sourceHandle !== 'miniapps' && e.sourceHandle !== 'ref' && e.sourceHandle !== 'send'))
         )
       }
       currentNode = nextEdge ? nodes.find(n => n.id === nextEdge.target) : undefined

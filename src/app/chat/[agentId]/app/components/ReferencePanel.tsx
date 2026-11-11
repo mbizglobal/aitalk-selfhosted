@@ -5,20 +5,34 @@ import { AlertTriangle, Check, Loader2 } from 'lucide-react'
 import { packageOfFamily, workT, type WorkLang } from '@/lib/translations/work'
 import type { ReferenceScreenItem, ReferenceScreenSheet, WorkApi } from '../lib/api'
 import { errorText } from './SheetTable'
+import { refCellText } from '@/lib/work/sheet-text'
 import { useWorkPkg } from './work-pkg'
 
 function cell(lang: WorkLang, v: unknown, options: string[] | undefined, pkg: string | null): string {
   if (v === undefined || v === null) return ''
   if (typeof v === 'string') return options?.includes(v) ? workT(lang, `opt_${v}`, v, pkg) : v
   if (typeof v === 'boolean') return workT(lang, v ? 'yes' : 'no', undefined, pkg)
-  if (typeof v === 'object') return JSON.stringify(v)
+  if (typeof v === 'object') return readable(v)
   return String(v)
+}
+
+function readable(v: unknown): string {
+  if (Array.isArray(v)) return v.map(readable).filter(Boolean).join('; ')
+  if (v && typeof v === 'object') {
+    return Object.entries(v as Record<string, unknown>)
+      .filter(([k, x]) => !/^(id|lineKey)$|Id$/.test(k) && x !== null && x !== undefined && x !== '')
+      .map(([, x]) => (typeof x === 'object' ? readable(x) : String(x)))
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return v === null || v === undefined ? '' : String(v)
 }
 
 function ReadOnlyTable({ lang, sheet }: { lang: WorkLang; sheet: ReferenceScreenSheet }) {
   const pkg = packageOfFamily(sheet.family)
   const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   const cols = sheet.schema.columns.filter((c) => !sheet.hidden.includes(c.name))
+  const instead = new Map((sheet.derived?.columns ?? []).flatMap((d) => (d.replaces ? [[d.replaces, d] as const] : [])))
   const rows = useMemo(() => {
     const col = sheet.dateColumn
     return col ? [...sheet.rows].sort((a, b) => String(b.data[col] ?? '').localeCompare(String(a.data[col] ?? ''))) : sheet.rows
@@ -32,7 +46,7 @@ function ReadOnlyTable({ lang, sheet }: { lang: WorkLang; sheet: ReferenceScreen
           <tr className="text-left text-xs text-gray-400">
             {confirmable && <th className="px-3 py-2 font-normal w-10 whitespace-nowrap">{t('status')}</th>}
             {cols.map((c) => (
-              <th key={c.name} className={`px-3 py-2 font-normal whitespace-nowrap ${c.type === 'money' || c.type === 'decimal' || c.type === 'number' ? 'text-right' : ''}`}>{t(`col_${c.name}`, c.name)}</th>
+              <th key={c.name} className={`px-3 py-2 font-normal whitespace-nowrap ${c.type === 'money' || c.type === 'decimal' || c.type === 'number' ? 'text-right' : ''}`}>{sheet.labels?.[c.name] ?? (instead.get(c.name) ? t(instead.get(c.name)!.label, c.name) : t(`col_${c.name}`, c.name))}</th>
             ))}
           </tr>
         </thead>
@@ -46,7 +60,7 @@ function ReadOnlyTable({ lang, sheet }: { lang: WorkLang; sheet: ReferenceScreen
               )}
               {cols.map((c) => (
                 <td key={c.name} className={`px-3 py-2 text-gray-200 max-w-[16rem] truncate ${c.type === 'money' || c.type === 'decimal' || c.type === 'number' ? 'text-right tabular-nums' : ''}`}>
-                  {cell(lang, r.data[c.name], sheet.options[c.name], pkg)}
+                  {(() => { const d = instead.get(c.name); const v = d ? sheet.derived?.cells[r.id]?.[d.name] : undefined; if (v !== undefined && v !== null && v !== '') return String(v); const rr = sheet.refRows?.[c.name]; return rr ? refCellText(lang, r.data[c.name], rr, null) : cell(lang, r.data[c.name], sheet.options[c.name], pkg) })()}
                 </td>
               ))}
             </tr>

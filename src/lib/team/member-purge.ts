@@ -5,6 +5,7 @@ type Db = {
   miniAppResult: { deleteMany(args: any): Promise<{ count: number }> }
   agentMemberPasswordResetToken: { deleteMany(args: any): Promise<{ count: number }> }
   agentMemberEmailChangeToken: { deleteMany(args: any): Promise<{ count: number }> }
+  workMessage: { updateMany(args: any): Promise<{ count: number }> }
   $executeRawUnsafe(sql: string, ...args: unknown[]): Promise<number>
 }
 
@@ -19,7 +20,10 @@ export interface MemberPurgeResult {
   payloadsDetached: number
   passwordResetTokens: number
   emailChangeTokens: number
+  privateMessagesScheduled: number
 }
+
+export const PRIVATE_MESSAGE_GRACE_MS = 30 * 86_400_000
 
 export function detachedSubjectId(payloadId: string): string {
   return `del:${payloadId}`
@@ -60,6 +64,7 @@ export async function purgeMemberPersonalData(
     payloadsDetached: 0,
     passwordResetTokens: 0,
     emailChangeTokens: 0,
+    privateMessagesScheduled: 0,
   }
   if (memberIds.length === 0) return empty
 
@@ -87,6 +92,11 @@ export async function purgeMemberPersonalData(
     where: { memberId: { in: memberIds } },
   })
 
+  const privateMessages = await db.workMessage.updateMany({
+    where: { room: 'private', owner: { in: memberIds.map((id) => `member:${id}`) }, purgeAt: null },
+    data: { purgeAt: new Date(Date.now() + PRIVATE_MESSAGE_GRACE_MS) },
+  })
+
   return {
     learningStates: learningStates.count,
     quizHistoryRows: quizHistory.count,
@@ -94,5 +104,6 @@ export async function purgeMemberPersonalData(
     payloadsDetached,
     passwordResetTokens: passwordResetTokens.count,
     emailChangeTokens: emailChangeTokens.count,
+    privateMessagesScheduled: privateMessages.count,
   }
 }

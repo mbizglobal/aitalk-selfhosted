@@ -1,6 +1,6 @@
 
 import type { Node, Edge } from 'reactflow'
-import { MessageSquare, Bot, Circle, Square, Globe, Workflow, FileSearch, Zap, RefreshCw, Pause, Database, DatabaseZap, Mail, SkipForward, Inbox, Send, GraduationCap, Puzzle, Briefcase } from 'lucide-react'
+import { MessageSquare, Bot, Circle, Square, Globe, Workflow, FileSearch, Zap, RefreshCw, Pause, Database, DatabaseZap, Mail, SkipForward, Inbox, Send, GraduationCap, Puzzle, Briefcase, Link2, ClipboardCheck } from 'lucide-react'
 import { SendGridIcon, TelegramIcon } from '../constants/components'
 import { isAiNodeRaw } from '@/lib/workflow/find-ai-node'
 import { isMiniAppAllowedOn, miniAppChannelOf } from '@/lib/workflow/mini-app-registry'
@@ -134,6 +134,9 @@ export function restoreNodesWithIcons(nodes: any[]): any[] {
           case 'workApp':
             icon = Briefcase
             break
+          case 'workInbox':
+            icon = Inbox
+            break
           default:
             if (label === 'Source') icon = FileSearch
             else if (label === 'MCP') icon = MCPLogo
@@ -145,7 +148,7 @@ export function restoreNodesWithIcons(nodes: any[]): any[] {
       else {
         switch (nodeType) {
         case 'start':
-          icon = node.data?.triggerType === 'subworkflow' ? Puzzle : MessageSquare
+          icon = node.data?.triggerType === 'subworkflow' ? Puzzle : node.data?.triggerType === 'workEvent' ? Link2 : MessageSquare
           break
         case 'ai':
           icon = Bot
@@ -207,6 +210,12 @@ export function restoreNodesWithIcons(nodes: any[]): any[] {
           break
         case 'store':
           icon = DatabaseZap
+          break
+        case 'workAppStep':
+          icon = ClipboardCheck
+          break
+        case 'workApp':
+          icon = Briefcase
           break
         case 'continue':
           icon = SkipForward
@@ -306,8 +315,14 @@ export function restoreNodesWithIcons(nodes: any[]): any[] {
         case 'store':
           color = 'bg-emerald-500'
           break
+        case 'workAppStep':
+          color = 'bg-amber-800'
+          break
         case 'workApp':
-          color = 'bg-emerald-600'
+          color = node.type === 'tool' ? 'bg-emerald-600' : 'bg-amber-600'
+          break
+        case 'workInbox':
+          color = 'bg-teal-600'
           break
         case 'webSearch':
           color = 'bg-green-500'

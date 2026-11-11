@@ -29,6 +29,7 @@ import { ConversationUsageChart } from '@/components/dashboard/conversation-usag
 import { BookingStatsCard } from '@/components/dashboard/booking-stats-card'
 import { VoiceQuizStatsCard } from '@/components/dashboard/voice-quiz-stats-card'
 import { McpServerCard } from '@/components/dashboard/mcp-server-card'
+import { WorkAppsCard } from '@/components/dashboard/work-apps-card'
 import { formatDateOnlyWithUserSettings } from '@/lib/format-date-with-user-settings'
 function formatLocation(country?: string | null, region?: string | null, city?: string | null): string {
   const parts = [country, region, city].filter(Boolean)
@@ -988,6 +989,8 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <WorkAppsCard ready={planReady} />
 
       <BookingStatsCard ready={planReady} />
 

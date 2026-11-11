@@ -55,18 +55,22 @@ export async function GET(
         id: true,
         email: true,
         displayName: true,
+        jobTitle: true,
         authMethod: true,
         status: true,
         joinedAt: true,
         lastSeenAt: true,
-        planSuspendedAt: true
+        planSuspendedAt: true,
+        _count: { select: { access: true } }
       }
     })
+    const owner = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } })
+    const ownerEmail = owner?.email?.toLowerCase() ?? null
 
     const seats = await getTeamSeatUsage(prisma, agentId)
 
     return NextResponse.json({
-      members,
+      members: members.map(({ _count, ...m }) => ({ ...m, accessCount: _count.access, sameAsOwner: !!ownerEmail && m.email.toLowerCase() === ownerEmail })),
       memberLimit: seats.limit,
       memberCount: seats.memberCount,
       totalMemberCount: members.length,

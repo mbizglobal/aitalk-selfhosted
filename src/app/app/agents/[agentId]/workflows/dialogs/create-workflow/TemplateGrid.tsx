@@ -24,7 +24,7 @@ export function TemplateGrid({ onBack, onSelectTemplate, t }: TemplateGridProps)
     const fetchData = async () => {
       try {
         const [templatesRes, categoriesRes] = await Promise.all([
-          fetch('/api/workflow-templates'),
+          fetch('/api/workflow-templates?kind=workflow'),
           fetch('/api/workflow-templates/categories'),
         ])
 

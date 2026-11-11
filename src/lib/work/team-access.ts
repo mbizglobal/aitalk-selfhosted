@@ -5,6 +5,8 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { prisma } from '@/lib/prisma'
 import { extractBearerToken } from '@/lib/agentAccess'
 import { verifyActiveAgentMemberToken } from '@/lib/teamMemberCache'
+import { resolveAppWorkAccess } from './app-access'
+import { memberCanUseWorkflow } from '@/lib/memberAccess'
 import { WorkError } from './errors'
 import type { SheetActor } from './sheet-gate'
 
@@ -25,8 +27,12 @@ export async function resolveWorkTeamAccess(request: NextRequest, agentId: strin
   const token = extractBearerToken(request)
   if (!token) return null
   const payload = await verifyActiveAgentMemberToken(prisma, token, agentId)
-  if (!payload) return null
-  return { userId: agent.userId, agentId, isOwner: false, actor: { type: 'human', memberId: payload.memberId } }
+  if (payload) return { userId: agent.userId, agentId, isOwner: false, actor: { type: 'human', memberId: payload.memberId } }
+  const app = await resolveAppWorkAccess(request, { agentId, userId: agent.userId })
+  if (!app) return null
+  return app.isOwner
+    ? { userId: agent.userId, agentId, isOwner: true, actor: { type: 'human' } }
+    : { userId: agent.userId, agentId, isOwner: false, actor: { type: 'human', memberId: app.memberId } }
 }
 
 export async function resolveWorkOwner(): Promise<string | null> {
@@ -35,8 +41,18 @@ export async function resolveWorkOwner(): Promise<string | null> {
 }
 
 export async function assertTeamProject(access: WorkTeamAccess, projectId: string): Promise<void> {
-  const p = await prisma.workProject.findFirst({ where: { id: projectId, userId: access.userId, agentId: access.agentId }, select: { id: true } })
+  const p = await prisma.workProject.findFirst({ where: { id: projectId, userId: access.userId, agentId: access.agentId }, select: { id: true, workflowId: true, workflowLinkedAt: true } })
   if (!p) throw new WorkError('NOT_FOUND')
+  if (access.isOwner) return
+  const ok = p.workflowId ? await memberMay(access, p.workflowId) : false
+  if (!ok) throw new WorkError('NOT_FOUND')
+}
+
+export const memberOf = (access: WorkTeamAccess): { memberId?: number } => (access.isOwner ? {} : { memberId: access.actor.memberId ?? -1 })
+
+export async function memberMay(access: WorkTeamAccess, workflowId: string): Promise<boolean> {
+  if (access.isOwner) return true
+  return access.actor.memberId !== undefined && memberCanUseWorkflow(prisma, access.agentId, access.actor.memberId, workflowId)
 }
 
 export async function assertTeamTask(access: WorkTeamAccess, projectId: string, taskId: string): Promise<void> {

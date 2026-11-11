@@ -44,6 +44,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [error, setError] = useState('')
   const [memberAuthMethod, setMemberAuthMethod] = useState<string | null>(null)
   const [memberHasPasskey, setMemberHasPasskey] = useState(false)
+  const [isOwnerLogin, setIsOwnerLogin] = useState(false)
   const [displayTitle, setDisplayTitle] = useState(agentTitle || '')
   const [isResetEmailSent, setIsResetEmailSent] = useState(false)
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false)
@@ -163,6 +164,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       setMemberAuthMethod(data.authMethod)
       setMemberHasPasskey(data.hasPasskey || false)
+      setIsOwnerLogin(!!data.isOwner)
 
       if (data.hasPasskey) {
         setStep('passkey')
@@ -189,6 +191,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsLoading(true)
     setError('')
 
+    if (isOwnerLogin) {
+      const res = await signIn('credentials', { email: email.trim(), password, action: 'login', redirect: false })
+      if (res?.ok && !res.error) {
+        window.location.reload()
+        return
+      }
+      setError(t('team_login_error_login_failed'))
+      setIsLoading(false)
+      return
+    }
+
     const result = await onLogin(email.trim(), password)
 
     if (!result.success) {
@@ -210,6 +223,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setError('')
     setMemberAuthMethod(null)
     setMemberHasPasskey(false)
+    setIsOwnerLogin(false)
     setIsResetEmailSent(false)
     setPasskeyAutoStarted(false)
   }
@@ -357,17 +371,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <ArrowLeft className="mr-1 h-4 w-4" />
           {t('team_back')}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="text-gray-400 hover:text-[#E07B53] p-0 h-auto text-sm"
-          onClick={() => {
-            setError('')
-            setStep('forgot-password')
-          }}
-        >
-          {t('team_login_forgot_password')}
-        </Button>
+        {!isOwnerLogin && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-gray-400 hover:text-[#E07B53] p-0 h-auto text-sm"
+            onClick={() => {
+              setError('')
+              setStep('forgot-password')
+            }}
+          >
+            {t('team_login_forgot_password')}
+          </Button>
+        )}
       </div>
     </form>
   )

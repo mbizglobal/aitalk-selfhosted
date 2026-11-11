@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     if (koreanCountries.includes(countryCode)) {
       detectedLanguage = 'ko';
     } else if (swissGermanCountries.includes(countryCode)) {
-      detectedLanguage = 'de-ch';
+      detectedLanguage = 'de';
     } else if (germanCountries.includes(countryCode)) {
       detectedLanguage = 'de';
     } else if (frenchCountries.includes(countryCode)) {
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       } else if (acceptLanguage.includes('it')) {
         detectedLanguage = 'en';
       } else {
-        detectedLanguage = 'de-ch';
+        detectedLanguage = 'de';
       }
     }
 

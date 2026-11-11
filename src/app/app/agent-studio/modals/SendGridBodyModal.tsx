@@ -14,8 +14,9 @@ export function SendGridBodyModal() {
   const { ui, workflow, nodeHandlers, reloadWorkflow } = useWorkflowContext()
 
   const selectedNode = workflow.nodes.find(
-    node => node.id === workflow.selectedNode && node.data?.nodeType === 'sendgrid'
+    node => node.id === workflow.selectedNode && (node.data?.nodeType === 'sendgrid' || node.data?.nodeType === 'smtp')
   )
+  const field = selectedNode?.data?.nodeType === 'smtp' ? 'body' : 'bodyTemplate'
 
   const [bodyTemplate, setBodyTemplate] = useState('')
   const [initialBodyTemplate, setInitialBodyTemplate] = useState('')
@@ -23,7 +24,7 @@ export function SendGridBodyModal() {
 
   useEffect(() => {
     if (ui.showSendGridBodyModal && selectedNode) {
-      const currentValue = selectedNode.data?.bodyTemplate || '{{context.aiResponse}}'
+      const currentValue = selectedNode.data?.[field] || '{{context.aiResponse}}'
       setBodyTemplate(currentValue)
       setInitialBodyTemplate(currentValue)
     }
@@ -37,7 +38,7 @@ export function SendGridBodyModal() {
 
   const handleSave = () => {
     if (selectedNode) {
-      nodeHandlers.updateNodeData(selectedNode.id, { bodyTemplate })
+      nodeHandlers.updateNodeData(selectedNode.id, { [field]: bodyTemplate })
     }
     ui.setShowSendGridBodyModal(false)
   }

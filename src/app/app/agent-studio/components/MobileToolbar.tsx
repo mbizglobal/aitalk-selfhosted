@@ -29,6 +29,7 @@ interface MobileToolbarProps {
   canRedo: boolean
   currentZoom: number
   testLabel?: string
+  showTest?: boolean
 }
 
 export function MobileToolbar({
@@ -44,7 +45,8 @@ export function MobileToolbar({
   canUndo,
   canRedo,
   currentZoom,
-  testLabel = 'Test'
+  testLabel = 'Test',
+  showTest = true
 }: MobileToolbarProps) {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-30 bg-[#1A1A1A] border-t border-[#3A3A3A] safe-area-bottom">
@@ -134,17 +136,21 @@ export function MobileToolbar({
             {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
           </Button>
 
-          <div className="w-px h-5 bg-[#3A3A3A] mx-0.5" />
+          {showTest && (
+            <>
+              <div className="w-px h-5 bg-[#3A3A3A] mx-0.5" />
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onTestClick}
-            className="h-9 px-3 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-full font-medium text-sm"
-          >
-            <Play className="w-4 h-4 mr-1" />
-            {testLabel}
-          </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onTestClick}
+                className="h-9 px-3 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-full font-medium text-sm"
+              >
+                <Play className="w-4 h-4 mr-1" />
+                {testLabel}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

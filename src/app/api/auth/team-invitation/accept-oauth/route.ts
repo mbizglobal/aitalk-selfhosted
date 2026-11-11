@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { assertSeatForMembership, TeamSeatLimitError } from '@/lib/teamSeats'
+import { invitationAccessData } from '@/lib/memberAccess'
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
@@ -94,6 +95,8 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       await assertSeatForMembership(tx, invitation.agentAgentId)
 
+      const claimed = await tx.agentMemberInvitation.delete({ where: { token: invitation.token } })
+
       const member = await tx.agentMember.create({
         data: {
           agentAgentId: invitation.agentAgentId,
@@ -101,12 +104,9 @@ export async function POST(request: NextRequest) {
           displayName: displayName?.trim() || user.name || null,
           authMethod: 'oauth',
           credentialRef: credentialRef,
-          status: 'active'
+          status: 'active',
+          ...(await invitationAccessData(tx, claimed)),
         }
-      })
-
-      await tx.agentMemberInvitation.delete({
-        where: { id: invitation.id }
       })
 
       return member

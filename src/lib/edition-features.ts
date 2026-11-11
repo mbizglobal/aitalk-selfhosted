@@ -1,4 +1,5 @@
 import { getEdition, type Edition } from '@/lib/edition'
+import { OPERATOR_PATH } from '@/lib/vendor-site'
 
 export interface EditionFeature {
   name: string
@@ -58,6 +59,7 @@ export const SELFHOSTED_OFF_FEATURES: readonly EditionFeature[] = [
     miniApps: ['quiz'],
   },
   { name: 'Mobile app API', verdict: 'cloud_only', jobs: [], routes: ['/api/app-api'] },
+  { name: 'Support reports', verdict: 'cloud_only', jobs: ['purgeSupportReports'] },
   {
     name: 'CPA',
     verdict: 'cloud_only',
@@ -100,7 +102,7 @@ export const SELFHOSTED_OFF_FEATURES: readonly EditionFeature[] = [
     jobs: ['processTrialExpiry'],
     routes: ['/contact-trial', '/api/trial-lead', '/api/auth/apply-partner-code'],
   },
-  { name: 'Operator admin', verdict: 'cloud_only', jobs: [], routes: ['/console', '/api/console', '/admin', '/api/admin'] },
+  { name: 'Operator admin', verdict: 'cloud_only', jobs: [], routes: [OPERATOR_PATH, `/api${OPERATOR_PATH}`, '/admin', '/api/admin'] },
   {
     name: 'Marketing site',
     verdict: 'cloud_only',
@@ -145,6 +147,11 @@ export const SHARED_JOBS: readonly string[] = [
   'cleanupOldTempStorage',
   'processScheduledAnonymizations',
   'cleanupExpiredVisitorContacts',
+  'markStaleWorkSends',
+  'processWorkSignals',
+  'processWorkAlerts',
+  'cleanupExpiredPublicLinks',
+  'purgeWorkPrivateMessages',
 ]
 
 export function enabledJobs(edition: Edition = getEdition()): ReadonlySet<string> {

@@ -11,7 +11,7 @@ import { markTemplateVar } from '../../template-scope'
 import { saveTempData, loadTempData } from '../../temp-storage'
 import { PineconeClient, PineconeConnectionConfig } from '@/lib/rag-providers/clients/pinecone'
 import { tryGetKnowledgeStore } from '@/lib/knowledge'
-import { AIToolClient, SendGridToolClient, TelegramToolClient, SmsToolClient, SmtpToolClient, GoogleCalendarToolClient, MicrosoftCalendarToolClient, SubWorkflowToolClient, WorkAppToolClient } from '../../tools'
+import { AIToolClient, SendGridToolClient, TelegramToolClient, SmsToolClient, SmtpToolClient, GoogleCalendarToolClient, MicrosoftCalendarToolClient, SubWorkflowToolClient, WorkAppToolClient, WorkInboxToolClient } from '../../tools'
 import { MultiCalendarDispatcher } from '../../tools/multi-calendar-dispatcher'
 import { bookingMessagePromptOf } from '@/lib/calendar/booking-message'
 import { extractPureJson, transformCitations, substituteTemplate, detectStreamFailure, makeStreamFailureError, ResultBuilders } from './utils'
@@ -30,8 +30,12 @@ import { LLM_PROVIDER_REGISTRY } from '@/lib/ai-providers/core/registry'
 import { MANAGED_MAX_OUTPUT_TOKENS } from '@/lib/managed/output-limit'
 import { reserveCpaForAiCall, type AiCallReservation } from '../../ai-call-cpa'
 import { makeImageReader } from './read-images'
+import { makeDocumentCarder } from './doc-card'
+import { makeDocFinder } from './doc-find'
+import { makeTextAsker } from './ask-text'
 import { describeCaughtError, safeLogId, safeLogToken } from '@/lib/log-mask'
 import { WORK_APP_TOOL_LIMITS, createToolExecutor, runToolFollowUps } from './tool-loop'
+import { recordWorkWebSearches, WebSearchTally } from '@/lib/work/web-search-log'
 import { insertPreviousToolTrace } from './tool-trace'
 
 export async function executeOpenAI(
@@ -217,7 +221,7 @@ export async function executeOpenAI(
 
   let inputContent: any
 
-  const needsSyncProcessing = outputFormat === 'json' || context.isScheduledTrigger || (context as any).isTelegramWebhook
+  const needsSyncProcessing = outputFormat === 'json' || context.isScheduledTrigger || (context as any).isTelegramWebhook || (context as any).isWorkEventTrigger
 
   //
   //
@@ -659,15 +663,35 @@ export async function executeOpenAI(
   if (selectedTools?.workApp && context.workScope) {
     try {
       const client = new WorkAppToolClient()
-      await client.initialize(prisma, '', { workflowId: context.workflowId, workScope: context.workScope, readImages: makeImageReader(openai, context.aiConnection ? context.aiConnection.imageModel : model, context) }, context.userId)
+      await client.initialize(prisma, '', { workflowId: context.workflowId, workScope: context.workScope, readImages: makeImageReader(openai, context.aiConnection ? context.aiConnection.imageModel : model, context), docCards: makeDocumentCarder(openai, model, context.aiConnection ? context.aiConnection.imageModel : model, context), docFind: makeDocFinder(openai, model, context.aiConnection ? context.aiConnection.imageModel : model, context), askText: makeTextAsker(openai, model, context), aiConnectionKind: context.aiConnection?.kind ?? null, model }, context.userId)
       for (const tool of client.listTools()) {
         tools.push({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })
         appsToolClients.set(tool.name, client)
       }
       requestConfig.instructions = `${requestConfig.instructions}\n\n${client.systemBrief()}`
+      if (client.webSearchOn() && !tools.some((t: any) => t.type === 'web_search')) tools.push({ type: 'web_search' } as any)
     } catch (err: any) {
       console.error('[AI Node] Failed to load Work app tool:', describeCaughtError(err))
       throw new Error('Work app tools could not be loaded')
+    }
+  }
+
+  if (selectedTools?.workInbox && node.data.workInbox && !context.workScope && !(context as any).isWorkEventTrigger && !context.isScheduledTrigger) {
+    try {
+      const tg = (context as any).isTelegramWebhook === true
+      const client = new WorkInboxToolClient()
+      await client.initialize(prisma, node.data.workInbox.targetWorkflowId, {
+        callerWorkflowId: context.workflowId,
+        inboxFamily: node.data.workInbox.inboxFamily,
+        channel: tg ? 'telegram' : context.isTestMode ? 'test' : 'chat',
+        telegramUserId: tg ? (context as any).telegramUserId : undefined,
+      }, context.userId)
+      for (const tool of client.listTools()) {
+        tools.push({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })
+        appsToolClients.set(tool.name, client)
+      }
+    } catch (err: any) {
+      console.error('[AI Node] Failed to load Work inbox tool:', describeCaughtError(err))
     }
   }
 
@@ -840,6 +864,7 @@ export async function executeOpenAI(
   let aiResponse = ''
   let responseId: string | null = null
   let usageData: any = null
+  let initialWebSearches = 0
   let completionPayload: any = null
   let functionCalls: Array<{ id: string; name: string; arguments: string }> = []
   const functionCallMap = new Map<string, { id: string; name: string; arguments: string }>()
@@ -848,12 +873,14 @@ export async function executeOpenAI(
   let initialFailure: { message: string; code?: string; responseId?: string } | null = null
 
   const responseStream = response as unknown as AsyncIterable<any>
+  const webTally = new WebSearchTally()
   try {
   for await (const chunk of responseStream) {
+    webTally.onChunk(chunk)
     const failure = detectStreamFailure(chunk)
     if (failure) {
       initialFailure = failure
-      if (failure.usageInputTokens != null) initialReservation.settle(failure.usageInputTokens, failure.usageOutputTokens)
+      if (failure.usageInputTokens != null) initialReservation.settle(failure.usageInputTokens, failure.usageOutputTokens, webTally.count)
       break
     }
     if (chunk.type === 'response.output_text.delta' && chunk.delta) {
@@ -904,6 +931,8 @@ export async function executeOpenAI(
         responseId = chunk.response.id
         usageData = chunk.response.usage
         if (!completionPayload) completionPayload = chunk.response
+        initialWebSearches = webTally.count
+        if (context.workScope) void recordWorkWebSearches(context, initialWebSearches, 0)
 
         if (chunk.response.output && Array.isArray(chunk.response.output)) {
 
@@ -1003,13 +1032,20 @@ export async function executeOpenAI(
 
   if (!initialFailure) initialReservation.settle(
     usageData?.input_tokens ?? usageData?.prompt_tokens,
-    usageData?.output_tokens ?? usageData?.completion_tokens
+    usageData?.output_tokens ?? usageData?.completion_tokens,
+    webTally.count,
   )
   } catch (streamError) {
     await closeMcpClientQuietly()
     throw streamError
   } finally {
+    if (usageData || webTally.count > 0) initialReservation.settle(
+      usageData?.input_tokens ?? usageData?.prompt_tokens,
+      usageData?.output_tokens ?? usageData?.completion_tokens,
+      webTally.count,
+    )
     initialReservation.finalize(sawInitialOutput)
+    initialWebSearches = webTally.count
   }
 
   if (initialFailure) {
@@ -1063,13 +1099,15 @@ export async function executeOpenAI(
       loop = await runToolFollowUps({
         openai,
         requestConfig,
+        initialWebSearches,
         nodeData: { model, maxTokens: effectiveMaxTokens, temperature },
         reserve: () => reserveCpaForAiCall(context, model),
         ...(context.workScope ? { limits: WORK_APP_TOOL_LIMITS } : {}),
         executor,
         responseId,
         functionCalls,
-        onRoundDone: ({ durationMs, usage, incompleteReason }) => {
+        onRoundDone: ({ round, durationMs, usage, incompleteReason, webSearches }) => {
+          if (context.workScope) void recordWorkWebSearches(context, webSearches, round)
           debugChildren.push({
             type: 'llm_call',
             name: `${model} (follow-up)`,

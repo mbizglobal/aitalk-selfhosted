@@ -8,17 +8,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
-type Step = 'loading' | 'hidden' | 'account_type' | 'ask' | 'form' | 'done'
-type AccountType = 'company' | 'individual'
+type Step = 'loading' | 'hidden' | 'form' | 'done'
 
 const STRINGS = {
   en: {
-    title: 'Welcome! Set up your AI agent',
-    acct_title: 'Quick question',
-    acct_desc: 'Are you setting up AI Talk for a company or for personal use?',
-    acct_company: 'For a company', acct_individual: 'For personal use',
-    ask_desc: 'Will you use an AI Voice Agent for your business? Tell us a bit so your agent can answer questions.',
-    ask_yes: 'Yes, set it up', ask_later: 'Later',
+    ask_later: 'Later',
     form_title: 'Tell us about your business',
     form_desc: 'This becomes your agent’s knowledge. You can edit it later.',
     q_address: 'Address / how to find us', q_services: 'Services and pricing', q_hours: 'Business hours',
@@ -32,12 +26,7 @@ const STRINGS = {
     done_cta: 'Go to dashboard', done_call: '🎙️ Call your AI now',
   },
   de: {
-    title: 'Willkommen! Richten Sie Ihren KI-Agenten ein',
-    acct_title: 'Kurze Frage',
-    acct_desc: 'Richten Sie AI Talk für ein Unternehmen oder für den privaten Gebrauch ein?',
-    acct_company: 'Für ein Unternehmen', acct_individual: 'Für den privaten Gebrauch',
-    ask_desc: 'Möchten Sie einen KI-Sprachagenten für Ihr Unternehmen nutzen? Erzählen Sie uns etwas, damit Ihr Agent Fragen beantworten kann.',
-    ask_yes: 'Ja, einrichten', ask_later: 'Später',
+    ask_later: 'Später',
     form_title: 'Erzählen Sie uns von Ihrem Unternehmen',
     form_desc: 'Dies wird zum Wissen Ihres Agenten. Sie können es später bearbeiten.',
     q_address: 'Adresse / Anfahrt', q_services: 'Leistungen und Preise', q_hours: 'Öffnungszeiten',
@@ -51,12 +40,7 @@ const STRINGS = {
     done_cta: 'Zum Dashboard', done_call: '🎙️ Jetzt Ihre KI anrufen',
   },
   fr: {
-    title: 'Bienvenue ! Configurez votre agent IA',
-    acct_title: 'Petite question',
-    acct_desc: 'Configurez-vous AI Talk pour une entreprise ou pour un usage personnel ?',
-    acct_company: 'Pour une entreprise', acct_individual: 'Pour un usage personnel',
-    ask_desc: 'Utiliserez-vous un agent vocal IA pour votre entreprise ? Donnez-nous quelques infos pour que votre agent puisse répondre aux questions.',
-    ask_yes: 'Oui, configurer', ask_later: 'Plus tard',
+    ask_later: 'Plus tard',
     form_title: 'Parlez-nous de votre entreprise',
     form_desc: 'Cela devient les connaissances de votre agent. Vous pourrez le modifier plus tard.',
     q_address: 'Adresse / comment nous trouver', q_services: 'Services et tarifs', q_hours: 'Heures d’ouverture',
@@ -70,12 +54,7 @@ const STRINGS = {
     done_cta: 'Aller au tableau de bord', done_call: '🎙️ Appelez votre IA maintenant',
   },
   es: {
-    title: '¡Bienvenido! Configura tu agente de IA',
-    acct_title: 'Una pregunta rápida',
-    acct_desc: '¿Configuras AI Talk para una empresa o para uso personal?',
-    acct_company: 'Para una empresa', acct_individual: 'Para uso personal',
-    ask_desc: '¿Usarás un agente de voz con IA para tu negocio? Cuéntanos un poco para que tu agente pueda responder preguntas.',
-    ask_yes: 'Sí, configurar', ask_later: 'Más tarde',
+    ask_later: 'Más tarde',
     form_title: 'Cuéntanos sobre tu negocio',
     form_desc: 'Esto se convierte en el conocimiento de tu agente. Puedes editarlo después.',
     q_address: 'Dirección / cómo encontrarnos', q_services: 'Servicios y precios', q_hours: 'Horario',
@@ -89,12 +68,7 @@ const STRINGS = {
     done_cta: 'Ir al panel', done_call: '🎙️ Llama a tu IA ahora',
   },
   ko: {
-    title: '환영합니다! AI 에이전트를 설정하세요',
-    acct_title: '간단한 질문',
-    acct_desc: 'AI Talk을 회사용으로 설정하시나요, 개인용으로 설정하시나요?',
-    acct_company: '회사용', acct_individual: '개인용',
-    ask_desc: '사업에 AI 음성 에이전트를 사용하시겠어요? 에이전트가 질문에 답할 수 있도록 정보를 알려주세요.',
-    ask_yes: '네, 설정할게요', ask_later: '나중에',
+    ask_later: '나중에',
     form_title: '사업 정보를 알려주세요',
     form_desc: '이 내용이 에이전트의 지식이 됩니다. 나중에 수정할 수 있어요.',
     q_address: '주소 / 찾아오는 방법', q_services: '서비스 내용 및 가격', q_hours: '영업시간',
@@ -116,9 +90,9 @@ const EXTRA = {
     edit_title: 'Edit your AI', edit_desc: 'Update what your AI knows and how it greets callers.',
   },
   de: {
-    intro_label: 'Begrüßung (was Ihre KI zuerst sagt)',
+    intro_label: 'Begrüssung (was Ihre KI zuerst sagt)',
     intro_default: 'Sie nutzen gerade die AI Talk-Testversion und können diese Nachricht bearbeiten. Die von Ihnen eingegebenen Geschäftsinformationen wurden gespeichert, und ich beantworte nur Fragen dazu. Fragen Sie mich gerne etwas.',
-    edit_title: 'KI bearbeiten', edit_desc: 'Aktualisieren Sie das Wissen Ihrer KI und ihre Begrüßung.',
+    edit_title: 'KI bearbeiten', edit_desc: 'Aktualisieren Sie das Wissen Ihrer KI und ihre Begrüssung.',
   },
   fr: {
     intro_label: 'Message d’accueil (ce que votre IA dit en premier)',
@@ -150,7 +124,7 @@ function pickStrings(lang: string) {
 export function OnboardingModal() {
   const { currentLanguage } = useLanguage()
   const L = pickStrings(currentLanguage)
-  const [step, setStep] = useState<Step>('loading')
+  const [step, setStep] = useState<Step>('hidden')
   const [agentId, setAgentId] = useState<string | null>(null)
   const [canVoice, setCanVoice] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -165,27 +139,6 @@ export function OnboardingModal() {
   const [other, setOther] = useState('')
   const [intro, setIntro] = useState('')
   const [existingBizIds, setExistingBizIds] = useState<string[]>([])
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch('/api/onboarding')
-        if (!res.ok) { if (!cancelled) setStep('hidden'); return }
-        const data = await res.json()
-        if (cancelled) return
-        setAgentId(data.agentId ?? null)
-        setCanVoice(data.canVoice === true)
-        if (data.completed) { setStep('hidden'); return }
-        setIntro(L.intro_default)
-        setStep(data.accountType ? 'ask' : 'account_type')
-      } catch {
-        if (!cancelled) setStep('hidden')
-      }
-    })()
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const openEditRef = useRef<() => void>(() => {})
   useEffect(() => {
@@ -236,20 +189,6 @@ export function OnboardingModal() {
       return res.ok
     } catch {
       return false
-    }
-  }
-
-  const chooseAccountType = async (accountType: AccountType) => {
-    setError(''); setSaving(true)
-    try {
-      const res = await fetch('/api/onboarding/account-type', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountType }),
-      })
-      if (!res.ok) { setError(L.error_save); setSaving(false); return }
-      setSaving(false); setStep('ask')
-    } catch {
-      setError(L.error_save); setSaving(false)
     }
   }
 
@@ -326,34 +265,6 @@ export function OnboardingModal() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-thin">
-        {step === 'account_type' && (
-          <>
-            <CardHeader>
-              <CardTitle>{L.acct_title}</CardTitle>
-              <CardDescription>{L.acct_desc}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button onClick={() => chooseAccountType('company')} disabled={saving}>{L.acct_company}</Button>
-              <Button variant="outline" onClick={() => chooseAccountType('individual')} disabled={saving}>{L.acct_individual}</Button>
-            </CardContent>
-          </>
-        )}
-
-        {step === 'ask' && (
-          <>
-            <CardHeader>
-              <CardTitle>{L.title}</CardTitle>
-              <CardDescription>{L.ask_desc}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button onClick={() => setStep('form')}>{L.ask_yes}</Button>
-              <Button variant="ghost" onClick={handleLater} disabled={saving}>{L.ask_later}</Button>
-            </CardContent>
-          </>
-        )}
-
         {step === 'form' && (
           <>
             <CardHeader>

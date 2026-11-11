@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { createWorkflow, listWorkflows, updateWorkflow } from '@/lib/workflow/service'
 import { buildSubWorkflowSkeleton, readSubWorkflowDefinition } from '@/lib/workflow/subworkflow'
 import { workflowServiceErrorResponse } from '@/lib/workflow/service-rest'
+import { isAppCanvas } from '@/lib/work/app-canvas'
 
 // ========================================
 // GET /api/agents/[agentId]/workflows
@@ -115,6 +116,9 @@ export async function POST(
       }
       finalWorkflowJson = buildSubWorkflowSkeleton(typeof body.name === 'string' ? body.name : '', (n) => taken.has(n))
     }
+    if (body.dataSheetSchema && finalWorkflowJson && isAppCanvas(finalWorkflowJson)) {
+      return NextResponse.json({ error: 'A work app canvas cannot create a data sheet here', code: 'WORK_APP_DATASHEET_UNSUPPORTED' }, { status: 400 })
+    }
     const created = await createWorkflow({
       userId: session.user.id,
       agentId,
@@ -135,7 +139,7 @@ export async function POST(
         try {
           await prisma.$transaction([
             ...(createdDataSheet ? [prisma.dataSheet.delete({ where: { id: createdDataSheet.id } })] : []),
-            prisma.workflow.delete({ where: { workflowId: workflow.workflowId } }),
+            prisma.workflow.deleteMany({ where: { workflowId: workflow.workflowId, version: workflow.version } }),
           ])
         } catch (cleanupErr) {
           console.error('[API] DataSheet 주입 보상 삭제 실패:', workflow.workflowId, createdDataSheet?.id, cleanupErr)
@@ -214,6 +218,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       workflow,
+      ...(created.appLinks?.length ? { appLinks: created.appLinks } : {}),
       ...(createdDataSheet && { createdDataSheet: { id: createdDataSheet.id, name: createdDataSheet.name } })
     }, { status: 201 })
 

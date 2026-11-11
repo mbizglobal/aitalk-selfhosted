@@ -5,6 +5,7 @@ export type ToolPlanType =
   | 'google_calendar' | 'microsoft_calendar'
   | 'subworkflow'
   | 'workApp'
+  | 'workInbox'
 
 export const MODAL_MANAGED_KEYS = [
   'label', 'icon', 'color', 'toolType', 'nodeType', 'isLoopTool', 'connectionId', 'mcpConnectionId',
@@ -21,6 +22,7 @@ export const MODAL_TOOL_TYPES: ReadonlySet<string> = new Set<ToolPlanType>([
   'google_calendar', 'microsoft_calendar',
   'subworkflow',
   'workApp',
+  'workInbox',
 ])
 
 export function splitAttachedTools<T extends { data?: { toolType?: string } | undefined }>(

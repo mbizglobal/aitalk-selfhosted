@@ -292,8 +292,8 @@ describe('reconcileToolEdges - removal, duplicates, normalization', () => {
 
 describe('MODAL_TOOL_TYPES - kinds the modal cannot show are not managed', () => {
   it('includes only the 9 kinds; functionCalling and webhook are excluded', () => {
-    assert.equal(MODAL_TOOL_TYPES.size, 11)
-    for (const t of ['source', 'mcp', 'webSearch', 'sendgrid', 'telegram', 'sms', 'smtp', 'google_calendar', 'microsoft_calendar', 'subworkflow', 'workApp']) {
+    assert.equal(MODAL_TOOL_TYPES.size, 12)
+    for (const t of ['source', 'mcp', 'webSearch', 'sendgrid', 'telegram', 'sms', 'smtp', 'google_calendar', 'microsoft_calendar', 'subworkflow', 'workApp', 'workInbox']) {
       assert.ok(MODAL_TOOL_TYPES.has(t), t)
     }
     assert.equal(MODAL_TOOL_TYPES.has('functionCalling'), false)

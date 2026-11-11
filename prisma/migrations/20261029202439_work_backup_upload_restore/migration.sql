@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "work_backup_upload" ADD COLUMN     "error" VARCHAR(120),
+ADD COLUMN     "gen" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "result" BYTEA,
+ADD COLUMN     "touched_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

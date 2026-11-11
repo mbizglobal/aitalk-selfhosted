@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { assertSeatForMembership, TeamSeatLimitError } from '@/lib/teamSeats'
 import { memberLandingPath } from '@/lib/work/member-landing'
+import { invitationAccessData } from '@/lib/memberAccess'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -73,6 +74,8 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       await assertSeatForMembership(tx, invitation.agentAgentId)
 
+      const claimed = await tx.agentMemberInvitation.delete({ where: { token: invitation.token } })
+
       const member = await tx.agentMember.create({
         data: {
           agentAgentId: invitation.agentAgentId,
@@ -80,12 +83,9 @@ export async function POST(request: NextRequest) {
           displayName: displayName?.trim() || null,
           authMethod: 'password',
           passwordHash,
-          status: 'active'
+          status: 'active',
+          ...(await invitationAccessData(tx, claimed)),
         }
-      })
-
-      await tx.agentMemberInvitation.delete({
-        where: { id: invitation.id }
       })
 
       return member
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
       agentId: invitation.agent.agentId,
       ownerUserId: invitation.agent.userId,
       workflowId: invitation.workflowId,
+      memberId: result.id,
     })
 
     return NextResponse.json({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { invitationAccessData } from '@/lib/memberAccess'
 import { getApiTranslation } from '@/lib/translations'
 import { assertSeatForMembership, lockAgentSeats, TeamSeatLimitError } from '@/lib/teamSeats'
 import { invalidateMemberCache } from '@/lib/teamMemberCache'
@@ -81,6 +82,8 @@ export async function POST(
 
       await assertSeatForMembership(tx, invitation.agentAgentId)
 
+      const claimed = await tx.agentMemberInvitation.delete({ where: { token: invitation.token } })
+
       const created = await tx.agentMember.create({
         data: {
           agentAgentId: invitation.agentAgentId,
@@ -90,12 +93,9 @@ export async function POST(
           status: 'active',
           displayName: displayName || null,
           joinedAt: new Date(),
-          lastSeenAt: new Date()
+          lastSeenAt: new Date(),
+          ...(await invitationAccessData(tx, claimed)),
         }
-      })
-
-      await tx.agentMemberInvitation.delete({
-        where: { id: invitation.id }
       })
 
       return created

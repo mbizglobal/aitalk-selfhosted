@@ -19,6 +19,8 @@ import {
   HttpRequestNodeExecutor,
   StoreNodeExecutor,
   PstnNodeExecutor,
+  WorkAppStepNodeExecutor,
+  WorkHandoffNodeExecutor,
   NodeExecutionResult
 } from '../nodes'
 
@@ -94,6 +96,12 @@ export async function executeNodeByType(
     case 'store':
       const storeExecutor = new StoreNodeExecutor()
       return await storeExecutor.execute(node, data, prisma)
+
+    case 'workAppStep':
+      return await new WorkAppStepNodeExecutor().execute(node, data, prisma)
+
+    case 'workHandoff':
+      return await new WorkHandoffNodeExecutor().execute(node, data, prisma)
 
     case 'pstn':
       const pstnExecutor = new PstnNodeExecutor()

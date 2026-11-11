@@ -182,6 +182,7 @@ export const translations = {
     api_error_feedback_content_required: 'Se requiere contenido del feedback',
     api_error_failed_to_send_feedback: 'Error al enviar el feedback',
     api_error_valid_email_required: 'Se requiere email válido',
+    api_error_team_invite_gmail: 'Gmail addresses can\'t be invited to a team. Please use a work email address.',
     api_error_team_member_limit_reached: 'Límite de miembros del equipo alcanzado para su plan. Por favor, actualice para añadir más miembros.',
     api_error_team_full: 'Este equipo ha alcanzado su límite de miembros, por lo que no se ha podido completar su invitación. Póngase en contacto con la persona que le invitó.',
     api_error_storage_limit_exceeded: 'Límite de almacenamiento excedido para este agente. Por favor, actualice su plan.',
@@ -880,11 +881,6 @@ If no relevant information is found, respond with: "I don't have specific inform
     settings_team_no_workflow_description_1: 'Crea un workflow en',
     settings_team_workflows_link: 'Workflows',
     settings_team_no_workflow_description_2: 'y cambia su estado a "Active" para invitar miembros del equipo.',
-    settings_team_no_production_workflow: 'Por favor, crea y publica un workflow primero',
-    settings_team_select_workflow: 'Por favor, selecciona un workflow',
-    settings_team_select_workflow_label: 'Seleccionar workflow inicial',
-    settings_team_workflow_placeholder: 'Elegir un workflow...',
-    settings_team_using_workflow: 'Usando workflow',
     settings_team_members_list: 'Miembros del equipo',
     settings_team_pending_invitations: 'Invitaciones pendientes',
     settings_team_invited: 'Invitado',
@@ -1872,6 +1868,7 @@ If no relevant information is found, respond with: "I don't have specific inform
     // Default Agent/Workflow Creation
     default_workflow_name: 'Workflow básico',
     default_workflow_description: 'Workflow predeterminado',
+    default_work_app_welcome: "Upload your receipts (photos or PDFs) in the Files tab on the right and ask me to sort them — I fill in one row per receipt and you confirm them. Taking photos with the phone app is coming soon. Photos are read by the AI. For more complex work, choose another app template or build your own Work app in Agent Studio.",
     additional_workflow_name: 'Workflow principal',
     additional_workflow_description: 'Workflow predeterminado',
 

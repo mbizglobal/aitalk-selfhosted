@@ -6,6 +6,8 @@ import { getLocalTemplates, getLocalCategories } from '@/lib/local-templates';
 import { readStoredBundleVersion } from '@/lib/workflow/bundle-template';
 import { describeCaughtError, safeLogToken } from '@/lib/log-mask';
 import { VENDOR_DEV_HOSTS } from '@/lib/vendor-site';
+import { filterTemplatesByKind, parseTemplateListKind, type TemplateListKind } from '@/lib/workflow/template-kind';
+import { visibleWorkAppTemplates, workAppTemplateIds } from '@/lib/work/workflow-template-catalog';
 
 const DEV_HOSTS = [...VENDOR_DEV_HOSTS, 'localhost', '127.0.0.1'];
 
@@ -29,11 +31,52 @@ function includedInEdition(t: { workflowJson: unknown }): boolean {
   return findEditionOffParts(t.workflowJson).length === 0
 }
 
+function workAppTemplateItems(categoryCode: string | null, rawSearch: string | undefined) {
+  const search = rawSearch?.trim() || undefined;
+  const names = new Map(getLocalCategories().map(c => [c.code, c.name]));
+  return visibleWorkAppTemplates()
+    .filter(({ template: t }) => !categoryCode || t.categoryCode === categoryCode)
+    .filter(({ template: t }) => !search
+      || t.name.toLowerCase().includes(search)
+      || t.description.toLowerCase().includes(search)
+      || t.keywords.some(k => k.toLowerCase().includes(search)))
+    .map(({ template: t, countries, publisher, includes, i18n }) => ({
+      templateId: t.templateId,
+      name: t.name,
+      description: t.description,
+      categoryCode: t.categoryCode,
+      categoryName: names.get(t.categoryCode) || t.categoryCode,
+      complexity: t.complexity,
+      keywords: t.keywords,
+      nodeTypes: t.nodeTypes,
+      features: t.features,
+      workflowJson: JSON.parse(t.workflowJson),
+      explanation: t.explanation,
+      sortOrder: t.sortOrder,
+      countries,
+      publisher,
+      includes,
+      i18n,
+    }));
+}
+
+function withWorkApps<T extends { workflowJson: unknown; sortOrder: number }>(general: T[], kind: TemplateListKind | null, categoryCode: string | null, search: string | undefined) {
+  if (kind === 'workflow') return filterTemplatesByKind(general, kind);
+  return [...general, ...workAppTemplateItems(categoryCode, search)].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const categoryCode = searchParams.get('category');
     const search = searchParams.get('search')?.toLowerCase();
+    const kind = parseTemplateListKind(searchParams.get('kind'));
+    if (kind === 'invalid') return NextResponse.json({ error: 'INVALID_KIND' }, { status: 400 });
+
+    if (kind === 'workApp') {
+      return NextResponse.json({ templates: workAppTemplateItems(categoryCode, search), source: 'code' });
+    }
+    const codeIds = workAppTemplateIds();
 
     if (isDevServer(request)) {
       const localTemplates = getLocalTemplates();
@@ -41,7 +84,7 @@ export async function GET(request: NextRequest) {
 
       const categoryMap = new Map(localCategories.map(c => [c.code, c.name]));
 
-      let filtered = localTemplates.map(t => ({
+      let filtered = localTemplates.filter(t => !codeIds.has(t.templateId)).map(t => ({
         templateId: t.templateId,
         name: t.name,
         description: t.description,
@@ -72,17 +115,18 @@ export async function GET(request: NextRequest) {
 
       filtered.sort((a, b) => a.sortOrder - b.sortOrder);
 
-      return NextResponse.json({ templates: filtered.filter(includedInEdition), source: 'local' });
+      return NextResponse.json({ templates: withWorkApps(filtered.filter(includedInEdition), kind, categoryCode, search), source: 'local' });
     }
 
     const where: {
+      templateId: { notIn: string[] };
       categoryCode?: string;
       OR?: Array<{
         name?: { contains: string };
         description?: { contains: string };
         keywords?: { contains: string };
       }>;
-    } = {};
+    } = { templateId: { notIn: [...codeIds] } };
 
     if (categoryCode) {
       where.categoryCode = categoryCode;
@@ -122,7 +166,7 @@ export async function GET(request: NextRequest) {
       bundleVersion: readStoredBundleVersion(t.bundleJson),
     }));
 
-    return NextResponse.json({ templates: parsed.filter(includedInEdition), source: 'database' });
+    return NextResponse.json({ templates: withWorkApps(parsed.filter(includedInEdition), kind, categoryCode, search), source: 'database' });
   } catch (error) {
     console.error('Get templates error:', describeCaughtError(error));
     return NextResponse.json(

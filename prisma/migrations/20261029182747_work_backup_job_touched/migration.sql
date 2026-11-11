@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "work_backup_job" ADD COLUMN     "touched_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

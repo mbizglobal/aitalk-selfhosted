@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "work_send" ALTER COLUMN "slot" SET DATA TYPE VARCHAR(120);

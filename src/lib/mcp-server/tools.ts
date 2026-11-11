@@ -25,10 +25,12 @@ import { deleteStorageItem } from '@/lib/storage/delete-item'
 import { listMcpTemplates, getMcpTemplate } from './templates'
 import { applyParams, type TemplateBinding } from './template-params'
 import { restoreMaskedSecrets } from './masked-restore'
+import { guardStudioOnlyFields } from './studio-only'
 import { truncateUtf8, listConversationEntries, getConversationDetail } from './history'
 import { MASK, maskSecrets, stripUrlCredentials } from './mask'
 import type { McpAuthContext } from './auth'
 import { isSelfHosted } from '@/lib/edition'
+import { WORK_APP_MCP_TOOLS, WORK_APP_TOOL_SCOPES, executeWorkAppTool } from './work-apps'
 
 export { truncateUtf8 }
 export { maskSecrets, stripUrlCredentials } from './mask'
@@ -333,6 +335,7 @@ export const MCP_TOOLS = [
       additionalProperties: false,
     },
   },
+  ...WORK_APP_MCP_TOOLS,
 ] as const
 
 export interface McpToolError {
@@ -371,6 +374,7 @@ export const TOOL_REQUIRED_SCOPE: Record<string, string> = {
   delete_source_file: 'write',
   list_conversations: 'read',
   get_conversation: 'read',
+  ...WORK_APP_TOOL_SCOPES,
 }
 
 function isPositiveInt32(v: unknown): v is number {
@@ -701,6 +705,7 @@ export async function executeMcpTool(
           kind,
           templateId,
           editableParameters: templateBinding ? (JSON.parse(templateBinding) as TemplateBinding).parameters.map(p => p.parameterId) : [],
+          ...(result.appLinks?.length ? { appLinks: result.appLinks } : {}),
           ...(subDef?.ok
             ? {
                 toolName: subDef.def.toolName,
@@ -911,6 +916,15 @@ export async function executeMcpTool(
             code: 'MASKED_VALUE_UNRESOLVED',
             message: `Masked values could not be resolved: ${maskIssues.map(i => `node "${i.nodeId}" ${i.message}`).join(' | ')}`,
             meta: { issues: maskIssues },
+          }
+        }
+        const studioIssues = guardStudioOnlyFields(incomingGraph, storedParsed)
+        if (studioIssues.length > 0) {
+          return {
+            ok: false,
+            code: 'TELEGRAM_CHAT_STUDIO_ONLY',
+            message: studioIssues.map(i => `node "${i.nodeId}": ${i.message}`).join(' | '),
+            meta: { issues: studioIssues },
           }
         }
       }
@@ -1355,6 +1369,7 @@ export async function executeMcpTool(
     }
 
     default:
+      if (name in WORK_APP_TOOL_SCOPES) return executeWorkAppTool(auth, name, args)
       return { ok: false, message: `Unknown tool: ${name}` }
   }
 }

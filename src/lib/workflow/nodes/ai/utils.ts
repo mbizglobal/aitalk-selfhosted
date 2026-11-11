@@ -25,6 +25,14 @@ export function detectStreamFailure(
   return null
 }
 
+export function isRateLimitError(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false
+  const x = e as { status?: unknown; code?: unknown; error?: unknown }
+  if (x.status === 429 || x.code === 'rate_limit_exceeded') return true
+  const inner = x.error
+  return !!inner && typeof inner === 'object' && (inner as { code?: unknown }).code === 'rate_limit_exceeded'
+}
+
 export interface StreamFailureError extends Error {
   streamFailureCode?: string
 }

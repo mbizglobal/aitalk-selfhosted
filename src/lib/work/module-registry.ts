@@ -1,10 +1,15 @@
 
+import { v3Handles, type AskTextFn } from './v3-handles'
+import { v5Handles, v8Handles } from './v5-handles'
+import { workSenders } from './senders'
 import { WorkError } from './errors'
 import { moduleLabel, validateModuleRegistry, type ModuleRunCtx, type WorkModule } from './modules'
 import type { SheetActor } from './sheet-gate'
 import type { WorkFileDeps } from './files'
 import { packageCoreOfModule, workModules } from './registry'
-import { entryCtx, frozenActor, moduleHandles } from './handles'
+import { entryCtx, frozenActor, moduleHandles, type HandleScope } from './handles'
+import { moduleNoticeOf, writeWorkNotice } from './notices'
+import { describeCaughtError } from '@/lib/log-mask'
 
 export function findWorkModule(id: string, modules: readonly WorkModule[] = workModules()): WorkModule {
   const m = modules.find((x) => x.id === id)
@@ -12,7 +17,7 @@ export function findWorkModule(id: string, modules: readonly WorkModule[] = work
   return m
 }
 
-export async function runWorkModule(deps: WorkFileDeps, req: { userId: string; projectId: string; moduleId: string; input: unknown; by: SheetActor }): Promise<unknown> {
+export async function runWorkModule(deps: WorkFileDeps, req: { userId: string; projectId: string; moduleId: string; input: unknown; by: SheetActor; askText?: AskTextFn; taskId?: string | null; writeIn?: HandleScope['writeIn'] }): Promise<unknown> {
   validateModuleRegistry(workModules(), deps.templates)
   const m = findWorkModule(req.moduleId)
   if (m.kind === 'calc') throw new WorkError('INVALID', `${moduleLabel(m)} runs inside a submission`)
@@ -20,16 +25,38 @@ export async function runWorkModule(deps: WorkFileDeps, req: { userId: string; p
   const p = await deps.db.workProject.findFirst({ where: { id: req.projectId, userId: req.userId }, select: { modules: true, workflowId: true } })
   if (!p) throw new WorkError('NOT_FOUND')
   if (!p.modules.includes(m.id)) throw new WorkError('FORBIDDEN', `${m.id} is not enabled in this project`)
+  if (req.writeIn && req.by.type !== 'human') throw new WorkError('FORBIDDEN', 'only a person runs a module inside another write')
   if (req.by.type === 'ai') {
     if (req.input && typeof req.input === 'object' && (req.input as { step?: unknown }).step === 'apply') throw new WorkError('FORBIDDEN', 'a person applies an import plan')
     if (!p.workflowId || p.workflowId !== req.by.workflowId) throw new WorkError('FORBIDDEN')
     const wf = await deps.db.workflow.findUnique({ where: { workflowId: p.workflowId }, select: { status: true } })
     if (!wf || wf.status === 'archived') throw new WorkError('FORBIDDEN')
   }
+  const core = packageCoreOfModule(m.id)
+  const person = req.by.type === 'human' ? { person: req.by.memberId === undefined ? {} : { memberId: req.by.memberId } } : req.by.type === 'ai' && req.by.requestedBy ? { requestedBy: req.by.requestedBy } : {}
   const handles = moduleHandles(
-    { deps, userId: req.userId, projectId: req.projectId, caller: req.by, writeAs: { type: 'module', id: m.id, version: m.version } },
-    (moduleId, input, caller) => runWorkModule(deps, { userId: req.userId, projectId: req.projectId, moduleId, input, by: caller }),
+    { deps, userId: req.userId, projectId: req.projectId, caller: req.by, writeAs: { type: 'module', id: m.id, version: m.version, ...person }, core, ...(req.writeIn ? { writeIn: req.writeIn } : {}) },
+    (moduleId, input, caller) => runWorkModule(deps, { userId: req.userId, projectId: req.projectId, moduleId, input, by: caller, askText: req.askText, taskId: req.taskId }),
   )
-  const ctx = entryCtx(handles, packageCoreOfModule(m.id), deps, { userId: req.userId, projectId: req.projectId, by: frozenActor(req.by) }) as ModuleRunCtx
-  return m.run(ctx, req.input)
+  const v3 = core !== null && core >= 3
+    ? await v3Handles({ deps, userId: req.userId, projectId: req.projectId, caller: req.by, askText: req.askText, taskId: req.taskId ?? null, senders: workSenders(deps.db) })
+    : null
+  const v5 = v5Handles(core, { deps, userId: req.userId, projectId: req.projectId, ...(req.by.type === 'ai' ? { readAsWorkflow: req.by.workflowId } : {}) })
+  const v7send = core !== null && core >= 7 && req.by.type === 'human' && !req.writeIn
+    ? {
+      sendAppNow: async (p: { family: string; rows: unknown; toProjectId?: string }) => (await import('./app-send')).sendAppNow(deps, { userId: req.userId, projectId: req.projectId, by: req.by }, p),
+      appLinkSetup: async (p: { inbox: string; reads: readonly string[]; back: readonly string[] }) => (await import('./app-send')).appLinkSetup(deps, { userId: req.userId, projectId: req.projectId }, p),
+    }
+    : {}
+  const ctx = entryCtx({ ...handles, ...(v3 ?? {}), ...v5, ...v7send, ...v8Handles(core, deps) }, core, deps, { userId: req.userId, projectId: req.projectId, by: frozenActor(req.by) }) as ModuleRunCtx
+  const out = await m.run(ctx, req.input)
+  const notice = req.writeIn ? null : moduleNoticeOf(out)
+  if (notice) {
+    const by = req.by.type === 'human' ? (req.by.memberId === undefined ? 'human' : `member:${req.by.memberId}`) : undefined
+    try {
+      const key = await deps.dataKey(deps.db, req.userId)
+      await deps.db.$transaction((tx) => writeWorkNotice(tx, key, { userId: req.userId, projectId: req.projectId, notice: by ? { ...notice, by } : notice, ...(by ? { alsoPrivate: by } : {}) }))
+    } catch (e) { console.error('[work] module notice:', describeCaughtError(e)) }
+  }
+  return out
 }

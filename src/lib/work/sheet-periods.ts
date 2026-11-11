@@ -52,3 +52,13 @@ export function changedDates(before: DateRange | undefined, after: DateRange | u
   if (contentChanged) return [before, after]
   return [...subtract(before, after), ...subtract(after, before)]
 }
+
+export function uncoveredRanges(periods: ReadonlyArray<DateRange & { status: string }>, range: DateRange): DateRange[] {
+  let left: DateRange[] = [range]
+  for (const p of periods) {
+    if (p.status !== 'submitted') continue
+    left = left.flatMap((r) => subtract(r, p))
+    if (!left.length) break
+  }
+  return left
+}

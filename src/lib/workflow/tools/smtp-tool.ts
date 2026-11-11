@@ -1,5 +1,6 @@
 
 import nodemailer from 'nodemailer'
+import { mailConnectTarget } from '@/lib/edition-connect'
 import { AIToolClient, ToolDefinition } from './types'
 import { PrismaClient } from '@prisma/client'
 import { getConnectionSecret } from '@/lib/secret-vault'
@@ -113,9 +114,10 @@ export class SmtpToolClient implements AIToolClient {
       const fromEmail = this.config.email || this.config.user
 
       let transportConfig: any
+      const target = await mailConnectTarget(this.config.host)
       if (this.authCredentials.accessToken) {
         transportConfig = {
-          host: this.config.host,
+          ...target,
           port: this.config.port,
           secure: this.config.secure ?? (this.config.port === 465),
           auth: {
@@ -126,7 +128,7 @@ export class SmtpToolClient implements AIToolClient {
         }
       } else {
         transportConfig = {
-          host: this.config.host,
+          ...target,
           port: this.config.port,
           secure: this.config.secure ?? (this.config.port === 465),
           auth: {

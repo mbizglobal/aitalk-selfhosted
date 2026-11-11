@@ -1,4 +1,4 @@
-/* Dashboard-only CSS — loaded on /app/*, /admin/*, /console/* routes only.
+/* Dashboard-only CSS — loaded on /app/*, /admin/*, operator console routes only.
    Moved out of globals.css to reduce public-page CSS weight. */
 
 /* Media management images */

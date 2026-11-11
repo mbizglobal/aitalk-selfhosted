@@ -25,11 +25,15 @@ export const NODE_CATALOG: Record<string, NodeSpec> = {
       toolName: "subworkflow: function name the calling AI uses (2-40 chars, ^[a-z][a-z0-9_]{1,39}$; exposed as 'subwf_<toolName>'; unique among the agent's sub-workflows)",
       toolDescription: 'subworkflow: what the tool does — the calling AI reads this to decide when to call it (max 1000 chars)',
       inputs: "subworkflow: [{name, type:'string'|'number'|'boolean', description?, required?}] (max 10) — becomes the function's parameters; the sub-workflow reads them as {{context.input.<name>}}",
-      appTemplate: "app: the work app template this app uses (e.g. 'vat' — Swiss VAT). Absent = the user picks one in the first chat, or builds a new structure. Only apps opened from /chat/[agentId]/app run this workflow — the chat widget, team chat, Telegram and voice never run a work app",
+      appTemplate: "app: the work app template this app uses (e.g. 'vat' — Swiss VAT, 'swiss-acc-invoice' — Swiss invoices with QR bill and mail card). Absent = the user picks one in the first chat, or builds a new structure. Only apps opened from /chat/[agentId]/app run this workflow — the chat widget, team chat, Telegram and voice never run a work app",
       appWelcomeMessage: 'app: first message shown when the work app opens',
+      workEventWorkflowId: "workEvent: the work app (Start / App workflow id of the same account) whose events start this workflow — required to deploy",
+      workEvents: "workEvent: which events start it — one or more of 'sealed' (a task was submitted the first time), 'resubmitted' (submitted again after unlocking), 'unlocked', 'inbox_row' (a customer-facing workflow added a row to the work app's inbox — no task, no period; the row's values are NOT in the event, open the work app to read them). The run sees {{context.workEvent.kind / title / periodStart / periodEnd / submissionNumber / projectId / taskId}} — plus rowId / family for 'inbox_row'",
+      connections: "app: which connection of this agent each slot of the work app uses — { <connection kind>: { <slot id>: <connection id> } }, e.g. { email: { mail: 'cm…' } }. Slots come from the app template (core 3 packages only); kinds are 'email' (SendGrid or SMTP connection), 'telegram', 'http' (HTTP request auth connection). Connection ids are NOT discoverable over MCP — set them in Agent Studio. A missing or wrong id saves fine and then every send from that slot is refused (NO_CONNECTION)",
+      ragSpaceId: 'app: document space id (positive integer) the work app searches when its template uses document search. Absent = the Default space. A deleted space or a space of another agent is refused at run time — it never widens to Default',
       timeoutSeconds: 'subworkflow: how long the calling AI waits for the result — a WHOLE number of seconds 5–60 (default 15; decimals, exponents and signs are rejected; a numeric string like "20" is accepted). Past it the AI receives {"error":"sub_workflow_timeout","note":"may still complete"} while the run keeps going — on a voice call the caller hears silence for that long',
     },
-    enums: { triggerType: ['chatWidget', 'schedule', 'telegram', 'pstn', 'subworkflow', 'app'] },
+    enums: { triggerType: ['chatWidget', 'schedule', 'telegram', 'pstn', 'subworkflow', 'app', 'workEvent'] },
     sourceHandles: 'default only',
     notes:
       'Exactly one executing Start per workflow — the engine uses the FIRST start node in the array; extra Starts never run. Schedule fields are consumed at save time (WorkflowSchedule sync), pstn voice fields by the voice bridges. ' +
@@ -236,6 +240,7 @@ export const NODE_CATALOG: Record<string, NodeSpec> = {
       { whenField: 'toolType', equals: 'microsoft_calendar', require: ['connectionId'] },
       { whenField: 'toolType', equals: 'mcp', require: ['mcpConnectionId'] },
       { whenField: 'toolType', equals: 'subworkflow', require: ['subWorkflowId'] },
+      { whenField: 'toolType', equals: 'workInbox', require: ['targetWorkflowId', 'inboxFamily'] },
     ],
     optionalFields: {
       parentId: 'AI node id (informational — the engine resolves attachment via the edge, not this)',
@@ -247,15 +252,18 @@ export const NODE_CATALOG: Record<string, NodeSpec> = {
       chatId: "toolType='telegram': chat ID",
       calendarId: "calendar tool types: target calendar (+ ~20 more calendar config fields)",
       subWorkflowId: "toolType='subworkflow': workflowId of a Sub-workflow (kind 'sub', same agent, not archived) — its Start node defines the function the AI sees",
+      targetWorkflowId: "toolType='workInbox': workflowId of a work app (Start / App, same account) that has been opened at least once",
+      inboxFamily: "toolType='workInbox': the inbox sheet family the work app declares (its app template's uses.inbox)",
     },
     enums: {
-      toolType: ['source', 'webSearch', 'mcp', 'functionCalling', 'sendgrid', 'telegram', 'sms', 'smtp', 'google_calendar', 'microsoft_calendar', 'miniapp', 'subworkflow', 'workApp'],
+      toolType: ['source', 'webSearch', 'mcp', 'functionCalling', 'sendgrid', 'telegram', 'sms', 'smtp', 'google_calendar', 'microsoft_calendar', 'miniapp', 'subworkflow', 'workApp', 'workInbox'],
     },
     sourceHandles: "Target of the AI node's 'tools' (or 'miniapps') edge; no outgoing flow edges. Excluded from flow-connectivity validation.",
     notes:
       "Saved tool nodes often duplicate the toolType into data.nodeType (e.g. 'google_calendar') — the type is still 'tool'. Mini App variant: toolType:'miniapp' + miniAppType one of 'quiz' (Start triggerType 'schedule', run by the engine) or 'voice_quiz' (Start triggerType 'pstn', run by the call session), attached via the 'miniapps' handle. voice_quiz has FOUR Sub-workflow slots; each slot holds a workflow id, and that id must be the one in data.subWorkflowId of a Sub-workflow tool node attached to the SAME AI node's 'tools' handle (the slot itself is never called data.subWorkflowId). REQUIRED: data.hooks.onRoundStart (membership check + open the round) and data.hooks.onRoundSettle (reward payout) — leave either empty and deploy is refused, because the call would ask questions that pay nothing. OPTIONAL: data.signupSubWorkflowId (sign up the caller by their phone number) and data.hooks.onMemberChange (stop the calls, delete the membership, save the time of day to call next). ⚠ signupSubWorkflowId sits directly on data, NOT inside hooks — put it under hooks and nothing reads it, so sign-up never turns on and no error is reported. Each optional slot is silent when empty: validation reports nothing and ONLY the feature in that slot is disabled — an empty signupSubWorkflowId means nobody can join, an empty onMemberChange means nobody can stop or leave. Omit either one only when you intend to ship without that feature. ≥2 calendar tools switch the AI node to Multi-Calendar mode (max 15). " +
       "Note: which tool types take effect depends on the channel — the workflow engine's own run wires source/webSearch/mcp/sendgrid/telegram/smtp/calendar on whichever AI node is executing, while the chat widget and voice channels load Apps tools (including sms) from the FIRST AI node's 'tools' edges only. An sms tool attached to a later AI node is therefore never consumed. " +
-      "Sub-workflow tool (toolType 'subworkflow', data.subWorkflowId): exposes another workflow of the same agent (kind 'sub') as a function named 'subwf_<toolName>' whose parameters come from that sub-workflow's Start node (triggerType 'subworkflow': toolName/toolDescription/inputs). Chat, STT+TTS voice and Realtime voice all load it. Sub-workflows are called by reference — never deployed (deploying one is rejected), so SAVING a sub-workflow changes what live callers run immediately. Inside a sub-workflow only these node types are allowed: start/end/dataSheets/httpRequest/store/ifElse/while/continue/sms/sendgrid/telegram/smtp/imap (no AI node, no wait, no nested sub-workflow tool). Its End node MUST set data.message — that text (max 4000 chars) is what the calling AI receives; a run that ends without a message, fails, or times out returns a fixed JSON error ({\"error\":\"sub_workflow_no_answer\"|\"sub_workflow_failed\"|\"sub_workflow_timeout\"} — timeout means the run MAY still complete). Arguments are validated against inputs (required, type coercion, string ≤2000 chars, ≤8KB total; unknown keys dropped). Idempotency is NOT provided: the model may call the same tool twice, even in parallel within one turn — a duplicate-check inside the sub-workflow only protects sequential calls.",
+      "Sub-workflow tool (toolType 'subworkflow', data.subWorkflowId): exposes another workflow of the same agent (kind 'sub') as a function named 'subwf_<toolName>' whose parameters come from that sub-workflow's Start node (triggerType 'subworkflow': toolName/toolDescription/inputs). Chat, STT+TTS voice and Realtime voice all load it. Sub-workflows are called by reference — never deployed (deploying one is rejected), so SAVING a sub-workflow changes what live callers run immediately. Inside a sub-workflow only these node types are allowed: start/end/dataSheets/httpRequest/store/ifElse/while/continue/sms/sendgrid/telegram/smtp/imap (no AI node, no wait, no nested sub-workflow tool). Its End node MUST set data.message — that text (max 4000 chars) is what the calling AI receives; a run that ends without a message, fails, or times out returns a fixed JSON error ({\"error\":\"sub_workflow_no_answer\"|\"sub_workflow_failed\"|\"sub_workflow_timeout\"} — timeout means the run MAY still complete). Arguments are validated against inputs (required, type coercion, string ≤2000 chars, ≤8KB total; unknown keys dropped). Idempotency is NOT provided: the model may call the same tool twice, even in parallel within one turn — a duplicate-check inside the sub-workflow only protects sequential calls. " +
+      "Work inbox tool (toolType 'workInbox', data.targetWorkflowId + data.inboxFamily): lets a customer-facing workflow (phone, chat widget, Telegram, web voice) ADD a row to a work app's inbox sheet — always unconfirmed, a person reviews it — and, on phone and Telegram only, READ the caller's own earlier rows (identified by the server: the calling number / Telegram user id, never by what the caller says; hidden numbers cannot read). Only one per AI node. Not allowed inside a work app (Start / App) workflow. Each new row raises the work app event 'inbox_row' (Start triggerType 'workEvent') — that event has no period, so a Work app node in that run must use periodDate 'today' or a fixed date.",
   },
 
   imap: {
@@ -469,6 +477,59 @@ export const NODE_CATALOG: Record<string, NodeSpec> = {
     sourceHandles: 'default only',
     notes:
       "RAG provider comes from context (prior Source node) or the account's settings — not from node data. Errors at runtime if no RAG provider is configured.",
+  },
+
+  workApp: {
+    nodeType: 'workApp',
+    description:
+      "Work app node (canvas only — docs: 'Work app canvas') — one work app of a main workflow whose Start has triggerType 'app'. The server turns each such node into a hidden work app on deploy; the engine never runs this node itself.",
+    requiredFields: [],
+    optionalFields: {
+      label: 'The app name',
+      appTemplate: 'Fixed app template; empty = chosen in the first chat',
+      appWelcomeMessage: 'Shown when the app opens',
+      connections: '{ <connection kind>: { <slot>: <connection id> } } — connection ids are not discoverable over MCP',
+      ragSpaceId: 'Document space id; empty = Default',
+      dbAiSql: '{ <database slot>: true } — lets the AI write its own SQL for that slot (off by default)',
+      ai: '{ model, systemMessage, maxTokens, imageInput, pdfInput, includeChatHistory } — empty = server defaults',
+    },
+    enums: {},
+    sourceHandles: "'send' · 'ref' (lines to another workApp node) · 'done' (\"when closed\" — runs when a task of this app is closed or submitted again; reaching another workApp node hands the result over) · 'ev:sealed' · 'ev:resubmitted' · 'ev:unlocked' · 'ev:inbox_row' (the steps after that app event). No plain output",
+    notes:
+      "Incoming edges: from the Start (App) node (a picture of the entry), send / ref lines from another workApp node, and handoffs — a 'done' line from another workApp node or a flow line from a node that follows a 'done' output. The receiving node ends that branch. Same node id after deleting = the same app comes back; a copied node (new id) = a new app.",
+  },
+
+  workAppLink: {
+    nodeType: 'workAppLink',
+    description:
+      "Link node (canvas only) — points at a shared work app that lives in another workflow (the company's one Bank ledger), so a Work app node of this canvas can read it by a reference line. No hidden app is made for it; the engine never runs it.",
+    requiredFields: ['appTemplate'],
+    optionalFields: {
+      label: 'Shown name (usually the linked app name)',
+      appTemplate: "The shared app template it looks for (e.g. 'ledger')",
+      linkedAppWorkflowId: 'The hidden work app it points at — a deployed shared app of the same account. Empty = not chosen yet: the draft saves, deploying is refused (LINK_TARGET_MISSING)',
+    },
+    enums: {},
+    sourceHandles: "'ref' only — reference lines to or from a workApp node of the same canvas, either direction. No send / done / event lines",
+    notes:
+      'One link node per linked app in a canvas. A canvas with link nodes still needs at least one workApp node. Creating a canvas from a template that holds a link node fills it on its own when the account has exactly one ledger (or makes one when it has none).',
+  },
+
+  workAppStep: {
+    nodeType: 'workAppStep',
+    description:
+      "Opens a task in another work app of the same account (or reads its status) for the period that contains a date; result in context.workApp (or saveAs). Used after a Work app event output (workApp node, ev:<event> handle) or in workflows started by Start triggerType 'workEvent'.",
+    requiredFields: ['action'],
+    optionalFields: {
+      targetNodeId: 'In a workflow with Work app nodes: the id of the Work app node whose app to open (preferred there). One of targetNodeId / targetWorkflowId is required',
+      targetWorkflowId: 'Elsewhere: the work app workflow id (a deployed Start / App workflow). One of targetNodeId / targetWorkflowId is required',
+      periodDate: "Which date picks the period: 'event_end' (default — end of the task that fired this run) · 'event_start' · 'today' (Zurich) · a fixed 'YYYY-MM-DD'",
+      saveAs: "Context key for the result, default 'workApp' — { projectId, taskId, title, periodStart, periodEnd, status, submissionNumber, created }",
+    },
+    enums: { action: ['open_task', 'read_status'] },
+    sourceHandles: "default (flow) · 'ref' / 'send' (legacy reference / send line between these nodes in old connecting workflows — in a workflow with Work app nodes draw those lines between the Work app nodes instead)",
+    notes:
+      "targetWorkflowId = a deployed Start / App workflow of the same account that was opened at least once (the node never creates a work app project). open_task uses the task of that period if it exists, otherwise creates one; read_status never creates. Fails on apps without a fixed period rule (custom) and on free work apps. Not allowed inside a work app workflow.",
   },
 
   pstn: {

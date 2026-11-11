@@ -878,7 +878,7 @@ export default function ChatPage({ params }: ChatPageProps) {
       const msgs: Record<string, string> = {
         ko: `"${file.name}" 파일이 최대 크기 25MB를 초과합니다.`,
         en: `File "${file.name}" exceeds the maximum size of 25MB.`,
-        de: `Datei „${file.name}" überschreitet die maximale Größe von 25 MB.`,
+        de: `Datei „${file.name}" überschreitet die maximale Grösse von 25 MB.`,
         fr: `Le fichier « ${file.name} » dépasse la taille maximale de 25 Mo.`,
         es: `El archivo "${file.name}" supera el tamaño máximo de 25 MB.`,
       }

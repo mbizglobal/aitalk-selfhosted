@@ -78,26 +78,6 @@ export const TEMPLATE_MANIFESTS: Record<string, TemplateManifest> = {
     ],
   },
 
-  'receipt-extraction': {
-    templateId: 'receipt-extraction',
-    parameters: [
-      {
-        parameterId: 'system_message',
-        label: 'Extraction instructions',
-        description: 'System message describing what to extract from uploaded receipts.',
-        type: 'string', targetNodeId: '6714b8ca-98f6-40ef-9697-b33f5810c266', targetNodeType: 'ai',
-        path: 'systemMessage', required: true,
-      },
-      {
-        parameterId: 'model',
-        label: 'AI model',
-        description: 'Vision-capable model used for extraction.',
-        type: 'enum', targetNodeId: '6714b8ca-98f6-40ef-9697-b33f5810c266', targetNodeType: 'ai',
-        path: 'model', required: true, allowedValues: TEXT_MODELS,
-      },
-    ],
-  },
-
   'daily-email-report': {
     templateId: 'daily-email-report',
     parameters: [
@@ -416,8 +396,6 @@ export const TEMPLATE_MANIFESTS: Record<string, TemplateManifest> = {
 }
 
 export const NOT_CREATABLE: Record<string, string> = {
-  'bank-csv-parser':
-    'This template requires automatic Data Sheet provisioning, which is not yet supported over MCP. Create it from the AiTalk web app instead.',
   'voice-quiz-reward':
     'This template creates several workflows plus a data sheet in one go, which is not yet supported over MCP. Create it from the AiTalk web app instead.',
 }

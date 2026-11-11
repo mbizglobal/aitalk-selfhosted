@@ -5,6 +5,8 @@ import { isOutboundPstnStartNode } from '../../utils/nodeUtils'
 import {
   isChatWidgetNode,
   isAppStartNode,
+  isWorkEventStartNode,
+  isWorkAppStepNode,
   isScheduleNode,
   isAiNode,
   isSourceNode,
@@ -27,6 +29,7 @@ import {
   isEndNode,
   isSubWorkflowStartNode,
   isSubWorkflowToolNode,
+  isWorkInboxToolNode,
 } from './nodeTypeUtils'
 
 export interface HeaderInfo {
@@ -52,10 +55,28 @@ export function getHeaderInfo(
       description: t.subworkflow_tool_desc || 'The AI calls the selected Sub-workflow as a function'
     }
   }
+  if (isWorkInboxToolNode(selectedNode)) {
+    return {
+      title: selectedNode.data?.label || t.work_inbox_tool || 'Work app inbox',
+      description: t.work_inbox_tool_desc || 'Customer requests go into a work app inbox — always unconfirmed'
+    }
+  }
   if (isAppStartNode(selectedNode)) {
     return {
       title: selectedNode.data?.label || t.app_start || 'Start / App',
       description: t.app_start_desc || 'Opens as a work app for the agent team'
+    }
+  }
+  if (isWorkEventStartNode(selectedNode)) {
+    return {
+      title: selectedNode.data?.label || t.work_event_start || 'Start / Work app event',
+      description: t.work_event_start_desc || 'Runs when another work app is submitted, submitted again or unlocked'
+    }
+  }
+  if (isWorkAppStepNode(selectedNode)) {
+    return {
+      title: selectedNode.data?.label || t.work_app_step || 'Work app',
+      description: t.work_app_step_desc || 'Opens a work app task or reads its status'
     }
   }
   if (isChatWidgetNode(selectedNode)) {

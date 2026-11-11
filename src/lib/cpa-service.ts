@@ -29,3 +29,7 @@ export async function checkCPABalance(_userId: string): Promise<number | null> {
 export async function validateCPAWithCache(_userId: string, _clientCache: any): Promise<{ allowed: boolean; balance: number; resetDate?: Date; newCache?: any }> {
   return { allowed: true, balance: 0 }
 }
+
+export function usableBoosterCpa(sub: { booster_cpa: number; booster_expires_at: Date | null }, now: Date = new Date()): number {
+  return sub.booster_expires_at && sub.booster_expires_at.getTime() <= now.getTime() ? 0 : sub.booster_cpa
+}

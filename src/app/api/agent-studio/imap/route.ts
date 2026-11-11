@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { encryptData, decryptData } from '@/lib/encryption'
 import { ImapFlow } from 'imapflow'
 import { getProviderById } from '@/lib/email/providers'
+import { describeCaughtError } from '@/lib/log-mask'
+import { mailConnectTarget, mailErrorCode, MAIL_ERROR_TEXT, type MailErrorCode } from '@/lib/edition-connect'
 
 interface ImapConfig {
   host: string
@@ -112,7 +114,8 @@ export async function POST(request: NextRequest) {
     if (!testResult.success) {
       return NextResponse.json({
         success: false,
-        error: testResult.error
+        error: testResult.error,
+        code: testResult.code
       }, { status: 400 })
     }
 
@@ -297,19 +300,20 @@ async function testImapConnection(
   port: number,
   user: string,
   password: string
-): Promise<{ success: boolean; error?: string; folders?: string[] }> {
-  const client = new ImapFlow({
-    host,
-    port: Number(port),
-    secure: Number(port) === 993,
-    auth: {
-      user,
-      pass: password
-    },
-    logger: false
-  })
-
+): Promise<{ success: boolean; error?: string; code?: MailErrorCode; folders?: string[] }> {
+  let client: ImapFlow | null = null
   try {
+    const target = await mailConnectTarget(host)
+    client = new ImapFlow({
+      ...target,
+      port: Number(port),
+      secure: Number(port) === 993,
+      auth: {
+        user,
+        pass: password
+      },
+      logger: false
+    })
     await client.connect()
 
     const mailboxList = await client.list()
@@ -321,11 +325,10 @@ async function testImapConnection(
       success: true,
       folders
     }
-  } catch (error: any) {
-    try { await client.logout() } catch { /* ignore */ }
-    return {
-      success: false,
-      error: error.message || 'Failed to connect to IMAP server'
-    }
+  } catch (error) {
+    try { await client?.logout() } catch { /* ignore */ }
+    const code = mailErrorCode(error)
+    console.error('[IMAP] connection test failed:', code, describeCaughtError(error))
+    return { success: false, error: MAIL_ERROR_TEXT[code], code }
   }
 }

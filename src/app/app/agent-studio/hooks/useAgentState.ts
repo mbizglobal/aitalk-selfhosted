@@ -33,6 +33,7 @@ export const useAgentState = (initialAgent?: any) => {
   const [agentId, setAgentId] = useState<string | null>(initialAgent?.id || null)
   const [workflowId, setWorkflowId] = useState<string | null>(null)
   const [workflowName, setWorkflowName] = useState<string>('')
+  const [savedWorkflowName, setSavedWorkflowName] = useState<string>('')
   const [workflowStatus, setWorkflowStatus] = useState<string>('draft')
   const [workflowKind, setWorkflowKind] = useState<'main' | 'sub'>('main')
   const workflowVersionRef = useRef<number>(1)
@@ -177,6 +178,7 @@ export const useAgentState = (initialAgent?: any) => {
     agentId,
     workflowId,
     workflowName,
+    savedWorkflowName,
     workflowStatus,
     workflowKind,
     workflowVersionRef,
@@ -188,6 +190,7 @@ export const useAgentState = (initialAgent?: any) => {
     setAgentId,
     setWorkflowId,
     setWorkflowName,
+    setSavedWorkflowName,
     setWorkflowStatus,
     setWorkflowKind,
     setAgentName,

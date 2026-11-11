@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { decryptData, encryptData } from '@/lib/encryption'
 import { isSelfHosted } from '@/lib/edition'
-import { AI_CONNECTION_KINDS, MIN_MAX_OUTPUT_TOKENS, connectionFingerprint, decryptAiConnectionRow, isChecked, type AiConnectionCheck, type AiConnectionKind } from './index'
+import { AI_CONNECTION_KINDS, MIN_MAX_OUTPUT_TOKENS, connectionFingerprint, decryptAiConnectionRow, isChecked, normalizeTextModels, passedTextModels, type AiConnectionCheck, type AiConnectionKind } from './index'
+import { fetchModelLists, modelProviderOf, ModelListError, type ModelLists } from './models'
 import { checkRecord, maskSecrets, runConnectionCheck } from './check'
 
 export interface AiConnectionInput {
@@ -12,10 +13,14 @@ export interface AiConnectionInput {
   headers?: Record<string, string>
   apiVersion?: string | null
   textModel: string
+  textModels?: string[] | null
   imageModel?: string | null
   embeddingModel?: string | null
   maxOutputTokens?: number | null
+  thinkingOff?: boolean
 }
+
+export const MAX_TEXT_MODELS = 10
 
 function assertSelfHosted() {
   if (!isSelfHosted()) throw new Error('AI connections are available only in the self-hosted edition')
@@ -30,10 +35,14 @@ function validate(i: AiConnectionInput, opts: { keyOptional?: boolean } = {}) {
   let u: URL
   try { u = new URL(i.baseUrl) } catch { throw new AiConnectionInputError('baseUrl must be a URL') }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new AiConnectionInputError('baseUrl must be http(s)')
+  if (/<[^>]*>|%3C|%3E/i.test(i.baseUrl)) throw new AiConnectionInputError('baseUrl still contains a placeholder such as <product_id> — put in your own value')
   if (u.username || u.password || u.search || u.hash) throw new AiConnectionInputError('baseUrl must not contain a user name, password, query string or # part — put keys in the API key field')
   if (!opts.keyOptional && !i.apiKey?.trim()) throw new AiConnectionInputError('apiKey is required')
   if (!i.textModel?.trim()) throw new AiConnectionInputError('textModel is required')
+  if (i.textModels != null && (!Array.isArray(i.textModels) || i.textModels.some((m) => typeof m !== 'string' || m.length > 200))) throw new AiConnectionInputError('textModels must be a list of model names')
+  if (normalizeTextModels(i.textModel, i.textModels).length > MAX_TEXT_MODELS) throw new AiConnectionInputError(`Choose at most ${MAX_TEXT_MODELS} text models`)
   if (i.maxOutputTokens != null && (!Number.isInteger(i.maxOutputTokens) || i.maxOutputTokens < MIN_MAX_OUTPUT_TOKENS || i.maxOutputTokens > 1_000_000)) throw new AiConnectionInputError(`maxOutputTokens must be an integer from ${MIN_MAX_OUTPUT_TOKENS} to 1000000`)
+  if (i.thinkingOff !== undefined && typeof i.thinkingOff !== 'boolean') throw new AiConnectionInputError('thinkingOff must be true or false')
   for (const [k, v] of Object.entries(i.headers ?? {})) if (!k.trim() || typeof v !== 'string') throw new AiConnectionInputError('headers must be name → string')
 }
 
@@ -46,9 +55,11 @@ async function toRow(i: AiConnectionInput) {
     headers: i.headers && Object.keys(i.headers).length ? await encryptData(JSON.stringify(i.headers)) : null,
     apiVersion: i.apiVersion?.trim() || null,
     textModel: i.textModel.trim(),
+    textModels: normalizeTextModels(i.textModel, i.textModels),
     imageModel: i.imageModel?.trim() || null,
     embeddingModel: i.kind === 'anthropic' ? null : i.embeddingModel?.trim() || null,
     maxOutputTokens: i.maxOutputTokens ?? null,
+    ...(i.thinkingOff !== undefined ? { thinkingOff: i.kind === 'openai_compatible' && i.thinkingOff } : {}),
   }
 }
 
@@ -85,12 +96,46 @@ export async function listAiConnections() {
     const c = await decryptAiConnectionRow(r, decryptData)
     return {
       id: r.id, name: r.name, kind: r.kind, baseUrl: r.baseUrl, apiVersion: r.apiVersion,
-      textModel: r.textModel, imageModel: r.imageModel, embeddingModel: r.embeddingModel, maxOutputTokens: r.maxOutputTokens,
-      isDefault: r.isDefault, hasHeaders: !!r.headers, readable: !!c,
+      textModel: r.textModel, textModels: normalizeTextModels(r.textModel, r.textModels), imageModel: r.imageModel, embeddingModel: r.embeddingModel, maxOutputTokens: r.maxOutputTokens,
+      thinkingOff: r.thinkingOff, isDefault: r.isDefault, hasHeaders: !!r.headers, readable: !!c,
       check: r.checkResult ? { ...(r.checkResult as unknown as AiConnectionCheck), ...((r.checkResult as any).error ? { error: maskSecrets(String((r.checkResult as any).error)) } : {}) } : null,
       checkValid: !!c && isChecked(r, c),
+      passedModels: c && isChecked(r, c) ? passedTextModels(c, r.checkResult as unknown as AiConnectionCheck) : [],
     }
   }))
+}
+
+export async function listAiConnectionChoices() {
+  assertSelfHosted()
+  const rows = await prisma.aiConnection.findMany({ orderBy: { createdAt: 'asc' } })
+  const out: Array<{ id: string; name: string; isDefault: boolean; defaultModel: string; models: string[] }> = []
+  for (const r of rows) {
+    const c = await decryptAiConnectionRow(r, decryptData)
+    if (!c || !isChecked(r, c)) continue
+    out.push({ id: r.id, name: r.name, isDefault: r.isDefault, defaultModel: c.textModel, models: passedTextModels(c, r.checkResult as unknown as AiConnectionCheck) })
+  }
+  return out
+}
+
+export async function listProviderModels(i: { id?: string | null; kind: AiConnectionKind; baseUrl: string; apiKey: string }): Promise<ModelLists> {
+  assertSelfHosted()
+  if (!AI_CONNECTION_KINDS.includes(i.kind)) throw new AiConnectionInputError('kind is not valid')
+  const provider = modelProviderOf(i.kind, i.baseUrl)
+  if (!provider) throw new AiConnectionInputError('Model lists are available for OpenAI, Azure OpenAI, Gemini and Claude only — type the model name.')
+  let key = i.apiKey?.trim()
+  if (!key && i.id) {
+    const row = await prisma.aiConnection.findUnique({ where: { id: i.id } })
+    if (!row) throw new AiConnectionNotFoundError('AI connection not found')
+    if (row.baseUrl !== i.baseUrl.trim() || row.kind !== i.kind) throw new AiConnectionInputError('Enter the API key again when you change the address or the type — the saved key is not sent to a new address.')
+    key = await decryptData(row.apiKey)
+  }
+  if (!key) throw new AiConnectionInputError('apiKey is required')
+  try {
+    return await fetchModelLists(provider, i.baseUrl, key)
+  } catch (e) {
+    if (e instanceof ModelListError) throw new AiConnectionInputError(e.message)
+    throw e
+  }
 }
 
 export async function setDefaultAiConnection(id: string): Promise<void> {

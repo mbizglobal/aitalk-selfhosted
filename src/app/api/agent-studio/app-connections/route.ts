@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         id: true,
         provider: true,
         label: true,
+        description: true,
         status: true,
         createdAt: true,
       }

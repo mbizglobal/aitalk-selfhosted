@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { describeCaughtError } from '@/lib/log-mask'
 import { WORK_ERROR_STATUS, WorkError } from './errors'
 import { defaultWorkFileDeps, type WorkFileDeps } from './files'
-import { resolveWorkOwner, resolveWorkTeamAccess, type WorkTeamAccess } from './team-access'
+import { assertTeamProject, resolveWorkOwner, resolveWorkTeamAccess, type WorkTeamAccess } from './team-access'
 
 export interface WorkRouteCtx {
   access: WorkTeamAccess
@@ -21,6 +21,7 @@ export function workRoute<P extends Params & { agentId: string }>(
       const p = await params
       const access = await resolveWorkTeamAccess(req, p.agentId)
       if (!access) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 })
+      if (typeof p.projectId === 'string') await assertTeamProject(access, p.projectId)
       const out = await handler(req, { access, deps: await defaultWorkFileDeps() }, p)
       return NextResponse.json(out ?? { ok: true })
     } catch (e) {

@@ -158,7 +158,24 @@ model User {
   mcpDeployRequests         McpDeployRequest[]
   vatFxRatesManual          VatFxRateManual[]
   workProjects              WorkProject[]
+  supportReports            SupportReport[]
+  workCounters              WorkCounter[]
+  workSignals               WorkSignal[]
+  workCanvasTrash           WorkCanvasTrash[]
+  workPurges                WorkPurge[]
+  workBackupJobs            WorkBackupJob[]
+  workBackupUploads         WorkBackupUpload[]
+  flowRuns                  FlowRun[]
+  workHandoffs              WorkHandoff[]
+  workHandoffPeriods        WorkHandoffPeriod[]
   workEvents                WorkEvent[]
+  workScans                 WorkScan[]
+  workForms                 WorkForm[]
+  workAppSpecs              WorkAppSpec[]
+  workIntakeLinks           WorkIntakeLink[]
+  workWebhookHooks          WorkWebhookHook[]
+  workAlertsFired           WorkAlertFired[]
+  workAppSpecProposals      WorkAppSpecProposal[]
 
   @@map("user")
 }
@@ -526,6 +543,10 @@ model ManagedRegionConfig {
   blobConnectionString String? @map("blob_connection_string") @db.Text
   blobContainerName    String? @map("blob_container_name") @db.VarChar(100) // e.g. 'managed-switzerlandnorth'
 
+  infobipApiKey  String? @map("infobip_api_key") @db.Text
+  infobipBaseUrl String? @map("infobip_base_url") @db.VarChar(200)
+  infobipSender  String? @map("infobip_sender") @db.VarChar(20)
+
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -542,10 +563,12 @@ model AiConnection {
   headers    String? @db.Text
   apiVersion String? @map("api_version") @db.VarChar(40)
 
-  textModel       String  @map("text_model") @db.VarChar(200)
-  imageModel      String? @map("image_model") @db.VarChar(200)
-  embeddingModel  String? @map("embedding_model") @db.VarChar(200)
-  maxOutputTokens Int?    @map("max_output_tokens")
+  textModel       String   @map("text_model") @db.VarChar(200)
+  textModels      String[] @default([]) @map("text_models") @db.VarChar(200)
+  imageModel      String?  @map("image_model") @db.VarChar(200)
+  embeddingModel  String?  @map("embedding_model") @db.VarChar(200)
+  maxOutputTokens Int?     @map("max_output_tokens")
+  thinkingOff     Boolean  @default(false) @map("thinking_off")
 
   isDefault Boolean @default(false) @map("is_default")
 
@@ -831,6 +854,7 @@ model Agent {
   miniAppAssignments  MiniAppAssignment[]
   voiceQuizLessons    VoiceQuizLesson[]
   workProjects        WorkProject[]
+  workCanvasTrash     WorkCanvasTrash[]
 
   @@index([agentId])
   @@index([userId])
@@ -904,6 +928,7 @@ model AgentMember {
   agentAgentId     String                @map("agent_id") @db.VarChar(20)
   email            String                @db.VarChar(320)
   displayName      String?               @map("display_name") @db.VarChar(100)
+  jobTitle         String?               @map("job_title") @db.VarChar(50)
   authMethod       AgentMemberAuthMethod @map("auth_method")
   credentialRef    String?               @map("credential_ref")
   passwordHash     String?               @map("password_hash") @db.Text
@@ -911,7 +936,9 @@ model AgentMember {
   joinedAt         DateTime              @default(now()) @map("joined_at")
   lastSeenAt       DateTime?             @map("last_seen_at")
   planSuspendedAt  DateTime?             @map("plan_suspended_at")
+  accessAll        Boolean               @default(false) @map("access_all")
   agent            Agent                 @relation(fields: [agentAgentId], references: [agentId], onDelete: Cascade)
+  access           AgentMemberAccess[]
   passkeys         AgentMemberPasskey[]
   appPushTokens    AppPushToken[]
   appRefreshTokens AppRefreshToken[]
@@ -919,6 +946,18 @@ model AgentMember {
   @@unique([agentAgentId, email])
   @@index([agentAgentId])
   @@map("agent_members")
+}
+
+model AgentMemberAccess {
+  memberId   Int         @map("member_id")
+  workflowId String      @map("workflow_id") @db.VarChar(25)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  member     AgentMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  workflow   Workflow    @relation(fields: [workflowId], references: [workflowId], onDelete: Cascade)
+
+  @@id([memberId, workflowId])
+  @@index([workflowId])
+  @@map("agent_member_access")
 }
 
 model AgentMemberPasskey {
@@ -941,17 +980,19 @@ model AgentMemberPasskey {
 }
 
 model AgentMemberInvitation {
-  id              Int                         @id @default(autoincrement())
-  agentAgentId    String                      @map("agent_id") @db.VarChar(20)
-  email           String                      @db.VarChar(320)
-  status          AgentMemberInvitationStatus @default(pending)
-  token           String                      @unique
-  expiresAt       DateTime?                   @map("expires_at")
-  invitedByUserId String?                     @map("invited_by_user_id") @db.VarChar(25)
-  workflowId      String?                     @map("workflow_id") @db.VarChar(30)
-  createdAt       DateTime                    @default(now()) @map("created_at")
-  acceptedAt      DateTime?                   @map("accepted_at")
-  agent           Agent                       @relation(fields: [agentAgentId], references: [agentId], onDelete: Cascade)
+  id                Int                         @id @default(autoincrement())
+  agentAgentId      String                      @map("agent_id") @db.VarChar(20)
+  email             String                      @db.VarChar(320)
+  status            AgentMemberInvitationStatus @default(pending)
+  token             String                      @unique
+  expiresAt         DateTime?                   @map("expires_at")
+  invitedByUserId   String?                     @map("invited_by_user_id") @db.VarChar(25)
+  workflowId        String?                     @map("workflow_id") @db.VarChar(30)
+  accessAll         Boolean                     @default(false) @map("access_all")
+  accessWorkflowIds String[]                    @default([]) @map("access_workflow_ids")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  acceptedAt        DateTime?                   @map("accepted_at")
+  agent             Agent                       @relation(fields: [agentAgentId], references: [agentId], onDelete: Cascade)
 
   @@index([agentAgentId])
   @@map("agent_member_invitations")
@@ -1319,6 +1360,7 @@ model DataSheet {
   schema         String   @db.Text
   sizeBytes      BigInt   @default(0) @map("size_bytes")
   rowCount       Int      @default(0) @map("row_count")
+  searchVer      Int      @default(0) @map("search_ver")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -1327,6 +1369,7 @@ model DataSheet {
   rows        DataSheetRow[]           @relation("SheetRowsByKind")
   projectRows DataSheetRow[]           @relation("SheetRowsByProject")
   groupItems  WorkflowGroupDataSheet[]
+  form        WorkForm?
 
   @@unique([agentId, name])
   @@unique([projectId, name])
@@ -1337,28 +1380,50 @@ model DataSheet {
 }
 
 model DataSheetRow {
-  id          String   @id @default(cuid()) @db.VarChar(25)
-  sheetId     String   @map("sheet_id") @db.VarChar(25)
-  kind        String   @default("agent") @db.VarChar(10)
-  projectId   String?  @map("project_id") @db.VarChar(25)
-  userId      String?  @map("user_id") @db.VarChar(25)
-  rowData     String   @map("row_data") @db.Text
-  sealed      Bytes?   @db.ByteA
+  id          String    @id @default(cuid()) @db.VarChar(25)
+  sheetId     String    @map("sheet_id") @db.VarChar(25)
+  kind        String    @default("agent") @db.VarChar(10)
+  projectId   String?   @map("project_id") @db.VarChar(25)
+  userId      String?   @map("user_id") @db.VarChar(25)
+  rowData     String    @map("row_data") @db.Text
+  sealed      Bytes?    @db.ByteA
   confirmed   Boolean?
-  confirmedBy String?  @map("confirmed_by") @db.VarChar(80)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  confirmedBy String?   @map("confirmed_by") @db.VarChar(80)
+  channelKey  String?   @map("channel_key") @db.VarChar(64)
+  fDate1      DateTime? @map("f_date1") @db.Date
+  fDate2      DateTime? @map("f_date2") @db.Date
+  fDate3      DateTime? @map("f_date3") @db.Date
+  fDate4      DateTime? @map("f_date4") @db.Date
+  fAmt1       Decimal?  @map("f_amt1")
+  fAmt2       Decimal?  @map("f_amt2")
+  fCur        String?   @map("f_cur") @db.VarChar(3)
+  fKey1       String?   @map("f_key1") @db.VarChar(255)
+  fKey2       String?   @map("f_key2") @db.VarChar(255)
+  fKey3       String?   @map("f_key3") @db.VarChar(255)
+  fKey4       String?   @map("f_key4") @db.VarChar(255)
+  fParty      String?   @map("f_party") @db.Char(64)
+  fLink       String?   @map("f_link") @db.VarChar(25)
+  fVer        Int       @default(0) @map("f_ver")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  sheet        DataSheet      @relation("SheetRowsByKind", fields: [sheetId, kind], references: [id, kind], onDelete: Cascade)
-  projectSheet DataSheet?     @relation("SheetRowsByProject", fields: [sheetId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+  sheet        DataSheet        @relation("SheetRowsByKind", fields: [sheetId, kind], references: [id, kind], onDelete: Cascade)
+  projectSheet DataSheet?       @relation("SheetRowsByProject", fields: [sheetId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
   keys         SheetRowKey[]
-  pairsFrom    SheetRowPair[] @relation("SheetRowPairFrom")
-  pairsTo      SheetRowPair[] @relation("SheetRowPairTo")
+  pairsFrom    SheetRowPair[]   @relation("SheetRowPairFrom")
+  pairsTo      SheetRowPair[]   @relation("SheetRowPairTo")
+  alertsFired  WorkAlertFired[]
 
   @@unique([id, projectId, userId])
   @@index([sheetId])
   @@index([sheetId, createdAt], map: "idx_sheet_created")
   @@index([sheetId, updatedAt], map: "idx_sheet_updated")
+  @@index([sheetId, channelKey], map: "idx_sheet_channel_key")
+  @@index([sheetId, fDate1, id], map: "idx_sheet_f_date1")
+  @@index([sheetId, fDate2], map: "idx_sheet_f_date2")
+  @@index([sheetId, fKey1], map: "idx_sheet_f_key1")
+  @@index([sheetId, fParty], map: "idx_sheet_f_party")
+  @@index([sheetId, fVer], map: "idx_sheet_f_ver")
   @@map("data_sheet_rows")
 }
 
@@ -1440,10 +1505,17 @@ model Workflow {
 
   kind String @default("main") @db.VarChar(10)
 
+  parentWorkflowId String?  @map("parent_workflow_id") @db.VarChar(25)
+  parentNodeId     String?  @map("parent_node_id") @db.VarChar(100)
+  formerParentIds  String[] @default([]) @map("former_parent_ids")
+  appProjectId     String?  @map("app_project_id") @db.VarChar(25)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   agent                Agent                 @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  parent               Workflow?             @relation("WorkflowAppParent", fields: [parentWorkflowId], references: [workflowId], onDelete: SetNull)
+  appChildren          Workflow[]            @relation("WorkflowAppParent")
   groupItems           WorkflowGroupItem[]
   schedules            WorkflowSchedule[]
   miniAppPayloads      MiniAppPayload[]
@@ -1451,7 +1523,9 @@ model Workflow {
   memberLearningStates MemberLearningState[]
   workflowVersions     WorkflowVersion[]
   workProjects         WorkProject[]
+  memberAccess         AgentMemberAccess[]
 
+  @@unique([parentWorkflowId, parentNodeId])
   @@index([agentId])
   @@index([status])
   @@index([agentId, kind])
@@ -1554,6 +1628,9 @@ enum WorkflowConnectionProvider {
   infobip_sms
   google_workspace
   microsoft_workspace
+  db_mysql
+  db_postgres
+  db_mssql
   custom
 }
 
@@ -2682,21 +2759,37 @@ model WorkProject {
   settings         Bytes?    @db.ByteA
   modules          String[]  @default([])
   approvalSettings Json?     @map("approval_settings")
+  capabilityOff    Json?     @map("capability_off")
   agentId          String?   @map("agent_id") @db.VarChar(20)
+  modulesSeen      Json?     @map("modules_seen")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workflow      Workflow?          @relation(fields: [workflowId], references: [workflowId], onDelete: SetNull)
-  agent         Agent?             @relation(fields: [agentId], references: [agentId], onDelete: SetNull)
-  tasks         WorkTask[]
-  sheets        DataSheet[]
-  pairs         SheetRowPair[]
-  files         WorkFile[]
-  referencesOut ProjectReference[] @relation("ReferenceFrom")
-  referencesIn  ProjectReference[] @relation("ReferenceTo")
-  notes         WorkNote[]
-  messages      WorkMessage[]
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflow         Workflow?             @relation(fields: [workflowId], references: [workflowId], onDelete: SetNull)
+  agent            Agent?                @relation(fields: [agentId], references: [agentId], onDelete: SetNull)
+  change           WorkProjectChange?
+  tasks            WorkTask[]
+  sheets           DataSheet[]
+  pairs            SheetRowPair[]
+  files            WorkFile[]
+  referencesOut    ProjectReference[]    @relation("ReferenceFrom")
+  referencesIn     ProjectReference[]    @relation("ReferenceTo")
+  notes            WorkNote[]
+  messages         WorkMessage[]
+  roomReads        WorkRoomRead[]
+  sends            WorkSend[]
+  handoffsIn       WorkHandoff[]
+  handoffPeriodsIn WorkHandoffPeriod[]
+  scans            WorkScan[]
+  forms            WorkForm[]
+  appSpec          WorkAppSpec?
+  alertsFired      WorkAlertFired[]
+  specProposals    WorkAppSpecProposal[]
+  intakeLinks      WorkIntakeLink[]
+  webhookHooks     WorkWebhookHook[]
+
+  fileUploads WorkFileUpload[]
 
   @@unique([id, userId])
   @@index([userId])
@@ -2704,15 +2797,28 @@ model WorkProject {
   @@map("work_project")
 }
 
+model WorkProjectChange {
+  projectId String  @id @map("project_id") @db.VarChar(25)
+  userId    String  @map("user_id") @db.VarChar(25)
+  seq       BigInt  @default(0)
+  lastTx    BigInt? @map("last_tx")
+
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("work_project_change")
+}
+
 model ProjectReference {
-  id                 String   @id @default(cuid()) @db.VarChar(25)
-  userId             String   @map("user_id") @db.VarChar(25)
-  fromProjectId      String   @map("from_project_id") @db.VarChar(25)
-  toProjectId        String   @map("to_project_id") @db.VarChar(25)
-  sheets             String[]
-  includeUnconfirmed Boolean  @default(false) @map("include_unconfirmed")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(cuid()) @db.VarChar(25)
+  userId              String   @map("user_id") @db.VarChar(25)
+  fromProjectId       String   @map("from_project_id") @db.VarChar(25)
+  toProjectId         String   @map("to_project_id") @db.VarChar(25)
+  sheets              String[]
+  includeUnconfirmed  Boolean  @default(false) @map("include_unconfirmed")
+  createdByWorkflowId String?  @map("created_by_workflow_id") @db.VarChar(25)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   from WorkProject @relation("ReferenceFrom", fields: [fromProjectId, userId], references: [id, userId], onDelete: Cascade)
   to   WorkProject @relation("ReferenceTo", fields: [toProjectId, userId], references: [id, userId], onDelete: Cascade)
@@ -2800,21 +2906,206 @@ model WorkNote {
 }
 
 model WorkMessage {
-  id        String   @id @default(cuid()) @db.VarChar(25)
-  projectId String   @map("project_id") @db.VarChar(25)
-  userId    String   @map("user_id") @db.VarChar(25)
-  taskId    String?  @map("task_id") @db.VarChar(25)
-  /// 'user' | 'assistant'
-  role      String   @db.VarChar(10)
-  actor     String   @db.VarChar(40)
-  body      Bytes    @db.ByteA
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(cuid()) @db.VarChar(25)
+  projectId String    @map("project_id") @db.VarChar(25)
+  userId    String    @map("user_id") @db.VarChar(25)
+  taskId    String?   @map("task_id") @db.VarChar(25)
+  role      String    @db.VarChar(10)
+  actor     String    @db.VarChar(40)
+  body      Bytes     @db.ByteA
+  room      String    @default("team") @db.VarChar(8)
+  owner     String?   @db.VarChar(40)
+  purgeAt   DateTime? @map("purge_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
   task    WorkTask?   @relation(fields: [taskId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
 
   @@index([projectId, taskId, createdAt])
+  @@index([projectId, taskId, room, owner, createdAt])
+  @@index([purgeAt])
   @@map("work_message")
+}
+
+model WorkRoomRead {
+  projectId String   @map("project_id") @db.VarChar(25)
+  userId    String   @map("user_id") @db.VarChar(25)
+  taskKey   String   @map("task_key") @db.VarChar(25)
+  reader    String   @db.VarChar(40)
+  readAt    DateTime @map("read_at")
+
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@id([projectId, taskKey, reader])
+  @@map("work_room_read")
+}
+
+model WorkSend {
+  id          String    @id @default(cuid()) @db.VarChar(25)
+  userId      String    @map("user_id") @db.VarChar(25)
+  projectId   String    @map("project_id") @db.VarChar(25)
+  taskId      String?   @map("task_id") @db.VarChar(25)
+  workflowId  String    @map("workflow_id") @db.VarChar(25)
+  /// 'email' · 'telegram' · 'http' · 'db_write' · 'sms' · 'call'
+  kind        String    @db.VarChar(12)
+  slot        String    @db.VarChar(120)
+  declared    String?   @db.VarChar(120)
+  /// 'pending' · 'sending' · 'sent' · 'failed' · 'unknown' · 'refused' · 'discarded'
+  status      String    @db.VarChar(10)
+  auto        Boolean   @default(false)
+  payload     Bytes     @db.ByteA
+  claimedAt   DateTime? @map("claimed_at")
+  requestedBy String    @map("requested_by") @db.VarChar(120)
+  decidedBy   String?   @map("decided_by") @db.VarChar(120)
+  decidedAt   DateTime? @map("decided_at")
+  code        String?   @db.VarChar(40)
+  result      Bytes?    @db.ByteA
+  reissueOf   String?   @map("reissue_of") @db.VarChar(25)
+  ref         String?   @db.VarChar(25)
+  prepareId   String?   @map("prepare_id") @db.VarChar(25)
+  prepareN    Int?      @map("prepare_n")
+  prepareAt   DateTime? @map("prepare_at")
+  dispatchedAt DateTime? @map("dispatched_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([status, claimedAt])
+  @@index([reissueOf])
+  @@index([projectId, ref])
+  @@map("work_send")
+}
+
+model WorkSmsCharge {
+  sendId           String    @id @map("send_id") @db.VarChar(25)
+  userId           String    @map("user_id") @db.VarChar(25)
+  agentId          String    @map("agent_id") @db.VarChar(20)
+  projectId        String    @map("project_id") @db.VarChar(25)
+  credits          Int
+  freeCharged      Int       @map("free_charged")
+  boosterCharged   Int       @map("booster_charged")
+  paidCharged      Int       @map("paid_charged")
+  logDate          DateTime  @map("log_date") @db.Date
+  boosterExpiresAt DateTime? @map("booster_expires_at")
+  status           String    @db.VarChar(10)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  closedAt         DateTime? @map("closed_at")
+
+  @@index([userId])
+  @@map("work_sms_charges")
+}
+
+model WorkSignal {
+  id               String    @id @default(cuid()) @db.VarChar(25)
+  userId           String    @map("user_id") @db.VarChar(25)
+  projectId        String    @map("project_id") @db.VarChar(25)
+  taskId           String?   @map("task_id") @db.VarChar(25)
+  appWorkflowId    String?   @map("app_workflow_id") @db.VarChar(25)
+  kind             String    @db.VarChar(20)
+  submissionNumber Int?      @map("submission_number")
+  periodStart      String?   @map("period_start") @db.VarChar(10)
+  periodEnd        String?   @map("period_end") @db.VarChar(10)
+  payload          Bytes     @db.ByteA
+  processedAt      DateTime? @map("processed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([processedAt, createdAt])
+  @@map("work_signal")
+}
+
+model FlowRun {
+  id             String    @id @default(cuid()) @db.VarChar(25)
+  userId         String    @map("user_id") @db.VarChar(25)
+  signalId       String    @map("signal_id") @db.VarChar(25)
+  workflowId     String    @map("workflow_id") @db.VarChar(25)
+  attempt        Int
+  status         String    @db.VarChar(12)
+  lane           String    @default("event") @db.VarChar(8)
+  canvasVersion  Int?      @map("canvas_version")
+  graphDigest    String?   @map("graph_digest") @db.VarChar(64)
+  canvasJson     String?   @map("canvas_json")
+  handoffs       Json?
+  pendingSkips   Json?     @map("pending_skips")
+  finishAttempts Int       @default(0) @map("finish_attempts")
+  nextFinishAt   DateTime? @map("next_finish_at")
+  event          Bytes     @db.ByteA
+  /// 'signal' · 'human' · 'member:<id>'
+  requestedBy    String    @map("requested_by") @db.VarChar(120)
+  startedAt      DateTime? @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+  failedNode     String?   @map("failed_node") @db.VarChar(100)
+  code           String?   @db.VarChar(40)
+  blockedSince   DateTime? @map("blocked_since")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([signalId, workflowId, lane, attempt])
+  @@index([status, createdAt])
+  @@index([workflowId, createdAt])
+  @@map("flow_run")
+}
+
+model WorkHandoff {
+  id               String   @id @default(cuid()) @db.VarChar(25)
+  userId           String   @map("user_id") @db.VarChar(25)
+  toProjectId      String   @map("to_project_id") @db.VarChar(25)
+  toWorkflowId     String   @map("to_workflow_id") @db.VarChar(25)
+  fromWorkflowId   String   @map("from_workflow_id") @db.VarChar(25)
+  routeKey         String   @map("route_key") @db.VarChar(60)
+  canvasWorkflowId String   @map("canvas_workflow_id") @db.VarChar(25)
+  periodId         String?  @map("period_id") @db.VarChar(25)
+  fromProjectId    String   @map("from_project_id") @db.VarChar(25)
+  fromTaskId       String   @map("from_task_id") @db.VarChar(25)
+  fromPeriodStart  String?  @map("from_period_start") @db.VarChar(10)
+  fromPeriodEnd    String?  @map("from_period_end") @db.VarChar(10)
+  submissionNumber Int      @map("submission_number")
+  /// 'delivered' · 'skipped' · 'withdrawn'
+  status           String   @db.VarChar(10)
+  inboxRowId       String?  @map("inbox_row_id") @db.VarChar(25)
+  inList           Boolean  @default(true) @map("in_list")
+  flowRunId        String?  @map("flow_run_id") @db.VarChar(25)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject        @relation(fields: [toProjectId, userId], references: [id, userId], onDelete: Cascade)
+  period  WorkHandoffPeriod? @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([toProjectId])
+  @@index([fromTaskId])
+  @@index([fromProjectId])
+  @@index([periodId])
+  @@map("work_handoff")
+}
+
+model WorkHandoffPeriod {
+  id               String   @id @default(cuid()) @db.VarChar(25)
+  userId           String   @map("user_id") @db.VarChar(25)
+  toProjectId      String   @map("to_project_id") @db.VarChar(25)
+  toWorkflowId     String   @map("to_workflow_id") @db.VarChar(25)
+  periodStart      String   @map("period_start") @db.VarChar(10)
+  periodEnd        String   @map("period_end") @db.VarChar(10)
+  expected         Json
+  canvasWorkflowId String   @map("canvas_workflow_id") @db.VarChar(25)
+  canvasVersion    Int      @map("canvas_version")
+  graphDigest      String   @map("graph_digest") @db.VarChar(64)
+  status           String   @default("waiting") @db.VarChar(10)
+  openedTaskId     String?  @map("opened_task_id") @db.VarChar(25)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  WorkProject   @relation(fields: [toProjectId, userId], references: [id, userId], onDelete: Cascade)
+  handoffs WorkHandoff[]
+
+  @@unique([toProjectId, periodStart, periodEnd])
+  @@map("work_handoff_period")
 }
 
 model WorkEvent {
@@ -2860,31 +3151,188 @@ model WorkSubmission {
   @@map("work_submission")
 }
 
-model WorkFile {
-  id           String   @id @default(cuid()) @db.VarChar(25)
-  projectId    String   @map("project_id") @db.VarChar(25)
-  userId       String   @map("user_id") @db.VarChar(25)
-  /// 'receipt' · 'bank_csv' · 'report' · 'page_image' · 'other'
-  kind         String   @db.VarChar(20)
-  parentFileId String?  @map("parent_file_id") @db.VarChar(25)
-  blobRegion   String   @map("blob_region") @db.VarChar(30)
-  blobPath     String   @map("blob_path") @db.VarChar(500)
-  mimeType     String   @map("mime_type") @db.VarChar(100)
-  sizeBytes    Int      @map("size_bytes")
-  sha256       String   @db.Char(64)
-  payload      Bytes    @db.ByteA
-  readText     Bytes?   @map("read_text") @db.ByteA
-  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+model WorkCounter {
+  userId String @map("user_id") @db.VarChar(25)
+  name   String @db.VarChar(60)
+  value  Int
 
-  project WorkProject          @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
-  parent  WorkFile?            @relation("WorkFileDerived", fields: [parentFileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
-  derived WorkFile[]           @relation("WorkFileDerived")
-  tasks   WorkTaskFile[]
-  proofs  WorkSubmissionFile[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, name])
+  @@map("work_counter")
+}
+
+model WorkPublicLink {
+  id             String    @id @default(cuid()) @db.VarChar(25)
+  userId         String    @map("user_id") @db.VarChar(25)
+  projectId      String    @map("project_id") @db.VarChar(25)
+  fileId         String    @map("file_id") @db.VarChar(25)
+  rowId          String    @map("row_id") @db.VarChar(25)
+  tokenHash      String    @unique @map("token_hash") @db.Char(64)
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  downloads      Int       @default(0)
+  lastDownloadAt DateTime? @map("last_download_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  file WorkFile @relation(fields: [fileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([rowId])
+  @@map("work_public_link")
+}
+
+model WorkFile {
+  id             String    @id @default(cuid()) @db.VarChar(25)
+  projectId      String    @map("project_id") @db.VarChar(25)
+  userId         String    @map("user_id") @db.VarChar(25)
+  /// 'receipt' · 'bank_csv' · 'report' · 'page_image' · 'other'
+  kind           String    @db.VarChar(20)
+  parentFileId   String?   @map("parent_file_id") @db.VarChar(25)
+  blobRegion     String    @map("blob_region") @db.VarChar(30)
+  blobPath       String    @map("blob_path") @db.VarChar(500)
+  mimeType       String    @map("mime_type") @db.VarChar(100)
+  sizeBytes      Int       @map("size_bytes")
+  sha256         String    @db.Char(64)
+  payload        Bytes     @db.ByteA
+  readText       Bytes?    @map("read_text") @db.ByteA
+  readCard       Bytes?    @map("read_card") @db.ByteA
+  readCardState  String?   @map("read_card_state") @db.VarChar(10)
+  readCardV      Int?      @map("read_card_v") @db.SmallInt
+  cardClaimId    String?   @map("card_claim_id") @db.VarChar(40)
+  cardClaimUntil DateTime? @map("card_claim_until") @db.Timestamp(3)
+  decision       Bytes?    @map("decision") @db.ByteA
+  decisionState  String?   @map("decision_state") @db.VarChar(10)
+  uploadedAt     DateTime  @default(now()) @map("uploaded_at")
+
+  project     WorkProject          @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+  parent      WorkFile?            @relation("WorkFileDerived", fields: [parentFileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+  derived     WorkFile[]           @relation("WorkFileDerived")
+  tasks       WorkTaskFile[]
+  proofs      WorkSubmissionFile[]
+  publicLinks WorkPublicLink[]
+  scans       WorkScanFile[]
+  pageBlocks  WorkFilePageBlock[]
+  findBlocks  WorkDocFindBlock[]
 
   @@unique([projectId, sha256])
   @@unique([id, projectId, userId])
   @@map("work_file")
+}
+
+model WorkFilePageBlock {
+  id         String    @id @default(cuid()) @db.VarChar(25)
+  fileId     String    @map("file_id") @db.VarChar(25)
+  projectId  String    @map("project_id") @db.VarChar(25)
+  userId     String    @map("user_id") @db.VarChar(25)
+  blockNo    Int       @map("block_no") @db.SmallInt
+  totalPages Int       @map("total_pages") @db.SmallInt
+  pages      Bytes     @db.ByteA
+  state      String    @default("partial") @db.VarChar(10)
+  charged    Boolean   @default(false)
+  claimId    String?   @map("claim_id") @db.VarChar(40)
+  claimUntil DateTime? @map("claim_until") @db.Timestamp(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  file WorkFile @relation(fields: [fileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+
+  @@unique([fileId, blockNo])
+  @@index([projectId])
+  @@map("work_file_page_block")
+}
+
+model WorkFileUpload {
+  id        String   @id @default(cuid()) @db.VarChar(25)
+  userId    String   @map("user_id") @db.VarChar(25)
+  projectId String   @map("project_id") @db.VarChar(25)
+  region    String   @db.VarChar(30)
+  kind      String   @db.VarChar(20)
+  mimeType  String   @map("mime_type") @db.VarChar(100)
+  sizeBytes Int      @map("size_bytes")
+  sha256    String   @db.Char(64)
+  pieces    Int      @db.SmallInt
+  payload   Bytes    @db.ByteA
+  state     String   @default("receiving") @db.VarChar(10)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("work_file_upload")
+}
+
+model WorkDocFindBlock {
+  id         String    @id @default(cuid()) @db.VarChar(25)
+  fileId     String    @map("file_id") @db.VarChar(25)
+  projectId  String    @map("project_id") @db.VarChar(25)
+  userId     String    @map("user_id") @db.VarChar(25)
+  fieldsHash String    @map("fields_hash") @db.Char(64)
+  blockNo    Int       @map("block_no") @db.SmallInt
+  result     Bytes?    @db.ByteA
+  state      String    @default("open") @db.VarChar(10)
+  charged    Boolean   @default(false)
+  claimId    String?   @map("claim_id") @db.VarChar(40)
+  claimUntil DateTime? @map("claim_until") @db.Timestamp(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  file WorkFile @relation(fields: [fileId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+
+  @@unique([fileId, fieldsHash, blockNo])
+  @@index([projectId])
+  @@map("work_doc_find_block")
+}
+
+model WorkScan {
+  id           String    @id @default(cuid()) @db.VarChar(25)
+  userId       String    @map("user_id") @db.VarChar(25)
+  projectId    String    @map("project_id") @db.VarChar(25)
+  clientScanId String    @map("client_scan_id") @db.VarChar(64)
+  /// receipts · claims · statement · chart(CHECK)
+  form         String    @db.VarChar(12)
+  actor        String    @db.VarChar(40)
+  status       String    @default("open") @db.VarChar(12)
+  completedAt  DateTime? @map("completed_at")
+  attempt      Int       @default(0)
+  attemptId    String?   @map("attempt_id") @db.VarChar(36)
+  leaseUntil   DateTime? @map("lease_until")
+  changedAt    DateTime? @map("changed_at")
+  failedAt     DateTime? @map("failed_at")
+  deferReason  String?   @map("defer_reason") @db.VarChar(12)
+  retryAt      DateTime? @map("retry_at")
+  staleRuns    Int       @default(0) @map("stale_runs")
+  staleLeft    Int?      @map("stale_left")
+  summary      Json?
+  pushedAt     DateTime? @map("pushed_at")
+  formId       String?   @map("form_id") @db.VarChar(25)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject    @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+  files   WorkScanFile[]
+  formRef WorkForm?      @relation(fields: [formId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, clientScanId])
+  @@index([projectId, status])
+  @@index([status, changedAt])
+  @@map("work_scan")
+}
+
+model WorkScanFile {
+  scanId      String   @map("scan_id") @db.VarChar(25)
+  fileId      String   @map("file_id") @db.VarChar(25)
+  owner       Boolean
+  hint        String?  @db.VarChar(10)
+  movedScanId String?  @map("moved_scan_id") @db.VarChar(25)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  scan WorkScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  file WorkFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([scanId, fileId])
+  @@index([fileId])
+  @@map("work_scan_file")
 }
 
 model WorkTaskFile {
@@ -2932,4 +3380,308 @@ model WorkSubmissionFile {
   @@unique([submissionId, fileId])
   @@index([fileId])
   @@map("work_submission_file")
+}
+
+model WorkCanvasTrash {
+  id            String   @id @default(cuid()) @db.VarChar(25)
+  userId        String   @map("user_id") @db.VarChar(25)
+  agentId       String   @map("agent_id") @db.VarChar(20)
+  oldWorkflowId String   @map("old_workflow_id") @db.VarChar(25)
+  body          Bytes    @db.ByteA
+  apps          Json
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("work_canvas_trash")
+}
+
+model WorkPurge {
+  id                String    @id @default(cuid()) @db.VarChar(25)
+  userId            String    @map("user_id") @db.VarChar(25)
+  kind              String    @db.VarChar(10)
+  /// 'pending' · 'uploading' · 'purging'
+  state             String    @db.VarChar(10)
+  projectId         String    @map("project_id") @db.VarChar(25)
+  canvasWorkflowIds String[]  @default([]) @map("canvas_workflow_ids")
+  nodeId            String?   @map("node_id") @db.VarChar(100)
+  blobRegions       String[]  @map("blob_regions")
+  deadline          DateTime?
+  claimedAt         DateTime? @map("claimed_at")
+  attempts          Int       @default(0)
+  lastError         String?   @map("last_error") @db.VarChar(80)
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([state, createdAt])
+  @@map("work_purge")
+}
+
+model WorkBackupJob {
+  id        String   @id @default(cuid()) @db.VarChar(25)
+  userId    String   @map("user_id") @db.VarChar(25)
+  /// 'workflow' · 'app'
+  scope     String   @db.VarChar(10)
+  state     String   @default("preparing") @db.VarChar(10)
+  error     String?  @db.VarChar(80)
+  touchedAt DateTime @default(now()) @map("touched_at")
+  targetId  String   @map("target_id") @db.VarChar(25)
+  plan      Bytes    @db.ByteA
+  partCount Int      @map("part_count")
+  region    String   @db.VarChar(40)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("work_backup_job")
+}
+
+model WorkBackupUpload {
+  id        String   @id @default(cuid()) @db.VarChar(25)
+  userId    String   @map("user_id") @db.VarChar(25)
+  state     String   @default("receiving") @db.VarChar(10)
+  region    String   @db.VarChar(40)
+  report    Bytes?   @db.ByteA
+  result    Bytes?   @db.ByteA
+  error     String?  @db.VarChar(120)
+  gen       Int      @default(0)
+  touchedAt DateTime @default(now()) @map("touched_at")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files  WorkBackupUploadFile[]
+  pieces WorkBackupUploadPiece[]
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("work_backup_upload")
+}
+
+model WorkBackupUploadFile {
+  uploadId   String @map("upload_id") @db.VarChar(25)
+  fileIndex  Int    @map("file_index")
+  totalBytes Int    @map("total_bytes")
+
+  upload WorkBackupUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@id([uploadId, fileIndex])
+  @@map("work_backup_upload_file")
+}
+
+model WorkBackupUploadPiece {
+  uploadId  String   @map("upload_id") @db.VarChar(25)
+  fileIndex Int      @map("file_index")
+  offset    Int
+  bytes     Int
+  sha256    String   @db.Char(64)
+  path      String   @db.VarChar(300)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  upload WorkBackupUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@id([uploadId, fileIndex, offset])
+  @@map("work_backup_upload_piece")
+}
+
+model SupportReport {
+  id            String    @id @default(cuid()) @db.VarChar(25)
+  number        Int       @unique @default(autoincrement())
+  userId        String    @map("user_id") @db.VarChar(25)
+  agentId       String?   @map("agent_id") @db.VarChar(50)
+  projectId     String?   @map("project_id") @db.VarChar(25)
+  appId         String?   @map("app_id") @db.VarChar(60)
+  /// 'work_files' | 'work_chat'
+  source        String    @db.VarChar(20)
+  reporter      String    @db.VarChar(40)
+  reporterEmail String?   @map("reporter_email") @db.VarChar(320)
+  lang          String    @db.VarChar(5)
+  consentV      Int       @map("consent_v") @db.SmallInt
+  consentAt     DateTime  @map("consent_at")
+  body          Bytes?    @db.ByteA
+  /// 'open' | 'resolved' | 'expired'
+  status        String    @default("open") @db.VarChar(10)
+  resolvedAt    DateTime? @map("resolved_at")
+  resolvedBy    String?   @map("resolved_by") @db.VarChar(100)
+  reply         Bytes?    @db.ByteA
+  /// null | 'sending' | 'sent' | 'failed' | 'unknown'
+  replyMail     String?   @map("reply_mail") @db.VarChar(10)
+  replyMailAt   DateTime? @map("reply_mail_at") @db.Timestamp(3)
+  purgeAt       DateTime  @map("purge_at")
+  purgedAt      DateTime? @map("purged_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files SupportReportFile[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([purgedAt, purgeAt])
+  @@map("support_reports")
+}
+
+model SupportReportFile {
+  id         String   @id @default(cuid()) @db.VarChar(25)
+  reportId   String   @map("report_id") @db.VarChar(25)
+  fromFileId String?  @map("from_file_id") @db.VarChar(25)
+  meta       Bytes    @db.ByteA
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  sizeBytes  Int      @map("size_bytes")
+  blobRegion String   @map("blob_region") @db.VarChar(30)
+  blobPath   String   @map("blob_path") @db.VarChar(500)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  report SupportReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("support_report_files")
+}
+
+model SupportReportAccess {
+  id        String   @id @default(cuid()) @db.VarChar(25)
+  reportId  String   @map("report_id") @db.VarChar(25)
+  fileRowId String   @map("file_row_id") @db.VarChar(25)
+  admin     String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([reportId])
+  @@map("support_report_accesses")
+}
+
+model WorkForm {
+  id        String    @id @default(cuid()) @db.VarChar(25)
+  userId    String    @map("user_id") @db.VarChar(25)
+  projectId String    @map("project_id") @db.VarChar(25)
+  sheetId   String    @unique @map("sheet_id") @db.VarChar(25)
+  name      String    @db.VarChar(40)
+  info      Bytes     @db.ByteA
+  shape     String    @db.VarChar(10)
+  version   Int       @default(1)
+  saveKey   String    @map("save_key") @db.VarChar(64)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+  sheet   DataSheet   @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  scans   WorkScan[]
+
+  @@unique([userId, saveKey])
+  @@index([projectId])
+  @@index([userId, createdAt])
+  @@map("work_form")
+}
+
+model WorkIntakeLink {
+  id          String    @id @default(cuid()) @db.VarChar(25)
+  userId      String    @map("user_id") @db.VarChar(25)
+  projectId   String    @map("project_id") @db.VarChar(25)
+  tableKey    String    @map("table_key") @db.VarChar(40)
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  tokenSealed Bytes     @map("token_sealed") @db.ByteA
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([projectId, tableKey])
+  @@map("work_intake_link")
+}
+
+model WorkWebhookHook {
+  id          String    @id @default(cuid()) @db.VarChar(25)
+  userId      String    @map("user_id") @db.VarChar(25)
+  projectId   String    @map("project_id") @db.VarChar(25)
+  tableKey    String    @map("table_key") @db.VarChar(40)
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  tokenSealed Bytes     @map("token_sealed") @db.ByteA
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  WorkProject         @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+  receipts WorkWebhookReceipt[]
+
+  @@index([projectId, tableKey])
+  @@map("work_webhook_hook")
+}
+
+model WorkWebhookReceipt {
+  id        String   @id @default(cuid()) @db.VarChar(25)
+  hookId    String   @map("hook_id") @db.VarChar(25)
+  keyHash   String   @map("key_hash") @db.Char(64)
+  rowId     String   @map("row_id") @db.VarChar(25)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  hook WorkWebhookHook @relation(fields: [hookId], references: [id], onDelete: Cascade)
+
+  @@unique([hookId, keyHash])
+  @@map("work_webhook_receipt")
+}
+
+model WorkAppSpec {
+  id        String   @id @default(cuid()) @db.VarChar(25)
+  userId    String   @map("user_id") @db.VarChar(25)
+  projectId String   @unique @map("project_id") @db.VarChar(25)
+  info      Bytes    @db.ByteA
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("work_app_spec")
+}
+
+model WorkAlertFired {
+  id         String   @id @default(cuid()) @db.VarChar(25)
+  userId     String   @map("user_id") @db.VarChar(25)
+  projectId  String   @map("project_id") @db.VarChar(25)
+  rowId      String   @map("row_id") @db.VarChar(25)
+  tableKey   String   @map("table_key") @db.VarChar(40)
+  alertKey   String   @map("alert_key") @db.VarChar(40)
+  targetDate String   @map("target_date") @db.VarChar(10)
+  late       Boolean  @default(false)
+  sendId     String?  @map("send_id") @db.VarChar(25)
+  firedAt    DateTime @default(now()) @map("fired_at")
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject  @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+  row     DataSheetRow @relation(fields: [rowId, projectId, userId], references: [id, projectId, userId], onDelete: Cascade)
+
+  @@unique([rowId, tableKey, alertKey])
+  @@index([projectId])
+  @@index([userId])
+  @@map("work_alert_fired")
+}
+
+model WorkAppSpecProposal {
+  id          String    @id @default(cuid()) @db.VarChar(25)
+  userId      String    @map("user_id") @db.VarChar(25)
+  projectId   String    @map("project_id") @db.VarChar(25)
+  tokenId     String    @map("token_id") @db.VarChar(25)
+  baseVersion Int       @map("base_version")
+  info        Bytes     @db.ByteA
+  status      String    @default("pending") @db.VarChar(20)
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project WorkProject @relation(fields: [projectId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("work_app_spec_proposal")
 }

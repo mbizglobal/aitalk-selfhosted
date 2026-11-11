@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import AgentStudioClient from './client'
 import { hasApiKey } from '@/lib/ai-providers'
+import { APP_WORKFLOW_KIND } from '@/lib/work/app-canvas'
 
 interface PageProps {
   searchParams: Promise<{
@@ -42,9 +43,11 @@ export default async function AgentStudioPage({ searchParams }: PageProps) {
 
   try {
     if (workflowId) {
+      const hidden = await prisma.workflow.findFirst({ where: { workflowId, kind: APP_WORKFLOW_KIND, agent: { userId } }, select: { parentWorkflowId: true } })
       initialWorkflow = await prisma.workflow.findFirst({
         where: {
-          workflowId,
+          workflowId: hidden ? (hidden.parentWorkflowId ?? '') : workflowId,
+          kind: { not: APP_WORKFLOW_KIND },
           agent: { userId }
         },
         include: {
@@ -68,6 +71,7 @@ export default async function AgentStudioPage({ searchParams }: PageProps) {
       initialWorkflow = await prisma.workflow.findFirst({
         where: {
           agentId,
+          kind: { not: APP_WORKFLOW_KIND },
           agent: { userId }
         },
         orderBy: [
@@ -93,13 +97,13 @@ export default async function AgentStudioPage({ searchParams }: PageProps) {
     }
     else {
       const firstAgent = await prisma.agent.findFirst({
-        where: { userId, workflows: { some: {} } },
+        where: { userId, workflows: { some: { kind: { not: APP_WORKFLOW_KIND } } } },
         orderBy: { createdAt: 'desc' },
       })
 
       if (firstAgent) {
         initialWorkflow = await prisma.workflow.findFirst({
-          where: { agentId: firstAgent.agentId },
+          where: { agentId: firstAgent.agentId, kind: { not: APP_WORKFLOW_KIND } },
           orderBy: [
             { status: 'desc' },
             { updatedAt: 'desc' }

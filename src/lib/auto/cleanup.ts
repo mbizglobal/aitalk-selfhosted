@@ -13,6 +13,10 @@ export class AutoRun {
   private readonly tempDir: string
   private readonly maxAge = 1 * 60 * 60 * 1000
   private consentExportInterval: NodeJS.Timeout | null = null
+  private workSendInterval: NodeJS.Timeout | null = null
+  private workTelegramBusy = false
+  private workSignalInterval: NodeJS.Timeout | null = null
+  private workAlertInterval: NodeJS.Timeout | null = null
   private jobs: ReadonlySet<string> = new Set()
 
   private constructor() {
@@ -56,6 +60,24 @@ export class AutoRun {
       10 * 60 * 1000,
     )
 
+    this.run('markStaleWorkSends', () => this.markStaleWorkSends())
+    if (this.jobs.has('markStaleWorkSends')) this.workSendInterval = setInterval(
+      () => { this.run('markStaleWorkSends', () => this.markStaleWorkSends()) },
+      60 * 1000,
+    )
+
+    this.run('processWorkSignals', () => this.processWorkSignals())
+    if (this.jobs.has('processWorkSignals')) this.workSignalInterval = setInterval(
+      () => { this.run('processWorkSignals', () => this.processWorkSignals()) },
+      30 * 1000,
+    )
+
+    this.run('processWorkAlerts', () => this.processWorkAlerts())
+    if (this.jobs.has('processWorkAlerts')) this.workAlertInterval = setInterval(
+      () => { this.run('processWorkAlerts', () => this.processWorkAlerts()) },
+      60 * 60 * 1000,
+    )
+
     if (this.jobs.has('processConsentLedgerExport')) this.consentExportInterval = setInterval(
       () => { this.run('processConsentLedgerExport', () => this.processConsentLedgerExport()) },
       6 * 60 * 60 * 1000,
@@ -76,6 +98,9 @@ export class AutoRun {
             this.run('cleanupOldConversations', () => this.cleanupOldConversations())
             this.run('cleanupExpiredVisitorContacts', () => this.cleanupExpiredVisitorContacts())
             this.run('cleanupExpiredMiniAppPayloads', () => this.cleanupExpiredMiniAppPayloads())
+            this.run('cleanupExpiredPublicLinks', () => this.cleanupExpiredPublicLinks())
+            this.run('purgeWorkPrivateMessages', () => this.purgeWorkPrivateMessages())
+            this.run('purgeSupportReports', () => this.purgeSupportReports())
             this.run('reportQuizCpaShortfall', () => this.reportQuizCpaShortfall())
 
             setTimeout(() => {
@@ -140,6 +165,9 @@ export class AutoRun {
               this.run('cleanupOldConversations', () => this.cleanupOldConversations())
               this.run('cleanupExpiredVisitorContacts', () => this.cleanupExpiredVisitorContacts())
               this.run('cleanupExpiredMiniAppPayloads', () => this.cleanupExpiredMiniAppPayloads())
+              this.run('cleanupExpiredPublicLinks', () => this.cleanupExpiredPublicLinks())
+              this.run('purgeWorkPrivateMessages', () => this.purgeWorkPrivateMessages())
+              this.run('purgeSupportReports', () => this.purgeSupportReports())
               this.run('reportQuizCpaShortfall', () => this.reportQuizCpaShortfall())
 
               setTimeout(() => {
@@ -210,6 +238,18 @@ export class AutoRun {
     if (this.consentExportInterval) {
       clearInterval(this.consentExportInterval)
       this.consentExportInterval = null
+    }
+    if (this.workSendInterval) {
+      clearInterval(this.workSendInterval)
+      this.workSendInterval = null
+    }
+    if (this.workSignalInterval) {
+      clearInterval(this.workSignalInterval)
+      this.workSignalInterval = null
+    }
+    if (this.workAlertInterval) {
+      clearInterval(this.workAlertInterval)
+      this.workAlertInterval = null
     }
   }
 
@@ -419,6 +459,29 @@ export class AutoRun {
 
   async cleanupExpiredMiniAppPayloads(): Promise<void> { return cloudJobs.cleanupExpiredMiniAppPayloads() }
 
+  async cleanupExpiredPublicLinks(): Promise<void> {
+    try {
+      const { deleteExpiredPublicLinks } = await import('@/lib/work/public-download')
+      const n = await deleteExpiredPublicLinks(prisma)
+      if (n > 0) console.log(`[CLEANUP] Deleted ${n} expired work download links`)
+    } catch (error) {
+      console.error('[CLEANUP] work download links:', error instanceof Error ? error.message : 'error')
+    }
+  }
+
+  async purgeWorkPrivateMessages(): Promise<void> {
+    try {
+      await prisma.$executeRaw`UPDATE work_message m SET purge_at = (NOW() AT TIME ZONE 'UTC') + INTERVAL '30 days'
+        WHERE m.room = 'private' AND m.purge_at IS NULL AND m.owner LIKE 'member:%'
+          AND NOT EXISTS (SELECT 1 FROM agent_members a WHERE 'member:' || a.id = m.owner)`
+      const r = await prisma.workMessage.deleteMany({ where: { room: 'private', purgeAt: { lt: new Date() } } })
+      if (r.count > 0) console.log(`[CLEANUP] Deleted ${r.count} private work messages of removed members`)
+    } catch (error) {
+      console.error('[CLEANUP] work private messages:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+  }
+
+  async purgeSupportReports(): Promise<void> { return cloudJobs.purgeSupportReports() }
   async reportQuizCpaShortfall(): Promise<void> { return cloudJobs.reportQuizCpaShortfall() }
 
   async cleanupExpiredVisitorContacts(): Promise<void> {
@@ -435,6 +498,81 @@ export class AutoRun {
   }
 
   async processInvoiceAutoRenewal(): Promise<void> { return cloudJobs.processInvoiceAutoRenewal() }
+
+  async processWorkSignals(): Promise<void> {
+    try {
+      const [{ processWorkSignals }, { ensureUserDataKey }] = await Promise.all([import('@/lib/work/flow-runs'), import('@/lib/user-data-key')])
+      const r = await processWorkSignals({ db: prisma, dataKey: ensureUserDataKey })
+      if (r.claimed || r.interrupted || r.started.length) console.log(`[CLEANUP] work signals — queued ${r.claimed} · interrupted ${r.interrupted} · started ${r.started.length}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to process work signals:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+    try {
+      const [{ processWorkPurges }, { deleteProjectBlobs }] = await Promise.all([import('@/lib/work/app-admin'), import('@/lib/managed/blob-storage')])
+      const r = await processWorkPurges({ db: prisma, deleteProjectBlobs })
+      if (r.done || r.waiting) console.log(`[CLEANUP] work purges — done ${r.done} · waiting ${r.waiting}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to process work purges:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+    try {
+      const [{ purgeExpiredBackupJobs }, { deleteBackupJobBlobs }] = await Promise.all([import('@/lib/work/backup-parts'), import('@/lib/managed/blob-storage')])
+      const n = await purgeExpiredBackupJobs({ db: prisma, deletePrefix: deleteBackupJobBlobs })
+      if (n) console.log(`[CLEANUP] work backup jobs expired — ${n}`)
+      const { purgeExpiredUploads } = await import('@/lib/work/backup-upload')
+      const m = await purgeExpiredUploads({ db: prisma, deletePrefix: deleteBackupJobBlobs })
+      if (m) console.log(`[CLEANUP] work backup uploads expired — ${m}`)
+      const { purgeExpiredFileUploads } = await import('@/lib/work/file-upload')
+      const fu = await purgeExpiredFileUploads({ db: prisma, deletePrefix: deleteBackupJobBlobs })
+      if (fu) console.log(`[CLEANUP] work file uploads expired — ${fu}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to purge work backup jobs:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+    try {
+      const { processScanSorts } = await import('@/lib/work/scan-sort')
+      const r = await processScanSorts()
+      if (r.closed || r.reclaimed || r.woke || r.started.length) console.log(`[CLEANUP] scan sorts — closed ${r.closed} · reclaimed ${r.reclaimed} · woke ${r.woke} · started ${r.started.length}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to process scan sorts:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+    try {
+      const { purgeDeletedForms } = await import('@/lib/work/myforms')
+      const n = await purgeDeletedForms(prisma)
+      if (n) console.log(`[CLEANUP] my forms purged — ${n}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to purge deleted forms:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+  }
+
+  async processWorkAlerts(): Promise<void> {
+    try {
+      const [{ processWorkAlerts }, { ensureUserDataKey }] = await Promise.all([import('@/lib/work/assembled-alerts'), import('@/lib/user-data-key')])
+      const r = await processWorkAlerts({ db: prisma, dataKey: ensureUserDataKey })
+      if (r.fired || r.cards || r.failed) console.log(`[CLEANUP] work alerts — apps ${r.apps} · fired ${r.fired} · late ${r.late} · cards ${r.cards} · failed ${r.failed}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to process work alerts:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+  }
+
+  async markStaleWorkSends(): Promise<void> {
+    try {
+      const { markStaleSends } = await import('@/lib/work/sends')
+      const n = await markStaleSends(prisma)
+      if (n > 0) console.log(`[CLEANUP] ${n} work send(s) without an answer marked unknown`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to mark stale work sends:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    }
+    if (this.workTelegramBusy) return
+    this.workTelegramBusy = true
+    try {
+      const [{ processWorkTelegram }, { ensureUserDataKey }] = await Promise.all([import('@/lib/work/assembled-telegram'), import('@/lib/user-data-key')])
+      const r = await processWorkTelegram({ db: prisma, dataKey: ensureUserDataKey })
+      if (r.sent || r.stale || r.other) console.log(`[CLEANUP] work telegram — sent ${r.sent} · stale ${r.stale} · other ${r.other}`)
+    } catch (error) {
+      console.error('[CLEANUP] Failed to send work telegram alerts:', error instanceof Error ? error.message.slice(0, 200) : 'error')
+    } finally {
+      this.workTelegramBusy = false
+    }
+  }
 
 
   async processManagedCpaReset(): Promise<void> { return cloudJobs.processManagedCpaReset() }

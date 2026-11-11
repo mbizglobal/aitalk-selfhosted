@@ -142,7 +142,7 @@ export function Header() {
               
               {isLanguageOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-md shadow-lg py-2 z-50">
-                  {supportedLanguages.map((l) => (
+                  {supportedLanguages.filter((l) => l !== 'de-ch').map((l) => (
                     <button
                       key={l}
                       onClick={() => handleLanguageChange(l)}
@@ -248,7 +248,7 @@ export function Header() {
               <div className="border-t border-gray-700 pt-4">
                 <div className="text-sm font-bold mb-2">{t('header_language')}</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {supportedLanguages.map((l) => (
+                  {supportedLanguages.filter((l) => l !== 'de-ch').map((l) => (
                     <button
                       key={l}
                       onClick={() => {

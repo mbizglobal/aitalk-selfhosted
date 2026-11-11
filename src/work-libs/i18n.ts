@@ -1,0 +1,1 @@
+export const WORK_LIB_I18N: Readonly<Record<string, { en: Readonly<Record<string, string>>; de: Readonly<Record<string, string>>; fr: Readonly<Record<string, string>>; ko: Readonly<Record<string, string>> }>> = {}

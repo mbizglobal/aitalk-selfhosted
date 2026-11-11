@@ -1,4 +1,5 @@
 import { getAppBaseUrl } from '@/lib/app-url'
+import { OPERATOR_PATH } from '@/lib/vendor-site'
 import { isSelfHosted } from '@/lib/edition'
 import { getFeedbackRecipient } from '@/lib/brand'
 import { translations, Language } from '@/lib/translations'
@@ -11,6 +12,10 @@ const emailClient = connectionString ? new EmailClient(connectionString) : null
 
 function escapeHtml(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+function looksLikeEmail(s: unknown): s is string {
+  return typeof s === 'string' && s.length <= 320 && /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(s)
 }
 
 function safeLang(language: unknown): Language {
@@ -41,6 +46,7 @@ export class EmailService {
     subject: string
     html: string
     from?: string
+    replyTo?: string
   }): Promise<EmailResponse> {
     return sendRoutedEmail(data, this.fromEmail, (d) => this.sendViaAcs(d))
   }
@@ -50,6 +56,7 @@ export class EmailService {
     subject: string
     html: string
     from?: string
+    replyTo?: string
   }): Promise<EmailResponse> {
     if (!emailClient) {
       return { success: false, error: 'ACS Email client not configured' }
@@ -60,6 +67,7 @@ export class EmailService {
         senderAddress: data.from || this.fromEmail,
         content: { subject: data.subject, html: data.html },
         recipients: { to: [{ address: data.to }] },
+        ...(data.replyTo && { replyTo: [{ address: data.replyTo }] }),
       })
 
       const result = await poller.pollUntilDone()
@@ -199,7 +207,7 @@ export class EmailService {
           subject: 'Welcome to AITalk.ch!',
           title: 'Welcome!',
           greeting: 'Hello',
-          message: 'Welcome to AITalk.ch! Your account has been successfully created. Start creating your AI agents today.',
+          message: 'Welcome to AITalk.ch! Your account has been successfully created. Start using or building AI Work Apps today.',
           button: 'Get Started',
           footer: 'Thank you for joining us!'
         },
@@ -253,7 +261,7 @@ export class EmailService {
           subject: 'Willkommen bei AITalk.ch!',
           title: 'Willkommen!',
           greeting: 'Hallo',
-          message: 'Willkommen bei AITalk.ch! Ihr Konto wurde erfolgreich erstellt. Beginnen Sie noch heute mit der Erstellung Ihrer KI-Agenten.',
+          message: 'Willkommen bei AITalk.ch! Ihr Konto wurde erfolgreich erstellt. Beginnen Sie noch heute, AI Work Apps zu nutzen oder zu erstellen.',
           button: 'Loslegen',
           footer: 'Vielen Dank, dass Sie sich uns anschließen!'
         },
@@ -307,7 +315,7 @@ export class EmailService {
           subject: 'Bienvenue sur AITalk.ch !',
           title: 'Bienvenue !',
           greeting: 'Bonjour',
-          message: 'Bienvenue sur AITalk.ch ! Votre compte a été créé avec succès. Commencez à créer vos agents IA dès aujourd\'hui.',
+          message: 'Bienvenue sur AITalk.ch ! Votre compte a été créé avec succès. Commencez dès aujourd\'hui à utiliser ou à créer des AI Work Apps.',
           button: 'Commencer',
           footer: 'Merci de nous rejoindre !'
         },
@@ -415,7 +423,7 @@ export class EmailService {
           subject: 'AITalk.ch에 오신 것을 환영합니다!',
           title: '환영합니다!',
           greeting: '안녕하세요',
-          message: 'AITalk.ch에 오신 것을 환영합니다! 계정이 성공적으로 생성되었습니다. 지금 바로 AI 에이전트를 만들어 보세요.',
+          message: 'AITalk.ch에 오신 것을 환영합니다! 계정이 성공적으로 생성되었습니다. 지금 바로 AI Work Apps 를 사용하거나 만들어 보세요.',
           button: '시작하기',
           footer: '저희와 함께해 주셔서 감사합니다!'
         },
@@ -522,21 +530,21 @@ export class EmailService {
         subject: 'Welcome to AiTalk.ch — your 14-day trial starts now',
         title: 'Welcome to AiTalk.ch',
         headline: 'Welcome to {BRAND}',
-        tagline: 'Real-time interpretation, in your pocket.',
+        tagline: 'AI Work Apps &mdash; AI does the work, you stay in control.',
         trialTitle: 'Your 14-day free trial has started',
         trialSub: 'Everything below is unlocked &mdash; no card needed.',
         greeting: 'Hello {NAME},',
-        intro: 'Thanks for joining. AiTalk.ch turns your phone into a real-time interpreter, a personal AI voice agent and a daily training coach. Here is what you can do right now.',
-        f1t: 'Real-time translation',
-        f1b: 'Speak naturally and hear the translation in your own language through your earphones &mdash; like having a live interpreter in your ear. Made for lectures, meetings, travel and everyday conversations. It keeps running with the screen off and the phone in your pocket.',
-        f2t: 'Your own AI voice agent',
-        f2b: 'Call your AI and talk to it by voice. It answers from what you set up in &ldquo;Edit AI setup&rdquo;, so it responds the way you want &mdash; great for quick questions, practice and hands-free help.',
-        f3t: 'Phone (PSTN) calling',
-        f3b: 'Add a phone number and your AI voice agent can place and take real calls. Real-time translation works with or without a number.',
-        f4t: 'Daily training quizzes',
-        f4b: 'Turn your own knowledge into short daily quizzes. A reminder arrives at the time you pick &mdash; tap it and the AI builds a quiz around what you have not mastered yet, with an explanation for every answer and read-aloud pronunciation practice. Set up a Quiz app for your account at {WEB} to begin; creating one uses credits.',
-        f5t: 'Build your workflows on the web',
-        f5b: 'Sign in at {WEB} with this same account. The web dashboard is where you design and fine-tune agents and workflows in detail &mdash; then put them to work from the app.',
+        intro: 'Thanks for joining. AiTalk.ch gives you AI Work Apps: apps where AI does demanding work such as invoices, receipts and bank statements, under your control. AI fills in the lines, and a person confirms before anything becomes final. Here is what you can do right now.',
+        f1t: 'Your AI Work Apps',
+        f1b: 'Expenses, Bank ledger and Payment approvals are ready on your home screen. Open an app, tell the AI what you need, and it works inside that app &mdash; fixed code calculates the numbers.',
+        f2t: 'Scan documents',
+        f2b: 'Photograph a receipt or document, or pick a file. AI enters it into the right table, and you check the result. With My forms you can set up your own forms for any kind of document.',
+        f3t: 'Real-time translation',
+        f3b: 'Speak naturally and hear the translation in your own language through your earphones. It keeps running with the screen off and the phone in your pocket.',
+        f4t: 'Your AI voice agent',
+        f4b: 'Call your AI and talk to it by voice. Add a phone number and it can place and take real calls.',
+        f5t: 'Build more on the web',
+        f5b: 'Sign in at {WEB} with this same account to add work apps for your country, connect them and fine-tune them in detail &mdash; then use them from the app.',
         cta: 'Open AiTalk.ch',
         explore: 'Explore aitalk.ch',
         youtube: 'Watch on YouTube',
@@ -550,21 +558,21 @@ export class EmailService {
         subject: 'Willkommen bei AiTalk.ch — Ihre 14-tägige Testphase beginnt jetzt',
         title: 'Willkommen bei AiTalk.ch',
         headline: 'Willkommen bei {BRAND}',
-        tagline: 'Dolmetschen in Echtzeit &mdash; direkt in Ihrer Tasche.',
+        tagline: 'AI Work Apps &mdash; die KI arbeitet, Sie behalten die Kontrolle.',
         trialTitle: 'Ihre 14-tägige kostenlose Testphase hat begonnen',
         trialSub: 'Alles Folgende ist freigeschaltet &mdash; ohne Kreditkarte.',
         greeting: 'Hallo {NAME},',
-        intro: 'Danke, dass Sie dabei sind. AiTalk.ch macht Ihr Telefon zum Echtzeit-Dolmetscher, zum persönlichen KI-Sprachassistenten und zum täglichen Lerncoach. Das können Sie ab sofort tun.',
-        f1t: 'Übersetzung in Echtzeit',
-        f1b: 'Sprechen Sie ganz natürlich und hören Sie die Übersetzung über Ihre Kopfhörer in Ihrer eigenen Sprache &mdash; wie ein Dolmetscher direkt im Ohr. Gemacht für Vorträge, Meetings, Reisen und Alltagsgespräche. Läuft weiter, auch wenn der Bildschirm aus ist und das Telefon in der Tasche steckt.',
-        f2t: 'Ihr eigener KI-Sprachassistent',
-        f2b: 'Rufen Sie Ihre KI an und sprechen Sie mit ihr. Sie antwortet auf Basis dessen, was Sie unter &ldquo;Edit AI setup&rdquo; hinterlegt haben &mdash; ideal für schnelle Fragen, zum Üben und für freihändige Hilfe.',
-        f3t: 'Telefonie (PSTN)',
-        f3b: 'Fügen Sie eine Rufnummer hinzu, damit Ihr KI-Sprachassistent echte Anrufe tätigen und annehmen kann. Die Echtzeit-Übersetzung funktioniert mit und ohne Rufnummer.',
-        f4t: 'Tägliche Lern-Quizze',
-        f4b: 'Machen Sie aus Ihrem eigenen Wissen kurze tägliche Quizze. Zur gewählten Zeit kommt eine Erinnerung &mdash; tippen Sie darauf und die KI erstellt ein Quiz rund um das, was Sie noch nicht sicher beherrschen: mit einer Erklärung zu jeder Antwort und Vorlesefunktion zum Aussprachetraining. Richten Sie dafür unter {WEB} eine Quiz-App für Ihr Konto ein; das Erstellen verbraucht Credits.',
-        f5t: 'Workflows im Web erstellen',
-        f5b: 'Melden Sie sich unter {WEB} mit demselben Konto an. Im Web-Dashboard gestalten und verfeinern Sie Agenten und Workflows im Detail &mdash; und nutzen sie dann in der App.',
+        intro: 'Danke, dass Sie dabei sind. AiTalk.ch bietet Ihnen AI Work Apps: Apps, in denen die KI aufwendige Arbeit wie Rechnungen, Belege und Bankauszüge erledigt &mdash; unter Ihrer Kontrolle. Die KI füllt die Zeilen aus, und ein Mensch bestätigt, bevor etwas definitiv ist. Das können Sie ab sofort tun.',
+        f1t: 'Ihre AI Work Apps',
+        f1b: 'Ausgaben, Bankjournal und Zahlungsfreigabe sind auf Ihrem Startbildschirm bereit. Öffnen Sie eine App und sagen Sie der KI, was Sie brauchen. Sie arbeitet in dieser App &mdash; fester Code berechnet die Zahlen.',
+        f2t: 'Dokumente scannen',
+        f2b: 'Fotografieren Sie einen Beleg oder ein Dokument oder wählen Sie eine Datei. Die KI trägt es in die passende Tabelle ein, und Sie prüfen das Ergebnis. Mit «Meine Formulare» richten Sie eigene Formulare für jede Art von Dokument ein.',
+        f3t: 'Übersetzung in Echtzeit',
+        f3b: 'Sprechen Sie ganz natürlich und hören Sie die Übersetzung über Ihre Kopfhörer in Ihrer eigenen Sprache. Läuft weiter, auch wenn der Bildschirm aus ist und das Telefon in der Tasche steckt.',
+        f4t: 'Ihr KI-Sprachassistent',
+        f4b: 'Rufen Sie Ihre KI an und sprechen Sie mit ihr. Mit einer Rufnummer kann sie echte Anrufe tätigen und annehmen.',
+        f5t: 'Mehr im Web aufbauen',
+        f5b: 'Melden Sie sich unter {WEB} mit demselben Konto an, um Arbeits-Apps für Ihr Land hinzuzufügen, sie zu verbinden und im Detail anzupassen &mdash; und nutzen Sie sie dann in der App.',
         cta: 'AiTalk.ch öffnen',
         explore: 'aitalk.ch entdecken',
         youtube: 'Auf YouTube ansehen',
@@ -578,21 +586,21 @@ export class EmailService {
         subject: 'Bienvenue sur AiTalk.ch — votre essai de 14 jours commence',
         title: 'Bienvenue sur AiTalk.ch',
         headline: 'Bienvenue sur {BRAND}',
-        tagline: 'L&rsquo;interprétation en temps réel, dans votre poche.',
+        tagline: 'AI Work Apps &mdash; l&rsquo;IA travaille, vous gardez le contrôle.',
         trialTitle: 'Votre essai gratuit de 14 jours a commencé',
         trialSub: 'Tout ce qui suit est débloqué &mdash; sans carte bancaire.',
         greeting: 'Bonjour {NAME},',
-        intro: 'Merci de nous rejoindre. AiTalk.ch transforme votre téléphone en interprète en temps réel, en agent vocal IA personnel et en coach d&rsquo;entraînement quotidien. Voici ce que vous pouvez faire dès maintenant.',
-        f1t: 'Traduction en temps réel',
-        f1b: 'Parlez naturellement et écoutez la traduction dans votre langue via vos écouteurs &mdash; comme un interprète à votre oreille. Pensé pour les conférences, les réunions, les voyages et les conversations du quotidien. Cela continue de fonctionner écran éteint, téléphone dans la poche.',
-        f2t: 'Votre propre agent vocal IA',
-        f2b: 'Appelez votre IA et parlez-lui de vive voix. Elle répond à partir de ce que vous avez défini dans &laquo;&nbsp;Edit AI setup&nbsp;&raquo;, donc elle répond comme vous le souhaitez &mdash; idéal pour les questions rapides, l&rsquo;entraînement et l&rsquo;aide mains libres.',
-        f3t: 'Appels téléphoniques (PSTN)',
-        f3b: 'Ajoutez un numéro de téléphone et votre agent vocal IA pourra passer et recevoir de vrais appels. La traduction en temps réel fonctionne avec ou sans numéro.',
-        f4t: 'Quiz d&rsquo;entraînement quotidiens',
-        f4b: 'Transformez vos connaissances en courts quiz quotidiens. À l&rsquo;heure que vous choisissez, un rappel arrive &mdash; touchez-le et l&rsquo;IA construit un quiz centré sur ce que vous ne maîtrisez pas encore, avec une explication pour chaque réponse et une lecture à voix haute pour travailler la prononciation. Configurez une application Quiz pour votre compte sur {WEB} pour commencer&nbsp;; chaque création consomme des crédits.',
-        f5t: 'Créez vos workflows sur le web',
-        f5b: 'Connectez-vous sur {WEB} avec ce même compte. Le tableau de bord web est l&rsquo;endroit où vous concevez et affinez vos agents et vos workflows en détail &mdash; puis vous les utilisez depuis l&rsquo;application.',
+        intro: 'Merci de nous rejoindre. AiTalk.ch vous offre les AI Work Apps&nbsp;: des apps dans lesquelles l&rsquo;IA effectue un travail exigeant comme les factures, les justificatifs et les relevés bancaires, sous votre contrôle. L&rsquo;IA remplit les lignes, et une personne confirme avant que quoi que ce soit ne devienne définitif. Voici ce que vous pouvez faire dès maintenant.',
+        f1t: 'Vos AI Work Apps',
+        f1b: 'Dépenses, Journal bancaire et Validation des paiements sont prêts sur votre écran d&rsquo;accueil. Ouvrez une app, dites à l&rsquo;IA ce dont vous avez besoin&nbsp;: elle travaille dans cette app, et un code fixe calcule les chiffres.',
+        f2t: 'Numériser des documents',
+        f2b: 'Photographiez un justificatif ou un document, ou choisissez un fichier. L&rsquo;IA le saisit dans le bon tableau, et vous vérifiez le résultat. Avec «&nbsp;Mes formulaires&nbsp;», créez vos propres formulaires pour tout type de document.',
+        f3t: 'Traduction en temps réel',
+        f3b: 'Parlez naturellement et écoutez la traduction dans votre langue via vos écouteurs. Cela continue de fonctionner écran éteint, téléphone dans la poche.',
+        f4t: 'Votre agent vocal IA',
+        f4b: 'Appelez votre IA et parlez-lui de vive voix. Avec un numéro de téléphone, elle peut passer et recevoir de vrais appels.',
+        f5t: 'Allez plus loin sur le web',
+        f5b: 'Connectez-vous sur {WEB} avec ce même compte pour ajouter des apps de travail pour votre pays, les relier et les affiner en détail &mdash; puis utilisez-les depuis l&rsquo;application.',
         cta: 'Ouvrir AiTalk.ch',
         explore: 'Découvrir aitalk.ch',
         youtube: 'Voir sur YouTube',
@@ -606,21 +614,21 @@ export class EmailService {
         subject: 'AiTalk.ch에 오신 것을 환영합니다 — 14일 무료 체험이 시작되었습니다',
         title: 'AiTalk.ch에 오신 것을 환영합니다',
         headline: '{BRAND}에 오신 것을 환영합니다',
-        tagline: '실시간 통역을 주머니 속에.',
+        tagline: 'AI Work Apps &mdash; 일은 AI 가, 통제는 내가.',
         trialTitle: '14일 무료 체험이 시작되었습니다',
         trialSub: '아래 기능이 모두 열려 있습니다 &mdash; 카드 등록 없이.',
         greeting: '{NAME}님, 안녕하세요.',
-        intro: '함께해 주셔서 감사합니다. AiTalk.ch는 휴대폰을 실시간 통역기이자 나만의 AI 음성 에이전트, 그리고 매일의 학습 코치로 만들어 줍니다. 지금 바로 이런 것들을 할 수 있습니다.',
-        f1t: '실시간 번역',
-        f1b: '평소처럼 말하면 이어폰으로 내 언어의 번역이 들립니다 &mdash; 귓속에 통역사가 있는 것처럼요. 강연·회의·여행·일상 대화를 위해 만들었습니다. 화면을 끄고 휴대폰을 주머니에 넣어도 계속 동작합니다.',
-        f2t: '나만의 AI 음성 에이전트',
-        f2b: 'AI에게 전화를 걸어 음성으로 대화하세요. &ldquo;Edit AI setup&rdquo;에서 설정한 내용을 바탕으로 답하기 때문에 원하는 방식으로 응답합니다. 간단한 질문, 연습, 핸즈프리 도움에 좋습니다.',
-        f3t: '전화(PSTN) 통화',
-        f3b: '전화번호를 추가하면 AI 음성 에이전트가 실제 전화를 걸고 받을 수 있습니다. 실시간 번역은 번호가 없어도 사용할 수 있습니다.',
-        f4t: '매일 훈련 퀴즈',
-        f4b: '내 지식을 짧은 매일 퀴즈로 만들어 보세요. 정한 시각에 알림이 오고, 탭하면 AI가 아직 익숙하지 않은 부분을 중심으로 퀴즈를 만들어 줍니다. 모든 답에 해설이 붙고 문제와 예문을 소리 내어 읽어 주어 발음 연습도 됩니다. 시작하려면 {WEB}에서 계정에 Quiz 앱을 설정하세요. 퀴즈를 만들 때 크레딧이 사용됩니다.',
-        f5t: '웹에서 워크플로 구성',
-        f5b: '같은 계정으로 {WEB}에 로그인하세요. 웹 대시보드에서 에이전트와 워크플로를 세밀하게 설계·조정한 뒤, 앱에서 그대로 사용할 수 있습니다.',
+        intro: '함께해 주셔서 감사합니다. AiTalk.ch 는 AI Work Apps 를 제공합니다. 청구서, 영수증, 은행 명세서처럼 손이 많이 가는 일을 AI 가 하되, 통제는 사용자 손에 있는 앱입니다. AI 가 줄을 채우고, 확정되기 전에 사람이 확인합니다. 지금 바로 이런 것들을 할 수 있습니다.',
+        f1t: '나의 AI Work Apps',
+        f1b: '지출, 은행 장부, 지급 승인이 홈 화면에 준비되어 있습니다. 앱을 열어 필요한 것을 AI 에게 말하면 AI 는 그 앱 안에서 일하고, 숫자는 고정된 코드가 계산합니다.',
+        f2t: '서류 스캔',
+        f2b: '영수증이나 서류를 찍거나 파일을 고르세요. AI 가 맞는 표에 넣어 주고, 결과는 직접 확인합니다. 「내 폼」으로 어떤 서류든 내가 정한 폼을 만들 수 있습니다.',
+        f3t: '실시간 번역',
+        f3b: '평소처럼 말하면 이어폰으로 내 언어의 번역이 들립니다. 화면을 끄고 휴대폰을 주머니에 넣어도 계속 동작합니다.',
+        f4t: 'AI 음성 에이전트',
+        f4b: 'AI 에게 전화를 걸어 음성으로 대화하세요. 전화번호를 추가하면 실제 전화를 걸고 받을 수 있습니다.',
+        f5t: '웹에서 더 만들기',
+        f5b: '같은 계정으로 {WEB} 에 로그인하면 내 나라에 맞는 업무 앱을 더하고, 서로 잇고, 세밀하게 조정할 수 있습니다. 그런 다음 앱에서 그대로 사용하세요.',
         cta: 'AiTalk.ch 열기',
         explore: 'aitalk.ch 둘러보기',
         youtube: 'YouTube에서 보기',
@@ -667,7 +675,7 @@ export class EmailService {
           <tr>
             <td align="center" style="background-color:#111827;background-image:linear-gradient(135deg,#111827 0%,#312E81 55%,#4F46E5 100%);padding:44px 32px 38px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="66">
-                <tr><td align="center" height="66" style="background-color:rgba(255,255,255,0.12);border-radius:33px;font-size:32px;line-height:66px;">&#127911;</td></tr>
+                <tr><td align="center" height="66" style="background-color:rgba(255,255,255,0.12);border-radius:33px;font-size:32px;line-height:66px;">&#128188;</td></tr>
               </table>
               <div style="font-size:29px;font-weight:800;color:#FFFFFF;letter-spacing:-0.5px;margin:20px 0 8px;">${fill(t.headline)}</div>
               <div style="font-size:15px;color:#C7D2FE;margin:0;">${t.tagline}</div>
@@ -687,10 +695,10 @@ export class EmailService {
             <td style="padding:34px 32px 8px;">
               <div style="font-size:17px;font-weight:700;color:#111827;margin:0 0 6px;">${fill(t.greeting)}</div>
               <div style="font-size:15px;line-height:1.7;color:#4B5563;margin:0 0 28px;">${t.intro}</div>
-${feature('&#127911;', '#EEF2FF', t.f1t, t.f1b)}
-${feature('&#129302;', '#F5F3FF', t.f2t, t.f2b)}
-${feature('&#128222;', '#ECFDF5', t.f3t, t.f3b)}
-${feature('&#129504;', '#FFF7ED', t.f4t, t.f4b)}
+${feature('&#128188;', '#EEF2FF', t.f1t, t.f1b)}
+${feature('&#128247;', '#ECFDF5', t.f2t, t.f2b)}
+${feature('&#127911;', '#F5F3FF', t.f3t, t.f3b)}
+${feature('&#128222;', '#FFF7ED', t.f4t, t.f4b)}
 ${feature('&#128736;&#65039;', '#F1F5F9', t.f5t, t.f5b)}
             </td>
           </tr>
@@ -1150,8 +1158,82 @@ ${feature('&#128736;&#65039;', '#F1F5F9', t.f5t, t.f5b)}
     return this.sendEmail({
       to: feedbackTo,
       subject: `${t.subject} - ${userEmail}`,
-      html
+      html,
+      ...(looksLikeEmail(userEmail) ? { replyTo: userEmail } : {}),
     })
+  }
+
+  private supportShell(lang: string, title: string, inner: string): string {
+    return `
+<!DOCTYPE html>
+<html lang="${escapeHtml(lang)}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1>${escapeHtml(title)}</h1>
+    </div>
+    <div class="content">${inner}</div>
+    <div class="footer">
+      <div class="footer-brand">AI Talk</div>
+      <div class="footer-copyright">&copy; ${new Date().getFullYear()} M-BIZ Global AG</div>
+    </div>
+  </div>
+</body>
+</html>`.trim()
+  }
+
+  async sendSupportReportNotice(r: { number: number; appId: string | null; source: string; fileCount: number; failures: string[]; reportId: string; reporterEmail: string | null; note: string }) {
+    const to = getFeedbackRecipient()
+    if (!to) return { success: false, error: 'Feedback recipient not configured' }
+    const link = `${getAppBaseUrl()}${OPERATOR_PATH}/reports?id=${encodeURIComponent(r.reportId)}`
+    const subject = `New report #${r.number} · ${r.appId ?? 'work app'} · ${r.fileCount} file(s)${r.failures.length ? ` · ${r.failures.join(', ')}` : ''}`
+    const html = this.supportShell('en', `Report #${r.number}`, `
+      <div class="details-box">
+        <p><strong>Reporter:</strong> ${escapeHtml(r.reporterEmail ?? '-')}</p>
+        <p><strong>App:</strong> ${escapeHtml(r.appId ?? '-')}</p>
+        <p><strong>From:</strong> ${escapeHtml(r.source)}</p>
+        <p><strong>Files:</strong> ${r.fileCount}</p>
+        <p><strong>Read failures:</strong> ${escapeHtml(r.failures.join(', ') || '-')}</p>
+      </div>
+      <div class="message">
+        <strong>Note:</strong>
+        <p style="white-space: pre-wrap;">${escapeHtml(r.note || '-')}</p>
+      </div>
+      <p><a href="${escapeHtml(link)}">Open in console</a> — files and the chat excerpt are there.</p>`)
+    return this.sendEmail({ to, subject, html, ...(r.reporterEmail ? { replyTo: r.reporterEmail } : {}) })
+  }
+
+  async sendSupportReceivedEmail(to: string, language: unknown, r: { number?: number; fileCount?: number }) {
+    const lang = safeLang(language)
+    const T = SUPPORT_TEXT[lang === 'de' || lang === 'fr' || lang === 'ko' ? lang : 'en']
+    const files = r.fileCount ? `<p>${escapeHtml(T.files.replace('{n}', String(r.fileCount)))}</p>` : ''
+    const subject = r.number ? T.subjectReport.replace('{n}', String(r.number)) : T.subjectFeedback
+    const html = this.supportShell(lang, subject, `
+      <div class="message">
+        <p>${escapeHtml(r.number ? T.bodyReport.replace('{n}', String(r.number)) : T.bodyFeedback)}</p>
+        <p>${escapeHtml(T.when)}</p>
+        ${files}
+        <p>${escapeHtml(T.sign)}</p>
+      </div>`)
+    return this.sendEmail({ to, subject, html })
+  }
+
+  async sendSupportReplyEmail(to: string, language: unknown, r: { number: number; text: string }) {
+    const lang = safeLang(language)
+    const T = SUPPORT_TEXT[lang === 'de' || lang === 'fr' || lang === 'ko' ? lang : 'en']
+    const subject = T.subjectReply.replace('{n}', String(r.number))
+    const html = this.supportShell(lang, subject, `
+      <div class="message">
+        <p style="white-space: pre-wrap;">${escapeHtml(r.text)}</p>
+        <p>${escapeHtml(T.sign)}</p>
+      </div>`)
+    return this.sendEmail({ to, subject, html })
   }
 
   async sendAnonymizationScheduledEmail(
@@ -1260,6 +1342,49 @@ ${feature('&#128736;&#65039;', '#F1F5F9', t.f5t, t.f5b)}
       html
     })
   }
+}
+
+const SUPPORT_TEXT: Record<'en' | 'de' | 'fr' | 'ko', { subjectReport: string; subjectFeedback: string; subjectReply: string; bodyReport: string; bodyFeedback: string; when: string; files: string; sign: string }> = {
+  en: {
+    subjectReport: 'We received your report #{n}',
+    subjectFeedback: 'We received your feedback',
+    subjectReply: 'Your report #{n} — our answer',
+    bodyReport: 'Thank you — we received your report #{n}.',
+    bodyFeedback: 'Thank you — we received your feedback.',
+    when: 'We will analyse it, fix the problem and get back to you within 24–48 hours (excluding weekends and Swiss public holidays).',
+    files: 'We use the {n} file(s) you agreed to share only to solve this problem.',
+    sign: 'AI Talk Support',
+  },
+  de: {
+    subjectReport: 'Wir haben Ihre Meldung #{n} erhalten',
+    subjectFeedback: 'Wir haben Ihr Feedback erhalten',
+    subjectReply: 'Ihre Meldung #{n} – unsere Antwort',
+    bodyReport: 'Vielen Dank – wir haben Ihre Meldung #{n} erhalten.',
+    bodyFeedback: 'Vielen Dank – wir haben Ihr Feedback erhalten.',
+    when: 'Wir analysieren sie, beheben das Problem und melden uns innerhalb von 24–48 Stunden (ohne Wochenenden und Schweizer Feiertage).',
+    files: 'Die {n} Datei(en), die Sie freigegeben haben, verwenden wir nur zur Lösung dieses Problems.',
+    sign: 'AI Talk Support',
+  },
+  fr: {
+    subjectReport: 'Nous avons reçu votre signalement n° {n}',
+    subjectFeedback: 'Nous avons reçu votre avis',
+    subjectReply: 'Votre signalement n° {n} — notre réponse',
+    bodyReport: 'Merci — nous avons reçu votre signalement n° {n}.',
+    bodyFeedback: 'Merci — nous avons reçu votre avis.',
+    when: 'Nous l’analysons, corrigeons le problème et revenons vers vous dans les 24 à 48 heures (hors week-ends et jours fériés suisses).',
+    files: 'Nous utilisons le(s) {n} fichier(s) que vous avez accepté de partager uniquement pour résoudre ce problème.',
+    sign: 'Support AI Talk',
+  },
+  ko: {
+    subjectReport: '문제 알림 #{n} 을 받았습니다',
+    subjectFeedback: '보내 주신 의견을 받았습니다',
+    subjectReply: '문제 알림 #{n} — 답변',
+    bodyReport: '감사합니다 — 문제 알림 #{n} 을 받았습니다.',
+    bodyFeedback: '감사합니다 — 보내 주신 의견을 받았습니다.',
+    when: '24~48시간 안에(주말 및 스위스 법정 공휴일 제외) 분석하고 문제를 해결한 뒤 알려 드리겠습니다.',
+    files: '보여 주기로 동의하신 파일 {n} 개는 이 문제를 해결하는 데에만 씁니다.',
+    sign: 'AI Talk 지원팀',
+  },
 }
 
 export const emailService = new EmailService()

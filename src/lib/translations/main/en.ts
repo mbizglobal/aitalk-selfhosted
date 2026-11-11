@@ -143,6 +143,9 @@ export const translations = {
 
     // Team Members & Production Workflows (Paid Plans)
     pricing_team_members: 'Up to {0} team members',
+    pricing_companies: "Up to {0} companies (bank ledgers)",
+    pricing_companies_one: "1 company or individual (bank ledger)",
+    pricing_my_forms: "Up to {0} custom forms (My forms)",
     pricing_production_workflows: 'Unlimited workflows, {0} active',
     
     // Legacy pricing keys (keep for compatibility)
@@ -207,7 +210,7 @@ export const translations = {
     managed_azure_search_desc: 'Enterprise vector database for RAG-powered knowledge search, stored in Switzerland (Azure Zurich).',
     managed_regions_title: 'Azure region Zurich',
     managed_regions_desc: 'One region for every customer — Microsoft Azure in Zurich, Switzerland.',
-    pricing_starter_app_only: 'Mobile app only',
+    pricing_starter_app_only: 'Mobile Pay only',
     pricing_starter_price_eur: 'EUR 20–25',
     pricing_starter_price_chf_note: '/month · incl. 8.1% VAT',
     pricing_starter_price_eur_note: '/month · incl. VAT',
@@ -383,7 +386,7 @@ export const translations = {
     auth_setup_title: 'Create the administrator',
     auth_setup_description: 'This installation has no administrator yet. The account you create now manages it — AI connections, agents and team members.',
     auth_selfhosted_admin_only: 'This sign-in is for the administrator of this installation. Team members: open the work app link in your invitation email.',
-    selfhosted_tagline: 'AI Agents Under Your Control',
+    selfhosted_tagline: 'AI Work Apps — under your control',
     selfhosted_footer_updates: 'Updates (GitHub)',
     auth_send_reset_email: 'Send Reset Email',
     auth_sending_reset_email: 'Sending Reset Email...',
@@ -576,20 +579,20 @@ export const translations = {
     
     // Company Page
     company_section1_title1: 'Our Story',
-    company_section1_desc1: 'Our journey has always been guided by one goal: helping our business partners (and their customers) succeed and grow robustly through pioneering technology.',
+    company_section1_desc1: 'Our journey has always been guided by one goal: helping our business partners — and their customers — succeed and grow with technology they can rely on.',
     company_section1_desc2: 'Since our founding in the UK in 2005, we\'ve been at the forefront of digital innovation. We first earned the trust of global giants like Samsung, EA Mobile, and Sega by building the technology that delivered over 1.5 billion mobile games to users in 55 countries. This experience taught us the power of seamless digital engagement.',
     company_section1_desc3: 'Building on that success, we relocated our headquarters to Switzerland in 2013 and expanded our expertise into interactive marketing. Our Branded Mini-Games (BMG) platform became a go-to customer loyalty tool for over 100 iconic brands, including BMW and KFC, proving our ability to deepen customer relationships through technology.',
-    company_section1_desc4: 'Today, we are channeling that two-decade legacy of innovation into the future of Artificial Intelligence. We go beyond simple AI chatbots, empowering businesses to revolutionize customer service and business automation through true \'AI Agents.\'<br><br>Our new service, AiTalk.ch, combines advanced RAG (Retrieval-augmented generation) technology with the core <strong>MCP (Model Context Protocol)</strong>. MCP connects various APIs to the AI\'s LLM, providing powerful automation services that go beyond simple answers to automate actual business workflows.<br><br>Headquartered in Baar, Zug, Switzerland, we are a team of AI experts dedicated to building the next generation of intelligent business automation solutions based on trust and precision.',
+    company_section1_desc4: 'Today we bring two decades of building dependable technology to AI. With AiTalk.ch we build <strong>AI Work Apps</strong>: apps in which AI does hard work — such as invoices, receipts, the VAT return and year-end closing — under your control. You tell the AI what you need, it works inside an app that defines exactly what it may touch, fixed code calculates the numbers, and a person confirms before anything is final.<br><br>We started with the work we know best: our own accounting, and we use the same Work Apps for our own companies. Businesses use them in AI Talk Cloud, run by us on Microsoft Azure with data stored in Switzerland — or install AI Talk Self-hosted on their own servers and build Work Apps for their own processes.<br><br>Headquartered in Baar, Zug, Switzerland, we build AI that businesses can trust with work where a wrong number is not an option.',
 
     company_section1_sub1_title1: 'OUR MISSION',
-    company_section1_sub1_desc1: 'Through AI Agent automation technology, we help enhance the core values of our business partners and their customers, and contribute to the prosperity and robust growth of our partners\' businesses.',
+    company_section1_sub1_desc1: 'To take hard, repetitive work off people\'s desks with AI — while the business stays in control of every number and every decision.',
     
     company_section1_sub2_title1: 'OUR CORE VALUES',
     company_section1_sub2_desc1: 'We act with integrity',
     company_section1_sub2_desc2: 'We serve as the partner your business needs',
     company_section1_sub2_desc3: 'We support each other to attain our full potential',
     company_section1_sub2_desc4: 'We respect our people, partners and communities',
-    company_section1_sub2_desc5: 'We follow our core values and work towards our mission to create and improve business results using AiTalk.ch.',
+    company_section1_sub2_desc5: 'We follow our core values and work towards our mission: AI that does real work, under your control.',
     
     company_section2_title1: 'OUR SERVICES & PRODUCTS',
     company_section2_desc1: 'Brands can create HTML5-based branded mini-games on their own without any coding. After the mini-game, campaigns and promotions are supported through a leaderboard, and users can collect points to redeem coupons.',
@@ -601,9 +604,9 @@ export const translations = {
     company_section_bmg_btn1: 'Learn more',
     
     company_section3_title1: 'About',
-    company_section3_desc1: `M-BIZ Global is a Swiss-based technology company with a two-decade legacy of digital innovation.`,
-    company_section3_desc1_5: `We design Agentic AI Solutions such as AiTalk.ch to support the AI Automation Services that businesses need.`,
-    company_section3_desc2: `Headquartered in Baar, Zug, we are dedicated to building the future of business through technology.`,
+    company_section3_desc1: 'M-BIZ Global AG is a Swiss technology company with a two-decade legacy of digital innovation.',
+    company_section3_desc1_5: 'We build AI Work Apps — AI that does hard work such as accounting, under your control — and operate AiTalk.ch.',
+    company_section3_desc2: 'Headquartered in Baar, Zug, we are building the future of business work: AI that people can trust.',
 
     // Legal Documents - Terms of Use
     terms_dpa_link: 'Data Processing Agreement',

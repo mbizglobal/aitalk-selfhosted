@@ -1,6 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import type { BackupTarget } from '@/components/work/BackupDownloadDialog'
 import type { Workflow, LimitType, WorkflowGroup } from '../types'
 
 interface UseWorkflowActionsProps {
@@ -13,6 +15,8 @@ interface UseWorkflowActionsProps {
   setLimitType: (type: LimitType) => void
   setIsLimitDialogOpen: (open: boolean) => void
   t: Record<string, string>
+  sharedInUseText?: (names: string[]) => string
+  onHasWorkApps?: (workflowId: string) => void
 }
 
 export function useWorkflowActions({
@@ -25,6 +29,8 @@ export function useWorkflowActions({
   setLimitType,
   setIsLimitDialogOpen,
   t,
+  sharedInUseText,
+  onHasWorkApps,
 }: UseWorkflowActionsProps) {
   const router = useRouter()
 
@@ -172,6 +178,7 @@ export function useWorkflowActions({
 
       if (!response.ok) {
         const data = await response.json()
+        if (data.code === 'HAS_WORK_APPS' && onHasWorkApps) { onHasWorkApps(workflowId); return }
         throw new Error(data.error || 'Failed to delete workflow')
       }
 
@@ -205,6 +212,9 @@ export function useWorkflowActions({
           setIsLimitDialogOpen(true)
           return
         }
+        if (errorData.code === 'SHARED_APP_IN_USE' && sharedInUseText && Array.isArray(errorData.canvases)) {
+          throw new Error(sharedInUseText(errorData.canvases.map((c: { name?: string }) => c?.name ?? '').filter(Boolean)))
+        }
         throw new Error(typeof errorData.error === 'string' && errorData.code ? errorData.error : 'Failed to change status')
       }
 
@@ -212,7 +222,7 @@ export function useWorkflowActions({
 
       // Update ungrouped workflows
       setWorkflows(workflows.map(w =>
-        w.workflowId === workflowId ? data.workflow : w
+        w.workflowId === workflowId ? { ...data.workflow, workApp: w.workApp } : w
       ))
 
       // Update grouped workflows
@@ -221,7 +231,7 @@ export function useWorkflowActions({
           ...group,
           workflows: group.workflows.map(item =>
             item.workflowId === workflowId
-              ? { ...item, workflow: data.workflow }
+              ? { ...item, workflow: { ...data.workflow, workApp: item.workflow.workApp } }
               : item
           )
         })))
@@ -236,7 +246,9 @@ export function useWorkflowActions({
     }
   }
 
+  const [backupTarget, setBackupTarget] = useState<BackupTarget | null>(null)
   const handleDownloadWorkflowJson = (workflow: Workflow) => {
+    if (workflow.workApp) { setBackupTarget({ scope: 'workflow', id: workflow.workflowId, name: workflow.name }); return }
     try {
       const jsonData = JSON.parse(workflow.workflowJson)
       const formattedJson = JSON.stringify(jsonData, null, 2)
@@ -264,5 +276,7 @@ export function useWorkflowActions({
     handleDeleteWorkflow,
     handleChangeStatus,
     handleDownloadWorkflowJson,
+    backupTarget,
+    closeBackup: () => setBackupTarget(null),
   }
 }

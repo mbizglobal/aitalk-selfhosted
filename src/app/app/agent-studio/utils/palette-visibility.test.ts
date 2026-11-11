@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { describe, it, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
@@ -92,4 +92,28 @@ test('While loop body mapping drift - all 10 modal types are mapped, and only mc
   assert.equal(LOOP_TOOL_NODE_KIND.mcp, 'tool')
   assert.equal(isLoopToolAllowedForKind('mcp', 'sub'), false)
   assert.equal(isLoopToolAllowedForKind('brand_new_loop_tool', 'sub'), true)
+})
+
+describe('work app canvas - hides parts that cannot be used', () => {
+  const ids = ['chat-widget', 'telegram-start', 'pstn-start', 'schedule', 'app-start', 'wait', 'pstn', 'work-app-step', 'subworkflow',
+    'work-app', 'ai', 'end', 'source', 'web-search', 'function-calling', 'mcp', 'condition', 'while', 'data-sheets', 'store', 'sendgrid', 'httpRequest', 'note'].map((id) => ({ id }))
+  it('on a canvas, candidates are hidden and Data sheets, AI, tools and flow stay', () => {
+    const shown = filterPaletteItems(ids, 'main', 'cloud', { appCanvas: true, hasStart: true }).map((x) => x.id)
+    for (const h of ['chat-widget', 'telegram-start', 'pstn-start', 'schedule', 'app-start', 'wait', 'pstn', 'work-app-step', 'subworkflow']) assert.ok(!shown.includes(h), h)
+    for (const k of ['work-app', 'ai', 'end', 'source', 'web-search', 'function-calling', 'mcp', 'condition', 'while', 'data-sheets', 'store', 'sendgrid', 'httpRequest', 'note']) assert.ok(shown.includes(k), k)
+  })
+  it('on a canvas without Start, Start / App is shown again', () => {
+    const shown = filterPaletteItems(ids, 'main', 'cloud', { appCanvas: true, hasStart: false }).map((x) => x.id)
+    assert.ok(shown.includes('app-start'))
+    assert.ok(!shown.includes('chat-widget'))
+  })
+  it('not a canvas (including old linking workflows) - unchanged', () => {
+    const shown = filterPaletteItems(ids, 'main', 'cloud').map((x) => x.id)
+    for (const k of ['wait', 'work-app-step', 'subworkflow', 'pstn', 'chat-widget']) assert.ok(shown.includes(k), k)
+  })
+  it('Wait inside a loop - blocked only on a canvas', () => {
+    assert.equal(isLoopToolAllowedForKind('wait', 'main', { appCanvas: true }), false)
+    assert.equal(isLoopToolAllowedForKind('wait', 'main'), true)
+    assert.equal(isLoopToolAllowedForKind('dataSheets', 'main', { appCanvas: true }), true)
+  })
 })

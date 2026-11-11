@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Menu, X } from 'lucide-react'
 import { WorkflowHeader } from './WorkflowHeader'
 import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowSidebar } from './WorkflowSidebar'
 import { LeftPalette, TestPanel, AIAssistantPanel } from '../panels'
 import { useWorkflowContext } from '../contexts/WorkflowContext'
+import { isAppWorkflow } from '@/lib/workflow/start-trigger'
 import type { PanelSizeState, ChatMessage, UploadedFile, FileInputConfig } from '../types'
 import type { WorkflowDebugLogEntry } from '@/lib/workflow'
 import type { ContextVariables } from '../hooks/useWorkflowExecution'
@@ -90,6 +91,11 @@ export const AgentStudioLayout: React.FC<AgentStudioLayoutProps> = ({
   onRemovePdf
 }) => {
   const { workflow, ui } = useWorkflowContext()
+  const isApp = isAppWorkflow({ nodes: workflow.nodes })
+  const { showDebugPanel, setShowDebugPanel } = ui
+  useEffect(() => {
+    if (isApp && showDebugPanel) setShowDebugPanel(false)
+  }, [isApp, showDebugPanel, setShowDebugPanel])
   const [isDragging, setIsDragging] = useState(false)
 
   return (

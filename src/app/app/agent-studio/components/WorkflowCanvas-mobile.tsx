@@ -10,6 +10,8 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useWorkflowContext } from '../contexts/WorkflowContext'
+import { HandoffReadinessContext, useHandoffReadiness } from './right-panel/handoff-readiness'
+import { useSavedTick } from './right-panel/WorkAppStepPanel'
 import { useLanguage } from '@/hooks/useLanguage'
 import { getAgentStudioTranslation } from '@/lib/translations/agent-studio'
 import type { Node, Edge } from 'reactflow'
@@ -69,7 +71,10 @@ interface WorkflowCanvasMobileProps {
 const WorkflowCanvasMobileContent: React.FC<WorkflowCanvasMobileProps> = ({
   onZoomChange
 }) => {
-  const { workflow, nodeHandlers, test, ui } = useWorkflowContext()
+  const { workflow, nodeHandlers, test, ui, agent } = useWorkflowContext()
+  const savedTick = useSavedTick(ui.hasChanges)
+  const isAppCanvas = workflow.nodes.some((n) => n.data?.nodeType === 'workApp')
+  const handoffReadiness = useHandoffReadiness(isAppCanvas ? agent.workflowId : null, agent.workflowStatus, savedTick)
   const { lang } = useLanguage()
   const t = getAgentStudioTranslation(lang)
   const reactFlowInstance = useReactFlow()
@@ -268,6 +273,7 @@ const WorkflowCanvasMobileContent: React.FC<WorkflowCanvasMobileProps> = ({
           }
         `
       }} />
+      <HandoffReadinessContext.Provider value={handoffReadiness}>
       <ReactFlow
         nodes={workflow.nodes.map(node => ({
           ...node,
@@ -336,6 +342,7 @@ const WorkflowCanvasMobileContent: React.FC<WorkflowCanvasMobileProps> = ({
           color="#3a3a3a"
         />
       </ReactFlow>
+      </HandoffReadinessContext.Provider>
     </div>
   )
 }

@@ -14,6 +14,7 @@ import { decrypt, decryptDataKey, decryptDataKeyWithLegacy } from '@/lib/encrypt
 import { getKnowledgeStore, SELFHOSTED_REGION } from '@/lib/knowledge'
 import { isSelfHosted } from '@/lib/edition'
 import { describeCaughtError, safeLogToken } from '@/lib/log-mask'
+import { deleteAccountLeftovers } from '@/lib/account-leftovers'
 import { purgeMemberPersonalData, memberLookupWhere, lockSeatsForAccountDeletion } from '@/lib/team/member-purge'
 import { lockAgentSeats } from '@/lib/teamSeats'
 
@@ -165,6 +166,8 @@ export async function executeAnonymization(userId: string, requestId: string) {
   console.log(`[Anonymization] Starting database transaction`)
 
   await prisma.$transaction(async (tx) => {
+    const { lockCompanyKey } = await import('@/lib/work/company-limit')
+    await lockCompanyKey(tx, userId)
     const memberWhere = memberLookupWhere(userEmail, userId)
     const memberAgents = await tx.agentMember.findMany({
       where: memberWhere,
@@ -318,38 +321,10 @@ export async function executeAnonymization(userId: string, requestId: string) {
 
     await tx.bookingIndex.deleteMany({ where: { userId } })
 
-    await tx.emailChangeToken.deleteMany({ where: { userId } })
-
     await tx.mcpAccessToken.deleteMany({ where: { userId } })
     await tx.mcpDeployRequest.deleteMany({ where: { userId } })
 
-    await tx.workflowAiAssistantSession.deleteMany({ where: { userId } })
-
-    if (user.agents.length > 0) {
-      const agentIds = user.agents.map(a => a.agentId)
-      await tx.voiceQuizRound.deleteMany({ where: { agentId: { in: agentIds } } })
-      await tx.voiceQuizLesson.deleteMany({ where: { agentId: { in: agentIds } } })
-      await tx.voiceQuizConsent.deleteMany({ where: { agentId: { in: agentIds } } })
-      await tx.voiceQuizConsentNotice.deleteMany({ where: { agentId: { in: agentIds } } })
-      await tx.voiceQuizConsentExport.deleteMany({ where: { agentId: { in: agentIds } } })
-    }
-
-    await tx.trialLead.updateMany({
-      where: {
-        OR: [
-          { userId },
-          ...(userEmail ? [{ email: userEmail, userId: null }] : []),
-        ],
-      },
-      data: {
-        companyName: 'Deleted',
-        contactName: 'Deleted User',
-        email: `deleted_${userId}@anonymized.local`,
-        phone: null,
-        country: null,
-        useCase: null,
-      },
-    })
+    await deleteAccountLeftovers(tx, { userId, agentIds: user.agents.map(a => a.agentId), email: userEmail })
 
     await tx.aiProviders.deleteMany({
       where: { id: userId }
@@ -397,7 +372,7 @@ export async function executeAnonymization(userId: string, requestId: string) {
         processedAt: new Date()
       }
     })
-  })
+  }, { timeout: 120_000, maxWait: 15_000 })
 
   try {
     await emailService.sendAnonymizationCompletedEmail(userEmail, userLanguage)

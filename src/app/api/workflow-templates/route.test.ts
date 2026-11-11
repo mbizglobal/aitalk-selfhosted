@@ -1,5 +1,6 @@
 
 import { describe, it } from 'node:test'
+import { cloudOnly } from '@/lib/work/cloud-apps-for-tests'
 import assert from 'node:assert/strict'
 
 import { prisma } from '@/lib/prisma'
@@ -66,7 +67,7 @@ describe('GET /api/workflow-templates - prod branch (DB)', () => {
   it('host=www.aitalk.ch goes through the DB and parses the JSON string fields', async () => {
     const restore = stubFindMany([templateRow()])
     try {
-      const res = await GET(makeRequest('www.aitalk.ch'))
+      const res = await GET(makeRequest('www.aitalk.ch', '?kind=workflow'))
 
       assert.equal(res.status, 200)
       const body = await res.json()
@@ -101,5 +102,84 @@ describe('GET /api/workflow-templates - prod branch (DB)', () => {
     } finally {
       restore()
     }
+  })
+})
+
+describe('GET /api/workflow-templates - work app templates come from the code list', () => {
+  function stubHonoringNotIn(rows: Array<Record<string, unknown>>) {
+    const model = prisma.workflowTemplate as any
+    const original = model.findMany
+    const calls: unknown[] = []
+    model.findMany = async (args: { where?: { templateId?: { notIn?: string[] } } }) => {
+      calls.push(args)
+      const notIn = args?.where?.templateId?.notIn ?? []
+      return rows.filter((r) => !notIn.includes(r.templateId as string))
+    }
+    return { calls, restore: () => { model.findMany = original } }
+  }
+
+  it('kind=workApp - no DB read even in prod - countries, maker and included apps are attached', cloudOnly, async () => {
+    const s = stubHonoringNotIn([])
+    try {
+      const res = await GET(makeRequest('www.aitalk.ch', '?kind=workApp'))
+      assert.equal(res.status, 200)
+      const body = await res.json()
+      assert.equal(body.source, 'code')
+      assert.equal(s.calls.length, 0, 'DB 를 읽으면 안 된다')
+      const by = Object.fromEntries(body.templates.map((t: { templateId: string }) => [t.templateId, t]))
+      assert.deepEqual(Object.keys(by).sort(), ['work-app', 'work-app-approvals', 'work-app-invoice', 'work-app-invoices', 'work-app-ledger', 'work-app-receipts', 'work-app-vat'])
+      assert.deepEqual(by['work-app-vat'].countries, ['CH'])
+      assert.equal(by['work-app'].countries, 'all')
+      assert.deepEqual(by['work-app-vat'].publisher, { kind: 'aitalk' })
+      assert.equal(by['work-app-invoice'].includes.length, 2)
+      assert.equal(typeof by['work-app'].workflowJson, 'object')
+    } finally {
+      s.restore()
+    }
+  })
+
+  it('kind=workApp - search and category filters also apply to code entries', cloudOnly, async () => {
+    const hit = await (await GET(makeRequest('www.aitalk.ch', '?kind=workApp&search=receipts'))).json()
+    assert.ok(hit.templates.some((t: { templateId: string }) => t.templateId === 'work-app-receipts'))
+    assert.ok(!hit.templates.some((t: { templateId: string }) => t.templateId === 'work-app-vat'))
+    const spaced = await (await GET(makeRequest('www.aitalk.ch', '?kind=workApp&search=%20RECEIPTS%20'))).json()
+    assert.deepEqual(spaced.templates.map((t: { templateId: string }) => t.templateId), hit.templates.map((t: { templateId: string }) => t.templateId), '대소문자 · 앞뒤 공백 무시')
+    const blank = await (await GET(makeRequest('www.aitalk.ch', '?kind=workApp&search=%20%20'))).json()
+    assert.equal(blank.templates.length, 7, '공백뿐인 검색 = 검색 없음')
+    const none = await (await GET(makeRequest('www.aitalk.ch', '?kind=workApp&category=no_such_category'))).json()
+    assert.deepEqual(none.templates, [])
+  })
+
+  it('same id with a broken old DB copy still returns 200 - dropped before parsing - kind=workflow has no work apps', cloudOnly, async () => {
+    const s = stubHonoringNotIn([templateRow({ templateId: 'work-app-vat', workflowJson: '{' }), templateRow()])
+    try {
+      const res = await GET(makeRequest('www.aitalk.ch', '?kind=workflow'))
+      assert.equal(res.status, 200)
+      const body = await res.json()
+      assert.deepEqual(body.templates.map((t: { templateId: string }) => t.templateId), ['tpl_test'])
+      const notIn = (s.calls[0] as { where: { templateId: { notIn: string[] } } }).where.templateId.notIn
+      assert.ok(notIn.includes('work-app-vat') && notIn.includes('work-app'))
+    } finally {
+      s.restore()
+    }
+  })
+
+  it('no kind - general + work apps - a shared id appears once, from code', async () => {
+    const s = stubHonoringNotIn([templateRow({ templateId: 'work-app', name: 'OLD DB COPY', workflowJson: '{' }), templateRow()])
+    try {
+      const body = await (await GET(makeRequest('www.aitalk.ch'))).json()
+      const ids = body.templates.map((t: { templateId: string }) => t.templateId)
+      assert.equal(ids.filter((x: string) => x === 'work-app').length, 1)
+      assert.ok(ids.includes('tpl_test'))
+      assert.notEqual(body.templates.find((t: { templateId: string }) => t.templateId === 'work-app').name, 'OLD DB COPY')
+    } finally {
+      s.restore()
+    }
+  })
+
+  it('development code path kind=workflow - work app templates are not mixed in', async () => {
+    const body = await (await GET(makeRequest('localhost', '?kind=workflow'))).json()
+    assert.ok(body.templates.length > 0)
+    assert.ok(body.templates.every((t: { templateId: string }) => !t.templateId.startsWith('work-app')))
   })
 })

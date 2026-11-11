@@ -168,6 +168,11 @@ export async function deleteProjectBlobs(regionId: string, userId: string, proje
   await deleteBlobsByPrefix(regionId, `${userId}/project/${projectId}/`, `project=${projectId}`)
 }
 
+export async function deleteBackupJobBlobs(regionId: string, prefix: string): Promise<void> {
+  if (!/^[A-Za-z0-9_-]+\/(backup-(job|upload)|project\/[A-Za-z0-9_-]+\/upload)\/[A-Za-z0-9_-]+\/$/.test(prefix)) throw new Error('backup job prefix shape')
+  await deleteBlobsByPrefix(regionId, prefix, 'backup-job')
+}
+
 export async function deleteUserBlobs(regionId: string, userId: string): Promise<void> {
   await deleteBlobsByPrefix(regionId, `${userId}/`, `user=${userId}`)
 }

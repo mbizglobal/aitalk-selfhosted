@@ -6,6 +6,9 @@ import { isSelfHosted } from '@/lib/edition';
 import { normalizeRoutePath, offFeatureForRoute } from '@/lib/edition-features';
 
 import { VENDOR_TRUSTED_IP_RANGES, VENDOR_TRUSTED_IPS } from '@/lib/vendor-network';
+import { OPERATOR_PATH } from '@/lib/vendor-site';
+
+const OPERATOR_API = `/api${OPERATOR_PATH}`;
 import blockedIPsData from '@/data/blocked-ips/blocked-ips.json';
 const PERMANENTLY_BLOCKED_IPS = new Set(blockedIPsData.map((item: { ip: string }) => item.ip));
 
@@ -141,7 +144,7 @@ function checkBot(request: NextRequest): BotCheckResult {
 
 // Order matters: longer-prefix locales (de-ch) MUST come before shorter ones (de)
 // in regex alternations so /de-ch/* does not incorrectly match the /de/ branch.
-const SUPPORTED_LANGS = ['en', 'de-ch', 'de', 'fr', 'ko'];
+const SUPPORTED_LANGS = ['en', 'de', 'fr', 'ko'];
 
 // Public pages that should be served under /{lang}/ path
 const PUBLIC_BASE_PATHS = ['/', '/pricing', '/mbizglobal', '/aboutus', '/law'];
@@ -156,7 +159,7 @@ function mapCountryToLanguage(countryCode: string, acceptLang: string): string |
   if (cc === 'CH' || cc === 'LI') {
     if (acceptLang.includes('fr')) return 'fr';
     if (acceptLang.includes('it')) return 'en';
-    return 'de-ch';
+    return 'de';
   }
   if (cc === 'CA') {
     if (acceptLang.includes('fr')) return 'fr';
@@ -177,7 +180,8 @@ function mapCountryToLanguage(countryCode: string, acceptLang: string): string |
 }
 
 function detectLangFromRequest(request: NextRequest): string {
-  const cookie = request.cookies.get('preferred-language')?.value;
+  const rawCookie = request.cookies.get('preferred-language')?.value;
+  const cookie = rawCookie === 'de-ch' ? 'de' : rawCookie;
   if (cookie && SUPPORTED_LANGS.includes(cookie)) return cookie;
 
   const acceptLang = request.headers.get('accept-language') || '';
@@ -225,10 +229,22 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  if (pathname.startsWith('/d/')) {
+    return NextResponse.next()
+  }
+
+  if (pathname.startsWith('/api/hooks/')) {
+    return NextResponse.next()
+  }
+
+  if (pathname.startsWith('/f/')) {
+    return NextResponse.next()
+  }
+
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
-    (!pathname.startsWith('/console') && !pathname.startsWith('/api/console') && pathname.includes('.')) && (
+    (!pathname.startsWith(OPERATOR_PATH) && !pathname.startsWith(OPERATOR_API) && pathname.includes('.')) && (
       pathname.endsWith('.ico') ||
       pathname.endsWith('.png') ||
       pathname.endsWith('.jpg') ||
@@ -252,10 +268,18 @@ export async function middleware(request: NextRequest) {
 
   // ========== Legacy URL 301 Redirects (SEO) ==========
 
+  if (pathname === '/de-ch' || pathname.startsWith('/de-ch/')) {
+    const rest = pathname.slice('/de-ch'.length);
+    const target = rest === '/mbizglobal' || rest.startsWith('/mbizglobal/') ? `/de/aboutus${rest.slice('/mbizglobal'.length)}` : `/de${rest}`;
+    const url = new URL(target, request.url);
+    url.search = request.nextUrl.search;
+    return NextResponse.redirect(url, 301);
+  }
+
   // 1. /home/{lang}/* → /{lang}/*  (de-ch first so it matches before bare 'de')
   const homeLangMatch = pathname.match(/^\/home\/(de-ch|en|de|fr|es|ko|ja|it)(\/.*)?\/?$/);
   if (homeLangMatch) {
-    const lang = (homeLangMatch[1] === 'it' || homeLangMatch[1] === 'ja') ? 'en' : homeLangMatch[1];
+    const lang = ['it', 'ja', 'es'].includes(homeLangMatch[1]) ? 'en' : homeLangMatch[1];
     const rest = homeLangMatch[2] || '';
     return NextResponse.redirect(new URL(`/${lang}${rest}`, request.url), 301);
   }
@@ -263,7 +287,7 @@ export async function middleware(request: NextRequest) {
   // 2. /{lang}/home/* → /{lang}/*
   const langHomeMatch = pathname.match(/^\/(de-ch|en|de|fr|es|ko|ja|it)\/home(\/.*)?\/?$/);
   if (langHomeMatch) {
-    const lang = (langHomeMatch[1] === 'it' || langHomeMatch[1] === 'ja') ? 'en' : langHomeMatch[1];
+    const lang = ['it', 'ja', 'es'].includes(langHomeMatch[1]) ? 'en' : langHomeMatch[1];
     const rest = langHomeMatch[2] || '';
     return NextResponse.redirect(new URL(`/${lang}${rest}`, request.url), 301);
   }
@@ -285,6 +309,13 @@ export async function middleware(request: NextRequest) {
   if (pathname === '/blog/ja' || pathname.startsWith('/blog/ja/')) {
     return NextResponse.redirect(new URL('/blog/en', request.url), 301);
   }
+  const esMatch = pathname.match(/^\/es(\/.*)?\/?$/);
+  if (esMatch) {
+    return NextResponse.redirect(new URL(`/en${esMatch[1] || ''}`, request.url), 301);
+  }
+  if (pathname === '/blog/es' || pathname.startsWith('/blog/es/')) {
+    return NextResponse.redirect(new URL('/blog/en', request.url), 301);
+  }
 
   // ========== Language Routing ==========
   if (pathname === '/de/mbizglobal' || pathname.startsWith('/de/mbizglobal/')) {
@@ -300,7 +331,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Handle ?lang=XX → redirect to /{lang}/path (301 permanent)
-  const langParam = request.nextUrl.searchParams.get('lang');
+  const rawLangParam = request.nextUrl.searchParams.get('lang');
+  const langParam = rawLangParam === 'de-ch' ? 'de' : rawLangParam;
   if (langParam && SUPPORTED_LANGS.includes(langParam) && isPublicBasePath(pathname)) {
     const finalPath = (langParam === 'de' && (pathname === '/mbizglobal' || pathname.startsWith('/mbizglobal/')))
       ? pathname.replace(/^\/mbizglobal/, '/aboutus')
@@ -400,14 +432,18 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (pathname.startsWith('/console') || pathname.startsWith('/api/console')) {
-    if (pathname === '/api/console/logout') {
+  if (pathname.startsWith(OPERATOR_PATH) || pathname.startsWith(OPERATOR_API)) {
+    if (pathname === `${OPERATOR_API}/logout`) {
       return NextResponse.next();
+    }
+
+    if (!isConsoleIPAllowed(getClientIP(request))) {
+      return NextResponse.rewrite(new URL('/__not_found', request.url));
     }
 
     const devBypass = process.env.NODE_ENV !== 'production' && process.env.CONSOLE_DEV_BYPASS === '1';
     if (!devBypass) {
-      const isApi = pathname.startsWith('/api/console');
+      const isApi = pathname.startsWith(OPERATOR_API);
       const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method);
 
       if (isApi && isMutating) {
@@ -438,10 +474,6 @@ export async function middleware(request: NextRequest) {
       }
 
       if (auth.via === 'session' && !isApi && request.method === 'GET') {
-        const clientIP = getClientIP(request);
-        if (!isConsoleIPAllowed(clientIP)) {
-          return NextResponse.redirect(new URL('/access-denied', request.url));
-        }
         const cookie = getConsoleAdminCookieOptions();
         const res = NextResponse.next();
         res.cookies.set(cookie.name, await issueConsoleAdminToken(auth.email), cookie);
@@ -449,16 +481,6 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    const clientIP = getClientIP(request);
-    if (!isConsoleIPAllowed(clientIP)) {
-      if (pathname.startsWith('/api/console')) {
-        return new NextResponse(
-          JSON.stringify({ error: 'Access denied', ip: clientIP }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      return NextResponse.redirect(new URL('/access-denied', request.url));
-    }
   }
 
   // ========== Admin IP Restriction ==========

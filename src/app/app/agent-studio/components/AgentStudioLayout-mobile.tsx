@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { hasMiniAppOnUnsupportedChannel } from '../utils/nodeUtils'
 import { useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ import { WorkflowSidebarMobile } from './WorkflowSidebar-mobile'
 import { MobileToolbar } from './MobileToolbar'
 import { LeftPaletteMobile, TestPanelMobile } from '../panels'
 import { useWorkflowContext } from '../contexts/WorkflowContext'
+import { isAppWorkflow } from '@/lib/workflow/start-trigger'
 import { useLanguage } from '@/hooks/useLanguage'
 import { getAgentStudioTranslation } from '@/lib/translations/agent-studio'
 import { useReactFlow } from 'reactflow'
@@ -83,11 +84,13 @@ export const AgentStudioLayoutMobile: React.FC<AgentStudioLayoutMobileProps> = (
 }) => {
   const router = useRouter()
   const { workflow, ui, agent, test, confirmLiveSave } = useWorkflowContext()
+  const isApp = isAppWorkflow({ nodes: workflow.nodes })
   const { lang } = useLanguage()
   const t = getAgentStudioTranslation(lang)
 
   const [showPalette, setShowPalette] = useState(false)
   const [showTestPanel, setShowTestPanel] = useState(false)
+  useEffect(() => { if (isApp) setShowTestPanel(false) }, [isApp])
   const [showMenu, setShowMenu] = useState(false)
   const [currentZoom, setCurrentZoom] = useState(100)
 
@@ -125,11 +128,12 @@ export const AgentStudioLayoutMobile: React.FC<AgentStudioLayoutMobileProps> = (
         edges: workflow.edges
       }
 
+      const sentName = agent.workflowName
       const response = await fetch(`/api/workflows/${agent.workflowId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: agent.workflowName,
+          name: sentName,
           workflowJson: JSON.stringify(workflowJson),
           expectedVersion: agent.workflowVersionRef.current, // optimistic concurrency (G1)
           expectedStatus: agent.workflowStatus,
@@ -147,6 +151,7 @@ export const AgentStudioLayoutMobile: React.FC<AgentStudioLayoutMobileProps> = (
           nodes: workflow.nodes,
           edges: workflow.edges
         })
+        agent.setSavedWorkflowName(sentName)
         return true
       } else {
         const error = await response.json().catch(() => null)
@@ -231,6 +236,7 @@ export const AgentStudioLayoutMobile: React.FC<AgentStudioLayoutMobileProps> = (
         canRedo={workflow.historyIndex < workflow.history.length - 1}
         currentZoom={currentZoom}
         testLabel={t.test_short || t.test}
+        showTest={!isApp}
       />
 
       <WorkflowSidebarMobile />
@@ -241,7 +247,7 @@ export const AgentStudioLayoutMobile: React.FC<AgentStudioLayoutMobileProps> = (
       />
 
       <TestPanelMobile
-        isOpen={showTestPanel}
+        isOpen={showTestPanel && !isApp}
         onClose={() => setShowTestPanel(false)}
         chatMessages={chatMessages}
         isExecuting={isExecuting}

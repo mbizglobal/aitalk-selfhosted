@@ -1,12 +1,38 @@
 'use client'
 
-import { memo, useMemo, useCallback } from 'react'
+import { memo, useMemo, useCallback, useContext } from 'react'
 import { NodeProps, Handle, Position, useEdges, useNodes, useReactFlow } from 'reactflow'
 import { generateNodeSummary } from '../utils/generateNodeSummary'
 import { analyzeNodeDependencies, type NodeDependency } from '../utils/analyzeDependencies'
 import { MiniChip } from '../components/MiniChip'
-import { Circle, MessageSquare, Clock, Bot, Inbox, Send, Globe, DatabaseZap, Phone, Puzzle, LayoutGrid } from 'lucide-react'
+import { Circle, MessageSquare, Clock, Bot, Inbox, Send, Globe, DatabaseZap, Phone, Puzzle, LayoutGrid, Link2, Briefcase, ClipboardCheck } from 'lucide-react'
 import { TelegramIcon, SendGridIcon, SmsIcon } from '../constants/components'
+import { useLanguage } from '@/hooks/useLanguage'
+import { getAgentStudioTranslation } from '@/lib/translations/agent-studio'
+import { COMPANY_BOOK_KINDS } from '@/lib/work/app-template-kinds'
+import { HandoffReadinessContext, handoffNotice, isHandoffTarget } from '../components/right-panel/handoff-readiness'
+
+export const WORK_APP_LINES_IN = 'lines-in'
+export const WORK_APP_LINES_IN_BOTTOM = 'lines-in-bottom'
+export const lineHandleBase = (h: string | null | undefined): string | null | undefined => (h === 'ref-top' ? 'ref' : h === 'send-top' ? 'send' : h)
+
+export function workAppLineOutHandle(base: 'ref' | 'send', from?: { position?: { y: number } | null; height?: number | null } | null, to?: { position?: { y: number } | null; height?: number | null } | null): string {
+  const mid = (n?: { position?: { y: number } | null; height?: number | null } | null) => (n?.position?.y ?? 0) + (n?.height ?? 110) / 2
+  return from && to && mid(to) < mid(from) ? `${base}-top` : base
+}
+
+export function workAppLineInHandle(given: string | null | undefined, from?: { position?: { y: number } | null; height?: number | null } | null, to?: { position?: { y: number } | null; height?: number | null } | null): string {
+  if (given === WORK_APP_LINES_IN || given === WORK_APP_LINES_IN_BOTTOM) return given
+  const mid = (n?: { position?: { y: number } | null; height?: number | null } | null) => (n?.position?.y ?? 0) + (n?.height ?? 110) / 2
+  return from && to && mid(from) > mid(to) ? WORK_APP_LINES_IN_BOTTOM : WORK_APP_LINES_IN
+}
+
+const WORK_APP_EVENT_HANDLES = [
+  { id: 'ev:sealed', key: 'work_app_ev_sealed', label: 'closed' },
+  { id: 'ev:resubmitted', key: 'work_app_ev_resubmitted', label: 'resubmitted' },
+  { id: 'ev:unlocked', key: 'work_app_ev_unlocked', label: 'unlocked' },
+  { id: 'ev:inbox_row', key: 'work_app_ev_inbox_row', label: 'new inbox row' },
+] as const
 
 let globalAddToolHandler: ((aiNodeId: string) => void) | null = null
 
@@ -56,6 +82,18 @@ export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
     }
     if (data.nodeType === 'start' && data.triggerType === 'app') {
       return LayoutGrid
+    }
+    if (data.nodeType === 'start' && data.triggerType === 'workEvent') {
+      return Link2
+    }
+    if (data.nodeType === 'workApp') {
+      return Briefcase
+    }
+    if (data.nodeType === 'workAppLink') {
+      return Link2
+    }
+    if (data.nodeType === 'workAppStep') {
+      return ClipboardCheck
     }
     // Chat Widget
     if (data.label === 'Chat Widget' || data.label === 'Start / Chat Widget' ||
@@ -110,6 +148,10 @@ export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
   const getRestoredColor = (): string | null => {
     if (data.triggerType === 'schedule') return 'bg-purple-500'
     if (data.nodeType === 'store') return 'bg-emerald-500'
+    if (data.triggerType === 'workEvent') return 'bg-cyan-600'
+    if (data.nodeType === 'workApp') return 'bg-amber-600'
+    if (data.nodeType === 'workAppLink') return 'bg-sky-700'
+    if (data.nodeType === 'workAppStep') return 'bg-amber-800'
     if (data.nodeType === 'httpRequest') return 'bg-orange-500'
     if (data.nodeType === 'sendgrid') return 'bg-[#00A9D1]'
     if (data.nodeType === 'sms_infobip' || data.nodeType === 'sms_acs' || data.nodeType === 'sms') return 'bg-sky-500'
@@ -126,6 +168,24 @@ export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
   const isStartNode = data.showLeftHandle === false
   const isAINode = data.nodeType === 'ai' || data.label === 'AI'
   const isEndNode = data.nodeType === 'end' || data.label === 'End'
+  const isWorkAppStep = data.nodeType === 'workAppStep'
+  const isWorkApp = data.nodeType === 'workApp'
+  const isWorkAppLink = data.nodeType === 'workAppLink'
+  const linkEmpty = isWorkAppLink && !(typeof data.linkedAppWorkflowId === 'string' && data.linkedAppWorkflowId)
+  const { lang: studioLang } = useLanguage()
+  const studioT = getAgentStudioTranslation(studioLang)
+  const inCanvas = isWorkAppStep && nodes.some((n) => (n.data as { nodeType?: unknown } | undefined)?.nodeType === 'workApp')
+  const hasOldLines = isWorkAppStep && edges.some((e) => (e.source === id || e.target === id) && (e.sourceHandle === 'ref' || e.sourceHandle === 'send'))
+  const hasLineHandles = isWorkApp || (isWorkAppStep && (!inCanvas || hasOldLines))
+  const handoffInCount = isWorkApp
+    ? new Set(edges.filter((e) => {
+        if (e.target !== id || e.sourceHandle === 'ref' || e.sourceHandle === 'send') return false
+        const src = nodes.find((n) => n.id === e.source)
+        return !!src && (src.data as { nodeType?: unknown } | undefined)?.nodeType !== 'start'
+      }).map((e) => e.source)).size
+    : 0
+  const handoffReadiness = useContext(HandoffReadinessContext)
+  const handoffWarn = isWorkApp && handoffReadiness !== null && handoffNotice(id, handoffReadiness, isHandoffTarget(id, nodes, edges)) !== null
   const isLoopTool = data.isLoopTool === true
   const hasBreakpoint = data.hasBreakpoint === true
   const canHaveBreakpoint = !isStartNode && !isEndNode
@@ -188,8 +248,8 @@ export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
         />
       )}
 
-      <div className={`px-3 py-2 bg-[#2A2A2A] border-2 ${selected ? 'border-green-500 shadow-green-500/50' : hasBreakpoint ? 'border-red-500/50' : 'border-[#5A5A5A]'} rounded-xl shadow-lg hover:shadow-xl transition-all ${isAINode ? 'min-w-[150px]' : ''} group`}>
-        {!isLoopTool && showLeftHandle && (
+      <div className={`px-3 py-2 bg-[#2A2A2A] border-2 ${selected ? 'border-green-500 shadow-green-500/50' : hasBreakpoint ? 'border-red-500/50' : 'border-[#5A5A5A]'} rounded-xl shadow-lg hover:shadow-xl transition-all ${isAINode ? 'min-w-[150px]' : ''} ${isWorkApp ? 'min-w-[190px] min-h-[112px] pr-20' : ''} ${isWorkAppLink ? 'min-w-[190px] border-dashed' : ''} group`}>
+        {!isLoopTool && showLeftHandle && !isWorkAppLink && (
           <Handle
             type="target"
             position={Position.Left}
@@ -249,7 +309,7 @@ export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
             </div>
           </div>
         )}
-        {!isLoopTool && !isEndNode && (
+        {!isLoopTool && !isEndNode && !isWorkApp && !isWorkAppLink && (
           <Handle
             type="source"
             position={Position.Right}
@@ -283,6 +343,108 @@ export const CustomNode = memo(({ data, selected, id }: NodeProps) => {
           }}
         />
       )}
+
+      {(isWorkApp || isWorkAppLink) && (
+        <>
+          <Handle
+            type="target"
+            position={Position.Top}
+            id={WORK_APP_LINES_IN}
+            title="send / ref"
+            className="!bg-gray-400 before:content-[''] before:absolute before:inset-[-6px] before:bg-transparent"
+            style={{ width: '10px', height: '6px', borderRadius: '2px', top: '-3px', left: '50%', transform: 'translateX(-50%)' }}
+          />
+          <Handle
+            type="target"
+            position={Position.Bottom}
+            id={WORK_APP_LINES_IN_BOTTOM}
+            title="send / ref"
+            className="!bg-gray-400 before:content-[''] before:absolute before:inset-[-6px] before:bg-transparent"
+            style={{ width: '10px', height: '6px', borderRadius: '2px', bottom: '-3px', top: 'auto', left: '50%', transform: 'translateX(-50%)' }}
+          />
+        </>
+      )}
+      {isWorkApp && (
+        <div className="absolute flex items-center" style={{ right: '-3px', top: '20px' }}>
+          <span className="absolute right-3 whitespace-nowrap text-[9px] font-semibold leading-none text-emerald-400 pointer-events-none select-none">{studioT.work_app_done || 'when closed'}</span>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="done"
+            title={studioT.work_app_done || 'when closed'}
+            className="!bg-emerald-400 before:content-[''] before:absolute before:inset-[-4px] before:bg-transparent !relative !right-0 !top-0 !transform-none"
+            style={{ width: '9px', height: '9px', borderRadius: '50%', border: '1px solid white' }}
+          />
+        </div>
+      )}
+      {isWorkAppLink && (
+        <div className={`absolute left-2 right-2 -top-9 truncate rounded px-1.5 py-0.5 text-center text-[9px] leading-none pointer-events-none select-none ${linkEmpty ? 'bg-amber-900/90 text-amber-200' : 'bg-sky-900/80 text-sky-200'}`}>
+          {linkEmpty ? (COMPANY_BOOK_KINDS.includes(String(data.appTemplate)) ? (studioT.work_app_link_band_empty || 'Choose a ledger — open the panel') : (studioT.work_app_link_band_empty_app || 'Choose the app — open the panel')) : (studioT.work_app_link_band || 'Linked — lives in its own workflow')}
+        </div>
+      )}
+      {isWorkApp && handoffWarn && (
+        <div className="absolute left-2 right-2 -top-9 truncate rounded bg-amber-900/90 px-1.5 py-0.5 text-center text-[9px] leading-none text-amber-200 pointer-events-none select-none">
+          {studioT.work_app_handoff_band || "Can't receive yet — open the panel"}
+        </div>
+      )}
+      {isWorkApp && !handoffWarn && handoffInCount >= 2 && (
+        <div className="absolute left-2 right-2 -top-9 truncate rounded bg-emerald-900/80 px-1.5 py-0.5 text-center text-[9px] leading-none text-emerald-200 pointer-events-none select-none">
+          {studioT.work_app_gather_band || 'Opens the task when all arrive'}
+        </div>
+      )}
+      {isWorkApp && WORK_APP_EVENT_HANDLES.map((h, i) => (
+        <div key={h.id} className="absolute flex items-center" style={{ right: '-3px', top: `${40 + i * 16}px` }}>
+          <span className="absolute right-3 whitespace-nowrap text-[9px] leading-none text-amber-400 pointer-events-none select-none">{studioT[h.key] || h.label}</span>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={h.id}
+            title={studioT[h.key] || h.label}
+            className="!bg-amber-400 before:content-[''] before:absolute before:inset-[-4px] before:bg-transparent !relative !right-0 !top-0 !transform-none"
+            style={{ width: '8px', height: '8px', borderRadius: '50%', border: '1px solid white' }}
+          />
+        </div>
+      ))}
+
+      {(hasLineHandles || isWorkAppLink) && (
+        <div className="absolute flex flex-col items-center" style={{ bottom: '-3px', left: 'calc(50% - 18px)', transform: 'translateX(-50%)' }}>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="ref"
+            title="ref"
+            className="!bg-amber-500 before:content-[''] before:absolute before:inset-[-4px] before:bg-transparent !relative !left-0 !bottom-0 !transform-none"
+            style={{ width: '8px', height: '8px', borderRadius: '2px', border: '1px dashed white' }}
+          />
+          <span className="absolute top-2 text-[9px] leading-none text-amber-500 pointer-events-none select-none">ref</span>
+        </div>
+      )}
+      {hasLineHandles && (
+        <div className="absolute flex flex-col items-center" style={{ bottom: '-3px', left: 'calc(50% + 18px)', transform: 'translateX(-50%)' }}>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="send"
+            title="send"
+            className="!bg-emerald-500 before:content-[''] before:absolute before:inset-[-4px] before:bg-transparent !relative !left-0 !bottom-0 !transform-none"
+            style={{ width: '8px', height: '8px', borderRadius: '2px', border: '1px dashed white' }}
+          />
+          <span className="absolute top-2 text-[9px] leading-none text-emerald-500 pointer-events-none select-none">send</span>
+        </div>
+      )}
+      {(isWorkApp || isWorkAppLink) && ([['ref-top', 'calc(50% - 18px)', '!bg-amber-500', 'text-amber-500', 'ref'], ...(isWorkAppLink ? [] : [['send-top', 'calc(50% + 18px)', '!bg-emerald-500', 'text-emerald-500', 'send']])] as const).map(([hid, left, bg, fg, text]) => (
+        <div key={hid} className="absolute flex flex-col items-center" style={{ top: '-3px', left, transform: 'translateX(-50%)' }}>
+          <span className={`absolute bottom-2 text-[9px] leading-none ${fg} pointer-events-none select-none`}>{text}</span>
+          <Handle
+            type="source"
+            position={Position.Top}
+            id={hid}
+            title={text}
+            className={`${bg} before:content-[''] before:absolute before:inset-[-4px] before:bg-transparent !relative !left-0 !top-0 !transform-none`}
+            style={{ width: '8px', height: '8px', borderRadius: '2px', border: '1px dashed white' }}
+          />
+        </div>
+      ))}
 
       {isAINode && shouldShowTools && (
         <Handle

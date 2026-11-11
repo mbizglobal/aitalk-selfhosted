@@ -2,7 +2,7 @@ import { MetadataRoute } from 'next';
 import { prisma } from '@/lib/prisma';
 
 const BASE = 'https://www.aitalk.ch';
-const LANGS = ['en', 'de', 'de-ch', 'fr', 'es', 'ko'] as const;
+const LANGS = ['en', 'de', 'fr', 'ko'] as const;
 
 type LangAlts = Record<string, string>;
 
@@ -73,12 +73,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ]);
 
+  const APP_LANGS = ['en', 'de', 'fr', 'ko'] as const;
+  const appAlternates = (path: string): LangAlts => ({
+    ...Object.fromEntries(APP_LANGS.map(l => [l, `${BASE}/${l}${path}`])),
+    'x-default': `${BASE}/en${path}`,
+  });
+  const appPages: MetadataRoute.Sitemap = APP_LANGS.flatMap(lang =>
+    ['/voice', '/quiz'].map(path => ({
+      url: `${BASE}/${lang}${path}`,
+      lastModified: now,
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+      alternates: { languages: appAlternates(path) },
+    }))
+  );
+
   // Blog posts (dynamic from DB) + Blog list pages
   let postPages: MetadataRoute.Sitemap = [];
   let blogListPages: MetadataRoute.Sitemap = [];
   try {
     const posts = await prisma.blogPost.findMany({
-      where: { published: true, language: { not: 'ja' } },
+      where: { published: true, language: { notIn: ['ja', 'es'] } },
       select: { slug: true, language: true, updatedAt: true, groupId: true },
     });
 
@@ -137,5 +152,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
   }
 
-  return [...staticPages, ...blogListPages, ...postPages];
+  return [...staticPages, ...appPages, ...blogListPages, ...postPages];
 }

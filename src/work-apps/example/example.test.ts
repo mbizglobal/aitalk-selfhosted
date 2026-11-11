@@ -5,13 +5,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { composeWorkApps } from '@/lib/work/registry'
-import type { ModuleRunCtx, WorkAppToolCtx } from '@/lib/work/package-api'
+import type { ModuleRunCtx, SendRequest, V3WorkAppToolCtx, WorkAppToolCtx } from '@/lib/work/package-api'
 import { vatWorkApp } from '@/work-apps/vat'
 import { exampleWorkApp } from '.'
 import { fromCents, toCents } from './money'
 import { importCsvModule, parseExpensesCsv, splitCsvLine } from './modules/import-csv'
 import { sumRows, totalModule } from './modules/total'
-import { summaryTool } from './tools'
+import { sendTotalTool, summaryTool } from './tools'
 
 const stopCode = (fn: () => unknown) => {
   try { fn() } catch (e) { return (e as { stop?: { code: string } }).stop?.code ?? (e as { code?: string }).code }
@@ -19,7 +19,7 @@ const stopCode = (fn: () => unknown) => {
 }
 const stopped = (code: string) => (e: { stop?: { code: string } }) => e.stop?.code === code
 
-test('registers next to VAT — core 2, English only', () => {
+test('registers next to VAT — core 3, English only', () => {
   const vat = vatWorkApp()
   const ex = exampleWorkApp()
   const r = composeWorkApps([() => vat, () => ex], [vat.meta, ex.meta])
@@ -131,4 +131,40 @@ test('example_summary — counts rows and unconfirmed rows (no totals — those 
     },
   } as unknown as WorkAppToolCtx
   assert.deepEqual(await summaryTool.run(ctx, {}), { rows: 2, unconfirmed: 1 })
+})
+
+test('example_send_total — closed months only, the total of that period, always a card (the AI passes the address)', async () => {
+  const sent: SendRequest[] = []
+  const ctxOf = (send?: (r: SendRequest) => Promise<{ sendId: string; status: 'card' | 'refused'; code?: string }>) => ({
+    sheets: {
+      async submittedPeriods() { return [{ start: '2026-07-01', end: '2026-07-31' }] },
+      async list() { return [{ id: 's1', name: 'Expenses', template: 'example.expenses@1' }] },
+      async read() {
+        return { rows: [
+          { data: { date: '2026-07-03', amount: '12.50' }, confirmed: true },
+          { data: { date: '2026-07-31', amount: '0.50' }, confirmed: true },
+          { data: { date: '2026-08-01', amount: '99.00' }, confirmed: false },
+        ] }
+      },
+    },
+    send,
+  }) as unknown as V3WorkAppToolCtx
+  const card = async (r: SendRequest) => { sent.push(r); return { sendId: 'x', status: 'card' as const } }
+
+  assert.deepEqual(await sendTotalTool.run(ctxOf(card), { month: '2026-07', to: 'a@example.com' }), { status: 'card', code: undefined, total: '13.00', count: 2 })
+  assert.deepEqual(sent, [{ via: 'mail', to: 'a@example.com', content: { subject: 'Expenses 2026-07', text: 'Expenses 2026-07: 13.00 (2 rows, closed).' } }])
+  // A month that is not closed — no card
+  assert.match(String(((await sendTotalTool.run(ctxOf(card), { month: '2026-08', to: 'a@example.com' })) as { error: string }).error), /not closed/)
+  assert.equal(sent.length, 1)
+  // A closed quarter covers the month; a period that covers only part of it does not
+  const withPeriods = (periods: Array<{ start: string; end: string }>) => Object.assign(ctxOf(card), { sheets: { ...(ctxOf(card) as unknown as { sheets: object }).sheets, async submittedPeriods() { return periods } } }) as unknown as V3WorkAppToolCtx
+  assert.equal(((await sendTotalTool.run(withPeriods([{ start: '2026-07-01', end: '2026-09-30' }]), { month: '2026-07', to: 'a@example.com' })) as { total: string }).total, '13.00')
+  assert.match(String(((await sendTotalTool.run(withPeriods([{ start: '2026-07-01', end: '2026-07-30' }]), { month: '2026-07', to: 'a@example.com' })) as { error: string }).error), /not closed/)
+  assert.equal(((await sendTotalTool.run(withPeriods([{ start: '2024-02-01', end: '2024-02-29' }]), { month: '2024-02', to: 'a@example.com' })) as { count: number }).count, 0)
+  for (const month of [undefined, '', '2026-7', '2026-07-01', 202607]) await assert.rejects(sendTotalTool.run(ctxOf(card), { month, to: 'a@example.com' }), { code: 'INVALID' })
+  // The core refuses an empty address — the tool passes the answer on
+  const refused = async () => ({ sendId: 'y', status: 'refused' as const, code: 'RECIPIENT_EMPTY' })
+  assert.equal(((await sendTotalTool.run(ctxOf(refused), { month: '2026-07', to: '' })) as { code: string }).code, 'RECIPIENT_EMPTY')
+  // Without the email connection declared there is no send handle
+  await assert.rejects(sendTotalTool.run(ctxOf(undefined), { month: '2026-07', to: 'a@example.com' }), { code: 'UNAVAILABLE' })
 })

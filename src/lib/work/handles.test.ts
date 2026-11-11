@@ -34,3 +34,31 @@ test('a core 2 calculation module with prepare (which gets the database) is reje
 type NoDeps<T> = 'deps' extends keyof T ? false : true
 const _publicCtxHaveNoDeps: [NoDeps<PublicModuleRunCtx>, NoDeps<PublicScreenRowsCtx>, NoDeps<PublicToolCtx>] = [true, true, true]
 void _publicCtxHaveNoDeps
+
+test('only version 5 has the references key - 1, 2, 3, 4 and null have no key', async () => {
+  const { v5Handles } = await import('./v5-handles')
+  const s = { deps: {} as never, userId: 'u', projectId: 'p' }
+  for (const core of [1, 2, 3, 4, null]) assert.deepEqual(Object.keys(v5Handles(core, s)), [], String(core))
+  assert.deepEqual(Object.keys(v5Handles(5, s)).sort(), ['fingerprint', 'references'])
+})
+
+import type { V5ActionWorkModule, V5WorkAppTool, V5AppTemplate } from './package-api'
+export const __v5TypeUse: { m: V5ActionWorkModule['run']; s: NonNullable<V5ActionWorkModule['screenRows']>; t: V5WorkAppTool['run']; c: NonNullable<V5AppTemplate['checklist']> } = {
+  m: async (ctx) => (await ctx.references()).references(),
+  s: async (ctx) => { (await ctx.references()).references(); return { rows: [] } as never },
+  t: async (ctx) => (await ctx.references()).references(),
+  c: async (ctx) => { (await ctx.references()).references(); return [] },
+}
+
+test('confirm cards and ledger link cards cannot be raised with propose - proposeConfirm and proposeLedgerLink only for version 5 tools', async () => {
+  const { toolHandles } = await import('./handles')
+  const { v5ToolHandles } = await import('./v5-handles')
+  const h = toolHandles({ deps: {} as never, userId: 'u', projectId: 'p', caller: { type: 'human' }, writeAs: { type: 'human' } }, 'run', async () => null)
+  assert.throws(() => h.propose({ type: 'confirm_rows', sheetId: 's', rowIds: ['r'], fingerprint: 'f'.repeat(64), count: 1, detail: '' }), /proposeConfirm/)
+  const s = { deps: {} as never, userId: 'u', projectId: 'p', workflowId: 'w', runId: 'run' }
+  for (const core of [1, 2, 3, 4, null]) assert.deepEqual(Object.keys(v5ToolHandles(core, s)), [], String(core))
+  assert.deepEqual(Object.keys(v5ToolHandles(5, s)).sort(), ['appLinkSetup', 'fingerprint', 'ledgerLinkSetup', 'proposeAppSend', 'proposeConfirm', 'proposeLedgerLink', 'proposeLedgerStatement', 'references'])
+  assert.throws(() => h.propose({ type: 'ledger_link', ledgerProjectId: 'l', items: [], expl: [], fingerprint: 'f'.repeat(64), count: 1, replaces: 0, rows: [], detail: '' }), /proposeLedgerLink/)
+  assert.throws(() => h.propose({ type: 'ledger_files', ledgerProjectId: 'l', files: [{ fileId: 'f', name: 'n' }], ledgerUrl: null }), /made by the core/)
+  assert.throws(() => h.propose({ type: 'ledger_statement', ledgerProjectId: 'l', fileId: 'f', fileName: 'n', statement: {}, account: { last4: '0310', currency: 'CHF', bank: 'ubs', label: '' }, summary: { lines: 0, from: '', until: '', opening: '0.00', closing: '0.00' } }), /proposeLedgerStatement/)
+})

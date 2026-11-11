@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useEdition } from '@/components/EditionProvider'
 import { offFeatureFor } from '@/lib/edition-features'
-import { X, Plus, FileSearch, Globe, AlertCircle, GripHorizontal, RefreshCw, Send, Calendar, Puzzle, Briefcase } from 'lucide-react'
+import { X, Plus, FileSearch, Globe, AlertCircle, GripHorizontal, RefreshCw, Send, Calendar, Puzzle, Briefcase, Inbox } from 'lucide-react'
 import { isAppWorkflow } from '@/lib/workflow/start-trigger'
 import { Button } from '@/components/ui/button'
 import { useWorkflowContext } from '../contexts/WorkflowContext'
@@ -62,6 +62,7 @@ const TOOL_TYPES = {
   microsoft_calendar: { name: 'Microsoft Calendar', color: 'bg-[#0078D4]', textColor: 'text-white' },
   subworkflow: { name: 'Sub-workflow', color: 'bg-pink-500', textColor: 'text-white' },
   workApp: { name: 'Work app', color: 'bg-emerald-600', textColor: 'text-white' },
+  workInbox: { name: 'Work app inbox', color: 'bg-teal-600', textColor: 'text-white' },
 }
 
 interface SubWorkflowSummary {
@@ -90,6 +91,7 @@ export function ToolsModal() {
   const [tempMicrosoftCalendarItems, setTempMicrosoftCalendarItemsRaw] = useState<ToolItem[]>([])
   const [tempSubWorkflowItems, setTempSubWorkflowItemsRaw] = useState<ToolItem[]>([])
   const [tempWorkAppItems, setTempWorkAppItemsRaw] = useState<ToolItem[]>([])
+  const [tempWorkInboxItems, setTempWorkInboxItemsRaw] = useState<ToolItem[]>([])
 
   const [modalDirty, setModalDirty] = useState(false)
   const markDirty = <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
@@ -108,6 +110,7 @@ export function ToolsModal() {
   const setTempMicrosoftCalendarItems = markDirty(setTempMicrosoftCalendarItemsRaw)
   const setTempSubWorkflowItems = markDirty(setTempSubWorkflowItemsRaw)
   const setTempWorkAppItems = markDirty(setTempWorkAppItemsRaw)
+  const setTempWorkInboxItems = markDirty(setTempWorkInboxItemsRaw)
 
   const [subWorkflows, setSubWorkflows] = useState<SubWorkflowSummary[]>([])
 
@@ -261,6 +264,7 @@ export function ToolsModal() {
     const microsoftCalendarNodes = connectedToolNodes.filter(n => n.data?.toolType === 'microsoft_calendar')
     const subWorkflowNodes = connectedToolNodes.filter(n => n.data?.toolType === 'subworkflow')
     const workAppNodes = connectedToolNodes.filter(n => n.data?.toolType === 'workApp')
+    const workInboxNodes = connectedToolNodes.filter(n => n.data?.toolType === 'workInbox')
 
     const asItem = (n: any) => ({
       id: n.id,
@@ -280,6 +284,7 @@ export function ToolsModal() {
     setTempMicrosoftCalendarItemsRaw(microsoftCalendarNodes.map(asItem))
     setTempSubWorkflowItemsRaw(subWorkflowNodes.map(n => ({ ...asItem(n), subWorkflowId: n.data.subWorkflowId || '' })))
     setTempWorkAppItemsRaw(workAppNodes.map(asItem))
+    setTempWorkInboxItemsRaw(workInboxNodes.map(asItem))
   }, [ui.showToolsModal, activeAiNode, workflow.edges, workflow.nodes])
 
   const wasOpenRef = useRef(false)
@@ -304,7 +309,7 @@ export function ToolsModal() {
     : 0
   const totalCount = tempSourceItems.length + tempMcpItems.length + tempWebSearchItems.length
     + tempSendgridItems.length + tempTelegramItems.length + tempSmsItems.length + tempSmtpItems.length
-    + tempSubWorkflowItems.length + tempWorkAppItems.length
+    + tempSubWorkflowItems.length + tempWorkAppItems.length + tempWorkInboxItems.length
     + unmanagedAttachedCount
   const totalCalendarCount = tempGoogleCalendarItems.length + tempMicrosoftCalendarItems.length
 
@@ -354,7 +359,7 @@ export function ToolsModal() {
     const attachedIds = new Set(attachedToolNodes.map(n => n.id))
 
     // Create new tool nodes (Source, MCP, Web Search + Apps)
-    const allToolItems: Array<ToolItem & { type: 'source' | 'mcp' | 'webSearch' | 'sendgrid' | 'telegram' | 'sms' | 'smtp' | 'google_calendar' | 'microsoft_calendar' | 'subworkflow' | 'workApp' }> = [
+    const allToolItems: Array<ToolItem & { type: 'source' | 'mcp' | 'webSearch' | 'sendgrid' | 'telegram' | 'sms' | 'smtp' | 'google_calendar' | 'microsoft_calendar' | 'subworkflow' | 'workApp' | 'workInbox' }> = [
       ...tempSourceItems.map(item => ({ ...item, type: 'source' as const })),
       ...tempMcpItems.map(item => ({ ...item, type: 'mcp' as const })),
       ...tempWebSearchItems.map(item => ({ ...item, type: 'webSearch' as const })),
@@ -366,6 +371,7 @@ export function ToolsModal() {
       ...tempMicrosoftCalendarItems.map(item => ({ ...item, type: 'microsoft_calendar' as const })),
       ...tempSubWorkflowItems.map(item => ({ ...item, type: 'subworkflow' as const })),
       ...tempWorkAppItems.map(item => ({ ...item, type: 'workApp' as const })),
+      ...tempWorkInboxItems.map(item => ({ ...item, type: 'workInbox' as const })),
     ]
 
     const toolConfig: Record<string, { icon: any; color: string }> = {
@@ -380,6 +386,7 @@ export function ToolsModal() {
       microsoft_calendar: { icon: Calendar, color: 'bg-[#0078D4]' },
       subworkflow: { icon: Puzzle, color: 'bg-pink-500' },
       workApp: { icon: Briefcase, color: 'bg-emerald-600' },
+      workInbox: { icon: Inbox, color: 'bg-teal-600' },
     }
 
     const positions = [
@@ -764,6 +771,48 @@ export function ToolsModal() {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {supportsAppsTools && !isAppWorkflow({ nodes: workflow.nodes }) && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded ${TOOL_TYPES.workInbox.color}`}>
+                    <Inbox className="w-4 h-4 text-white" />
+                  </div>
+                  <label className="text-sm font-medium text-gray-200">{t.work_inbox_tool || TOOL_TYPES.workInbox.name}</label>
+                </div>
+                <span className="text-xs text-gray-400">{tempWorkInboxItems.length}/1</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {tempWorkInboxItems.map((item) => (
+                  <div key={item.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg ${TOOL_TYPES.workInbox.color} text-white`}>
+                    <span className="text-sm font-medium">{item.name}</span>
+                    <button onClick={() => setTempWorkInboxItems(prev => prev.filter(i => i.id !== item.id))} className="hover:opacity-70">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {tempWorkInboxItems.length === 0 && (
+                  <button
+                    onClick={() => {
+                      if (totalCount >= 10) {
+                        toast.error(t.max_tools_allowed)
+                        return
+                      }
+                      setTempWorkInboxItems([{ id: `workinbox-${Date.now()}`, name: t.work_inbox_tool || 'Work app inbox' }])
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-[#3A3A3A] text-gray-400 hover:border-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="text-sm font-medium">{t.add_work_inbox_tool || 'Add work app inbox'}</span>
+                  </button>
+                )}
+              </div>
+              {tempWorkInboxItems.length > 0 && (
+                <p className="mt-2 text-xs text-gray-500">{t.work_inbox_pick_hint || 'After saving, click the inbox node on the canvas to choose the work app and its inbox.'}</p>
+              )}
             </div>
           )}
 

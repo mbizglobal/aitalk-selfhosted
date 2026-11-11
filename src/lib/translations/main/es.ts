@@ -207,7 +207,7 @@ export const translations = {
     managed_azure_openai_desc: 'Últimos modelos de OpenAI alojados en Microsoft Azure con seguridad y cumplimiento empresarial.',
     managed_azure_search_desc: 'Base de datos vectorial empresarial para búsqueda de conocimiento con RAG. Tus datos nunca salen de la región seleccionada.',
     managed_regions_desc: 'Elija la región más cercana para un rendimiento óptimo y cumplimiento normativo.',
-    pricing_starter_app_only: 'Mobile app only',
+    pricing_starter_app_only: 'Mobile Pay only',
     pricing_starter_price_eur: 'EUR 20–25',
     pricing_starter_price_chf_note: '/month · incl. 8.1% VAT',
     pricing_starter_price_eur_note: '/month · incl. VAT',

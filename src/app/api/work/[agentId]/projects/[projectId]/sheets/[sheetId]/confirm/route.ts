@@ -20,5 +20,6 @@ export const POST = workRoute<{ agentId: string; projectId: string; sheetId: str
   if (!Array.isArray(body.rowIds) || body.rowIds.length === 0 || body.rowIds.length > 1000 || !body.rowIds.every((x) => typeof x === 'string')) {
     throw new WorkError('INVALID', 'rowIds must be a list of row ids')
   }
-  return confirmFromScreen(deps, target, { rowIds: body.rowIds as string[] })
+  if (body.fingerprint !== undefined && (typeof body.fingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(body.fingerprint))) throw new WorkError('INVALID', 'fingerprint')
+  return confirmFromScreen(deps, target, { rowIds: body.rowIds as string[], ...(typeof body.fingerprint === 'string' ? { fingerprint: body.fingerprint } : {}) })
 })

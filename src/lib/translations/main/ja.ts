@@ -208,7 +208,7 @@ export const translations = {
     managed_azure_search_desc: 'RAG対応ナレッジ検索のためのエンタープライズベクターデータベース。日本Azureリージョン(東京)にフル機能(Semantic Ranker, Higher Storage)で配置され、データが国境を越えることはありません。',
     managed_regions_title: '12カ国で利用可能',
     managed_regions_desc: '最適なパフォーマンスとコンプライアンスのために最寄りのリージョンをお選びください。',
-    pricing_starter_app_only: 'Mobile app only',
+    pricing_starter_app_only: 'Mobile Pay only',
     pricing_starter_price_eur: 'EUR 20–25',
     pricing_starter_price_chf_note: '/month · incl. 8.1% VAT',
     pricing_starter_price_eur_note: '/month · incl. VAT',

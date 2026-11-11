@@ -418,7 +418,7 @@ export const createWorkflowHandlers = (context: WorkflowExecutionContext) => {
       visited.add(nodeId)
       recursionStack.add(nodeId)
 
-      const outgoingEdges = edges.filter(e => e.source === nodeId)
+      const outgoingEdges = edges.filter(e => e.source === nodeId && !['tools', 'miniapps', 'ref', 'send'].includes(String(e.sourceHandle ?? '')))
       for (const edge of outgoingEdges) {
         if (!visited.has(edge.target)) {
           if (hasCycleDFS(edge.target)) {

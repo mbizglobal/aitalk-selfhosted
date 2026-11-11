@@ -25,7 +25,7 @@ describe('computation - builds flags from attached tool nodes', () => {
       source: 'source', mcp: 'mcp', webSearch: 'webSearch', functionCalling: 'functionCalling',
       sendgrid: 'sendgrid', telegram: 'telegram', sms: 'sms', smtp: 'smtp',
       googleCalendar: 'google_calendar', microsoftCalendar: 'microsoft_calendar',
-      subworkflow: 'subworkflow', workApp: 'workApp',
+      subworkflow: 'subworkflow', workApp: 'workApp', workInbox: 'workInbox',
     }
     assert.deepEqual(DERIVED_TOOL_FLAGS.slice().sort(), Object.keys(byFlag).sort())
 

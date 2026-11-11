@@ -24,7 +24,9 @@ export const SUPPORTED_NODE_TYPES: WorkflowNode['type'][] = [
   'smtp',
   'httpRequest',
   'store',
-  'pstn'
+  'pstn',
+  'workAppStep',
+  'workHandoff'
 ] as const
 
 export const isSupportedNodeType = (value: any): value is WorkflowNode['type'] =>

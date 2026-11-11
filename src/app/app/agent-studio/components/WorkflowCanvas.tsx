@@ -7,10 +7,14 @@ import ReactFlow, {
   MarkerType,
   OnSelectionChangeParams,
   Background,
-  BackgroundVariant
+  BackgroundVariant,
+  type Connection,
+  type OnConnectStartParams
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useWorkflowContext } from '../contexts/WorkflowContext'
+import { HandoffReadinessContext, useHandoffReadiness } from './right-panel/handoff-readiness'
+import { useSavedTick } from './right-panel/WorkAppStepPanel'
 import { Button } from '@/components/ui/button'
 import {
   ZoomIn,
@@ -26,7 +30,7 @@ import {
   Plus
 } from 'lucide-react'
 
-import { CustomNode } from '../nodes/CustomNode'
+import { CustomNode, lineHandleBase, workAppLineInHandle, workAppLineOutHandle } from '../nodes/CustomNode'
 import { ToolNode } from '../nodes/ToolNode'
 import { NoteNode } from '../nodes/NoteNode'
 import { IfElseNode } from '../nodes/IfElseNode'
@@ -91,7 +95,10 @@ const defaultEdgeOptions = {
 }
 
 const WorkflowCanvasContent: React.FC = () => {
-  const { workflow, nodeHandlers, test, ui } = useWorkflowContext()
+  const { workflow, nodeHandlers, test, ui, agent } = useWorkflowContext()
+  const savedTick = useSavedTick(ui.hasChanges)
+  const isAppCanvas = workflow.nodes.some((n) => n.data?.nodeType === 'workApp')
+  const handoffReadiness = useHandoffReadiness(isAppCanvas ? agent.workflowId : null, agent.workflowStatus, savedTick)
   const reactFlowInstance = useReactFlow()
   const { fitView, zoomIn, zoomOut, getZoom, setViewport, getViewport } = reactFlowInstance
 
@@ -99,6 +106,7 @@ const WorkflowCanvasContent: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = React.useState(false)
       const [controlledViewport, setControlledViewport] = React.useState<{ x: number; y: number; zoom: number }>({ x: 0, y: 0, zoom: 1 })
   const lastRightClickTimeRef = React.useRef<number>(0)
+  const pendingConnectRef = React.useRef<{ nodeId: string; handleId: string | null; made: boolean } | null>(null)
 
   const handleLockToggle = useCallback(() => {
     if (!ui.isLocked) {
@@ -514,7 +522,18 @@ const WorkflowCanvasContent: React.FC = () => {
       ui.showVoiceQuizNoticeModal, ui.showVoiceQuizContentModal, ui.showVoiceQuizBankModal])
 
   const customizedEdges = useMemo(
-    () => customizeEdges(workflow.edges, workflow.nodes),
+    () => {
+      const byId = new Map(workflow.nodes.map((n) => [n.id, n]))
+      const lineNode = (id: string) => { const k = byId.get(id)?.data?.nodeType; return k === 'workApp' || k === 'workAppLink' }
+      const edges = workflow.edges.map((e) => ((e.sourceHandle === 'send' || e.sourceHandle === 'ref') && lineNode(e.target) && lineNode(e.source)
+        ? {
+            ...e,
+            sourceHandle: workAppLineOutHandle(e.sourceHandle, byId.get(e.source), byId.get(e.target)),
+            targetHandle: workAppLineInHandle(e.targetHandle, byId.get(e.source), byId.get(e.target)),
+          }
+        : e))
+      return customizeEdges(edges, workflow.nodes)
+    },
     [workflow.edges, workflow.nodes]
   )
 
@@ -533,6 +552,7 @@ const WorkflowCanvasContent: React.FC = () => {
           }
         `
       }} />
+      <HandoffReadinessContext.Provider value={handoffReadiness}>
       <ReactFlow
         nodes={workflow.nodes.map(node => ({
           ...node,
@@ -552,7 +572,19 @@ const WorkflowCanvasContent: React.FC = () => {
         edges={customizedEdges}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
-        onConnect={nodeHandlers.onConnect}
+        onConnectStart={(_e: unknown, p: OnConnectStartParams) => { pendingConnectRef.current = p.nodeId ? { nodeId: p.nodeId, handleId: p.handleId ?? null, made: false } : null }}
+        onConnect={(c: Connection) => { if (pendingConnectRef.current) pendingConnectRef.current.made = true; nodeHandlers.onConnect(c) }}
+        onConnectEnd={(e: MouseEvent | TouchEvent) => {
+          const pending = pendingConnectRef.current
+          pendingConnectRef.current = null
+          if (!pending || pending.made || !['send', 'ref', 'done'].includes(lineHandleBase(pending.handleId) ?? '')) return
+          const pt = 'changedTouches' in e ? e.changedTouches[0] : e
+          const el = pt ? document.elementFromPoint(pt.clientX, pt.clientY) : null
+          const targetId = (el?.closest('.react-flow__node') as HTMLElement | null)?.getAttribute('data-id')
+          if (!targetId || targetId === pending.nodeId) return
+          const c: Connection = { source: pending.nodeId, sourceHandle: pending.handleId, target: targetId, targetHandle: null }
+          if (nodeHandlers.isValidConnection(c)) nodeHandlers.onConnect(c)
+        }}
         isValidConnection={nodeHandlers.isValidConnection}
         onNodeClick={nodeHandlers.onNodeClick}
         onNodeDragStart={nodeHandlers.onNodeDragStart}
@@ -761,6 +793,7 @@ const WorkflowCanvasContent: React.FC = () => {
           </Panel>
         )}
       </ReactFlow>
+      </HandoffReadinessContext.Provider>
     </div>
   )
 }
@@ -997,6 +1030,45 @@ function createPaletteNode(
           nodeType: 'start',
           triggerType: 'app',
           showLeftHandle: false
+        },
+        selected: false
+      }
+    case 'work-event-start':
+      return {
+        id,
+        type: 'custom',
+        position,
+        data: {
+          ...baseData,
+          nodeType: 'start',
+          triggerType: 'workEvent',
+          workEvents: ['sealed'],
+          showLeftHandle: false
+        },
+        selected: false
+      }
+    case 'work-app':
+      return {
+        id,
+        type: 'custom',
+        position,
+        data: {
+          ...baseData,
+          nodeType: 'workApp',
+          ai: {},
+        },
+        selected: false
+      }
+    case 'work-app-step':
+      return {
+        id,
+        type: 'custom',
+        position,
+        data: {
+          ...baseData,
+          nodeType: 'workAppStep',
+          action: 'open_task',
+          periodDate: 'event_end',
         },
         selected: false
       }

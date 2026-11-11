@@ -1,4 +1,4 @@
-export type CreateStep = 'select' | 'blank' | 'template' | 'preview' | 'sub'
+export type CreateStep = 'blank' | 'template' | 'workapp' | 'preview' | 'sub'
 
 export interface DataSheetColumn {
   name: string
@@ -29,6 +29,10 @@ export interface WorkflowTemplate {
   sortOrder: number
   dataSheetSchema?: DataSheetSchema
   bundleVersion?: number
+  countries?: 'all' | string[]
+  publisher?: { kind: 'aitalk' } | { kind: 'community'; names: string[] } | { kind: 'own' }
+  includes?: string[]
+  i18n?: Partial<Record<string, { name: string; description: string; explanation: string }>>
 }
 
 export interface Category {
@@ -48,11 +52,8 @@ export interface CreateWorkflowTranslations {
   workflow_create: string
   workflow_creating: string
   // Template dialog keys
-  workflow_step_select_title: string
   workflow_step_blank_title: string
-  workflow_step_blank_desc: string
   workflow_step_template_title: string
-  workflow_step_template_desc: string
   workflow_template_search: string
   workflow_template_all_categories: string
   workflow_template_no_results: string
@@ -65,6 +66,18 @@ export interface CreateWorkflowTranslations {
   workflow_template_datasheet_auto: string
   // Sub-workflow (docs/wf/subwf/subwf.md) — optional keys, callers fall back to English
   workflow_step_sub_title?: string
-  workflow_step_sub_desc?: string
   workflow_sub_form_hint?: string
+  workflow_workapp_pick_title?: string
+  workflow_workapp_none?: string
+  workflow_workapp_all_countries?: string
+  workflow_workapp_any_country?: string
+  workflow_workapp_search?: string
+  workflow_workapp_includes?: string
+  workflow_workapp_company_full?: string
+  workflow_workapp_by_aitalk?: string
+  workflow_workapp_by_community?: string
+  workflow_workapp_by_own?: string
+  workflow_workapp_myforms_desc?: string
+  workflow_workapp_myforms_open?: string
+  workflow_workapp_myforms_failed?: string
 }

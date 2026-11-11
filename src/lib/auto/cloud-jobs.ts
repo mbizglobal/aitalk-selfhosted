@@ -27,4 +27,5 @@ export const cloudJobs = {
   reconcileStoreSubscriptions: unavailable('reconcileStoreSubscriptions'),
   retryStoreAcknowledgements: unavailable('retryStoreAcknowledgements'),
   retryOldContractCuts: unavailable('retryOldContractCuts'),
+  purgeSupportReports: unavailable('purgeSupportReports'),
 }

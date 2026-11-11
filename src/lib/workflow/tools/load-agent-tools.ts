@@ -10,6 +10,7 @@ import { GoogleCalendarToolClient } from './google-calendar-tool'
 import { MicrosoftCalendarToolClient } from './microsoft-calendar-tool'
 import { CallTransferToolClient } from './call-transfer-tool'
 import { SubWorkflowToolClient } from './subworkflow-tool'
+import { WorkInboxToolClient } from './work-inbox-tool'
 import { MultiCalendarDispatcher, CalendarRosterEntry, CalendarNodeInput } from './multi-calendar-dispatcher'
 import { isAiNodeRaw } from '../find-ai-node'
 import { bookingMessagePromptOf } from '@/lib/calendar/booking-message'
@@ -182,7 +183,7 @@ export async function loadAgentAppsTools(
     e.source === aiNode.id && e.sourceHandle === 'tools'
   )
 
-  const appsToolTypes = ['sendgrid', 'telegram', 'sms', 'smtp', 'google_calendar', 'microsoft_calendar', 'subworkflow'] as const
+  const appsToolTypes = ['sendgrid', 'telegram', 'sms', 'smtp', 'google_calendar', 'microsoft_calendar', 'subworkflow', 'workInbox'] as const
   type AppsToolType = typeof appsToolTypes[number]
 
   const toolNodes: Array<{ nodeId: string; toolType: AppsToolType; connectionId: string; nodeData: any }> = []
@@ -194,7 +195,7 @@ export async function loadAgentAppsTools(
     if (!toolNode || toolNode.type !== 'tool') continue
 
     const toolType = toolNode.data?.toolType as string
-    const connectionId = (toolType === 'subworkflow' ? toolNode.data?.subWorkflowId : toolNode.data?.connectionId) as string
+    const connectionId = (toolType === 'subworkflow' ? toolNode.data?.subWorkflowId : toolType === 'workInbox' ? toolNode.data?.targetWorkflowId : toolNode.data?.connectionId) as string
 
     if (!appsToolTypes.includes(toolType as AppsToolType)) continue
     if (offFeatureFor('toolTypes', toolType)) {
@@ -205,7 +206,7 @@ export async function loadAgentAppsTools(
     if (channel === 'booking_widget' && toolType !== 'google_calendar' && toolType !== 'microsoft_calendar') continue
 
     if (!connectionId) {
-      const reason = toolType === 'subworkflow' ? 'no subWorkflowId' : 'no connectionId'
+      const reason = toolType === 'subworkflow' ? 'no subWorkflowId' : toolType === 'workInbox' ? 'no targetWorkflowId' : 'no connectionId'
       skipped.push({ toolType, reason })
       failedTools.push({ toolType, reason })
       continue
@@ -353,7 +354,8 @@ export async function loadAgentAppsTools(
     ? otherToolNodes
     : toolNodes
   const subWorkflowNodes = singleModeNodesAll.filter((t) => t.toolType === 'subworkflow')
-  const singleModeNodes = singleModeNodesAll.filter((t) => t.toolType !== 'subworkflow')
+  const workInboxNodes = channel === 'pstn' || channel === 'web_voice' || channel === 'test' ? singleModeNodesAll.filter((t) => t.toolType === 'workInbox') : []
+  const singleModeNodes = singleModeNodesAll.filter((t) => t.toolType !== 'subworkflow' && t.toolType !== 'workInbox')
 
   for (const { toolType, connectionId, nodeData } of singleModeNodes) {
     try {
@@ -470,6 +472,7 @@ export async function loadAgentAppsTools(
           bookingMessagePrompt ??= bookingMessagePromptOf(nodeData)
           break
         case 'subworkflow':
+        case 'workInbox':
           continue
       }
 
@@ -517,6 +520,28 @@ export async function loadAgentAppsTools(
         clients.set(tool.name, client)
         definitions.push({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })
       }
+    }
+  }
+
+  if (workInboxNodes.length > 1) {
+    console.error(`[Widget] ${workInboxNodes.length} work inbox tools on one AI node — none is loaded`)
+    failedTools.push({ toolType: 'workInbox', reason: 'more than one work inbox tool on the AI node' })
+  } else if (workInboxNodes.length === 1) {
+    const { connectionId: targetWorkflowId, nodeData } = workInboxNodes[0]
+    try {
+      const client = new WorkInboxToolClient()
+      await client.initialize(prisma, targetWorkflowId, {
+        callerWorkflowId: workflow.workflowId,
+        inboxFamily: typeof nodeData?.inboxFamily === 'string' ? nodeData.inboxFamily.trim() : '',
+        channel: channel === 'pstn' ? 'pstn' : channel === 'web_voice' ? 'web_voice' : 'test',
+      }, userId)
+      for (const tool of client.listTools()) {
+        clients.set(tool.name, client)
+        definitions.push({ type: 'function', name: tool.name, description: tool.description, parameters: tool.parameters })
+      }
+    } catch (error: any) {
+      console.error('[Widget] Failed to load Work inbox tool:', describeCaughtError(error))
+      failedTools.push({ toolType: 'workInbox', reason: describeCaughtError(error) })
     }
   }
 

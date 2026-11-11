@@ -23,7 +23,6 @@ Allow: /
 Disallow: /api/
 Disallow: /app/api/
 Disallow: /admin/
-Disallow: /console/
 Disallow: /auth/
 Disallow: /access-denied
 
@@ -35,7 +34,6 @@ Disallow: /api/
 Disallow: /app/api/
 
 Disallow: /admin/
-Disallow: /console/
 Disallow: /auth/
 Disallow: /access-denied
 

@@ -14,8 +14,11 @@ import {
 } from './subworkflow'
 import type { WorkflowNode } from './types'
 import { MINI_APP_REGISTRY, MINI_APP_TYPES, isMiniAppAllowedOn, isMiniAppNode, miniAppChannelOf, type MiniAppType } from './mini-app-registry'
-import { APP_TRIGGER } from './start-trigger'
-import { APP_TEMPLATE_KINDS, isAppTemplateKind } from '@/lib/work/app-template-kinds'
+import { APP_TRIGGER, WORK_EVENT_TRIGGER, WORK_EVENT_KINDS } from './start-trigger'
+import { isCalendarDate } from '@/lib/work/dates'
+import { referenceLinesOf, sendLinesOf } from '@/lib/work/reference-lines'
+import { APP_TEMPLATE_KINDS, isAppTemplateKind, isSharedAppTemplateKind, SHARED_APP_TEMPLATE_KINDS } from '@/lib/work/app-template-kinds'
+import { appNodesOf, isAppCanvas, linkNodesOf, linkTargetOf, canvasEventEntries, DONE_HANDLE, doneRunGraph, eventKindOfHandle, eventRunGraph, EVENT_HANDLE_PREFIX, handoffCycle, handoffRoutesOf, HANDOFF_NODE } from '@/lib/work/app-canvas'
 
 // ========================================
 // ========================================
@@ -42,6 +45,9 @@ export type WorkflowValidationIssueCode =
   | 'CONDITION_EXPRESSION_INVALID'
   | 'SUB_WORKFLOW_RULE'
   | 'APP_START_RULE'
+  | 'WORK_EVENT_RULE'
+  | 'WORK_APP_CANVAS_RULE'
+  | 'LINK_TARGET_MISSING'
   | 'EDITION_NOT_INCLUDED'
 
 export type WorkflowIssueSeverity = 'error' | 'warning'
@@ -104,7 +110,7 @@ function engineKind(node: RawNode): string | null {
 }
 
 function isFlowEdge(edge: RawEdge): boolean {
-  return edge.sourceHandle !== 'tools' && edge.sourceHandle !== 'miniapps'
+  return edge.sourceHandle !== 'tools' && edge.sourceHandle !== 'miniapps' && edge.sourceHandle !== 'ref' && edge.sourceHandle !== 'send'
 }
 
 function issue(
@@ -298,8 +304,252 @@ export function validateWorkflowJson(
       if (t !== undefined && t !== null && t !== '' && !isAppTemplateKind(t)) {
         issues.push(issue('APP_START_RULE', `Node "${label(n)}": appTemplate "${String(t)}" is not a known app template (known: ${APP_TEMPLATE_KINDS.join(', ')}; leave it empty to choose in the first chat)`, { nodeId: n.id, field: 'appTemplate' }))
       }
+      const conns = (n.data as Record<string, unknown>)?.connections
+      if (conns !== undefined && conns !== null) {
+        const ok = typeof conns === 'object' && !Array.isArray(conns) && Object.values(conns as Record<string, unknown>).every((slots) =>
+          !!slots && typeof slots === 'object' && !Array.isArray(slots) && Object.values(slots as Record<string, unknown>).every((id) => typeof id === 'string' && id.trim().length > 0 && id.length <= 64))
+        if (!ok) issues.push(issue('APP_START_RULE', `Node "${label(n)}": connections must be { <connection kind>: { <slot>: "<connection id>" } } with non-empty text ids`, { nodeId: n.id, field: 'connections' }))
+      }
+      const ai = (n.data as Record<string, unknown>)?.dbAiSql
+      if (ai !== undefined && ai !== null && !(typeof ai === 'object' && !Array.isArray(ai) && Object.entries(ai as Record<string, unknown>).every(([k, v]) => k.length > 0 && k.length <= 64 && typeof v === 'boolean'))) {
+        issues.push(issue('APP_START_RULE', `Node "${label(n)}": dbAiSql must be { <database slot>: true | false }`, { nodeId: n.id, field: 'dbAiSql' }))
+      }
+      if (!telegramChatsOk((n.data as Record<string, unknown>)?.telegramChats)) {
+        issues.push(issue('APP_START_RULE', `Node "${label(n)}": telegramChats must be { <telegram slot>: "<chat id — a number like -1001234567890, or @channelname>" }`, { nodeId: n.id, field: 'telegramChats' }))
+      }
+      if (!calendarSlotsOk((n.data as Record<string, unknown>)?.calendarSlots)) {
+        issues.push(issue('APP_START_RULE', `Node "${label(n)}": calendarSlots must be { <calendar slot>: { connectionId, accountId, calendarId, calendarName? } } — picked in the studio`, { nodeId: n.id, field: 'calendarSlots' }))
+      }
+      const rs = (n.data as Record<string, unknown>)?.ragSpaceId
+      if (rs !== undefined && rs !== null && rs !== '' && !((typeof rs === 'number' && Number.isSafeInteger(rs) && rs > 0) || (typeof rs === 'string' && /^[1-9]\d{0,9}$/.test(rs)))) {
+        issues.push(issue('APP_START_RULE', `Node "${label(n)}": ragSpaceId must be a positive whole number (leave it empty for the Default space)`, { nodeId: n.id, field: 'ragSpaceId' }))
+      }
     }
   }
+
+  {
+    const startNodes = nodes.filter(n => engineKind(n) === 'start')
+    const evStarts = startNodes.filter(n => n.data?.triggerType === WORK_EVENT_TRIGGER)
+    if (evStarts.length && startNodes.length !== 1) {
+      issues.push(issue('WORK_EVENT_RULE', `A workflow started by a work app event (Start triggerType "${WORK_EVENT_TRIGGER}") must have exactly one Start node (found ${startNodes.length})`))
+    }
+    if (evStarts.length && startNodes.some(n => n.data?.triggerType === APP_TRIGGER)) {
+      issues.push(issue('WORK_EVENT_RULE', 'A work app workflow (Start / App) cannot also be started by a work app event'))
+    }
+    for (const n of evStarts) {
+      const d = (n.data ?? {}) as Record<string, unknown>
+      const src = d.workEventWorkflowId
+      if (src !== undefined && src !== null && src !== '' && (typeof src !== 'string' || src.length > 25)) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": workEventWorkflowId must be the id of a work app workflow`, { nodeId: n.id, field: 'workEventWorkflowId' }))
+      } else if (level !== 'structural' && (typeof src !== 'string' || !src)) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": choose the work app whose events start this workflow (workEventWorkflowId)`, { nodeId: n.id, field: 'workEventWorkflowId' }))
+      }
+      const ev = d.workEvents
+      if (ev !== undefined && ev !== null && (!Array.isArray(ev) || !ev.every((x) => typeof x === 'string' && (WORK_EVENT_KINDS as readonly string[]).includes(x)))) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": workEvents must be a list of ${WORK_EVENT_KINDS.join(', ')}`, { nodeId: n.id, field: 'workEvents' }))
+      } else if (level !== 'structural' && (!Array.isArray(ev) || ev.length === 0)) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": choose at least one event (${WORK_EVENT_KINDS.join(', ')})`, { nodeId: n.id, field: 'workEvents' }))
+      }
+    }
+    if (evStarts.length) {
+      for (const n of nodes) {
+        if (engineKind(n) === 'wait') issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": a Wait node cannot be used in a workflow started by a work app event — no person replies to it`, { nodeId: n.id }))
+      }
+    }
+    const isApp = startNodes.some(n => n.data?.triggerType === APP_TRIGGER) && !isAppCanvas({ nodes, edges })
+    for (const p of referenceLinesOf({ nodes, edges }).problems) issues.push(issue('WORK_EVENT_RULE', `Reference line: ${p.message}`, { edgeId: p.edgeId }))
+    for (const l of referenceLinesOf({ nodes, edges }).lines) {
+      if (level !== 'structural' && (!Array.isArray(l.sheets) || l.sheets.length === 0 || !l.sheets.every((x) => typeof x === 'string' && x))) {
+        issues.push(issue('WORK_EVENT_RULE', 'Reference line: choose at least one sheet the work app may read', { edgeId: l.edgeId }))
+      }
+    }
+    const sendLines = sendLinesOf({ nodes, edges })
+    for (const p of sendLines.problems) issues.push(issue('WORK_EVENT_RULE', `Send line: ${p.message}`, { edgeId: p.edgeId }))
+    for (const l of sendLines.lines) {
+      if (level !== 'structural' && !l.family) issues.push(issue('WORK_EVENT_RULE', 'Send line: choose the inbox of the receiving work app', { edgeId: l.edgeId }))
+    }
+    for (const n of nodes) {
+      if (engineKind(n) !== 'workAppStep') continue
+      if (isApp) issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": the work app node connects work apps — it cannot be placed inside a work app`, { nodeId: n.id }))
+      const tw = (n.data as Record<string, unknown> | undefined)?.targetWorkflowId
+      const tn = (n.data as Record<string, unknown> | undefined)?.targetNodeId
+      if (level !== 'structural' && !(typeof tw === 'string' && tw) && !(typeof tn === 'string' && tn)) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": choose the work app to open (targetNodeId in a workflow with Work app nodes, otherwise targetWorkflowId)`, { nodeId: n.id, field: 'targetWorkflowId' }))
+      }
+      const pd = (n.data as Record<string, unknown> | undefined)?.periodDate
+      if (pd !== undefined && pd !== null && pd !== '' && !(pd === 'event_end' || pd === 'event_start' || pd === 'today' || isCalendarDate(pd))) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": periodDate must be event_end, event_start, today or a calendar date YYYY-MM-DD`, { nodeId: n.id, field: 'periodDate' }))
+      }
+    }
+    const inboxTools = (aiId: string) => edges.filter((e) => e.source === aiId && e.sourceHandle === 'tools')
+      .map((e) => nodes.find((x) => x.id === e.target)).filter((t) => t?.type === 'tool' && t.data?.toolType === 'workInbox')
+    for (const n of nodes) {
+      if (engineKind(n) !== 'ai') continue
+      const k = inboxTools(n.id).length
+      if (k > 1) issues.push(issue('NODE_SPEC_VIOLATION', `Node "${label(n)}" (ai): only one Work inbox tool per AI node — ${k} are attached`, { nodeId: n.id }))
+      if (k > 0 && isApp) issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": a Work inbox tool is for customer-facing workflows — it cannot be attached inside a work app`, { nodeId: n.id }))
+      if (k > 0 && startNodes.some((s) => s.data?.triggerType === WORK_EVENT_TRIGGER || s.data?.triggerType === 'schedule')) {
+        issues.push(issue('WORK_EVENT_RULE', `Node "${label(n)}": a Work inbox tool is for customer-facing workflows — it cannot be used in a workflow started by a work app event or a schedule`, { nodeId: n.id }))
+      }
+    }
+  }
+
+  const canvasApps = appNodesOf({ nodes, edges })
+  const canvasLinks = linkNodesOf({ nodes, edges })
+  const canvasIssues = (): WorkflowJsonValidationResult | null => {
+    if (!canvasApps.length && !canvasLinks.length) return null
+    const C = 'WORK_APP_CANVAS_RULE' as const
+    if (kind === 'sub') issues.push(issue(C, 'Work app nodes cannot be placed in a Sub-workflow'))
+    const starts = nodes.filter(n => engineKind(n) === 'start')
+    if (starts.length !== 1 || starts[0].data?.triggerType !== APP_TRIGGER) {
+      issues.push(issue(C, `A workflow with Work app nodes needs exactly one Start node with triggerType "${APP_TRIGGER}" (Start / App)`))
+    }
+    const appIds = new Set(canvasApps.map(n => n.id))
+    const linkIds = new Set(canvasLinks.map(n => n.id))
+    const startIds = new Set(starts.map(n => n.id))
+    const linkedBy = new Map<string, string>()
+    for (const n of canvasLinks) {
+      const d = (n.data ?? {}) as Record<string, unknown>
+      if (!isSharedAppTemplateKind(d.appTemplate)) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": appTemplate "${String(d.appTemplate ?? '')}" — a link node points at a shared work app (${SHARED_APP_TEMPLATE_KINDS.join(', ') || 'none in this build'})`, { nodeId: n.id, field: 'appTemplate' }))
+      }
+      const t = d.linkedAppWorkflowId
+      if (t !== undefined && t !== null && t !== '' && (typeof t !== 'string' || t.length > 25)) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": linkedAppWorkflowId must be the id of a work app`, { nodeId: n.id, field: 'linkedAppWorkflowId' }))
+        continue
+      }
+      const target = linkTargetOf(n)
+      if (!target) {
+        if (level !== 'structural') issues.push(issue('LINK_TARGET_MISSING', `Node "${label(n as RawNode)}": choose the work app this link points at`, { nodeId: n.id, field: 'linkedAppWorkflowId' }))
+        continue
+      }
+      const first = linkedBy.get(target)
+      if (first) issues.push(issue(C, `Node "${label(n as RawNode)}": this work app is already linked by node "${first}" — one link node per app`, { nodeId: n.id }))
+      else linkedBy.set(target, label(n as RawNode))
+    }
+    if (canvasLinks.length && !canvasApps.length && level !== 'structural') {
+      issues.push(issue(C, 'A link node joins a work app of this workflow by a reference line — add at least one Work app node'))
+    }
+    for (const n of canvasApps) {
+      const d = (n.data ?? {}) as Record<string, unknown>
+      if (n.id.length > 100) issues.push(issue(C, `Node "${label(n as RawNode)}": a Work app node id must be at most 100 characters`, { nodeId: n.id }))
+      const t = d.appTemplate
+      if (t !== undefined && t !== null && t !== '' && !isAppTemplateKind(t)) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": appTemplate "${String(t)}" is not a known app template (known: ${APP_TEMPLATE_KINDS.join(', ')}; leave it empty to choose in the first chat)`, { nodeId: n.id, field: 'appTemplate' }))
+      }
+      const conns = d.connections
+      if (conns !== undefined && conns !== null && !(typeof conns === 'object' && !Array.isArray(conns) && Object.values(conns as Record<string, unknown>).every((slots) =>
+        !!slots && typeof slots === 'object' && !Array.isArray(slots) && Object.values(slots as Record<string, unknown>).every((id) => typeof id === 'string' && id.trim().length > 0 && id.length <= 64)))) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": connections must be { <connection kind>: { <slot>: "<connection id>" } } with non-empty text ids`, { nodeId: n.id, field: 'connections' }))
+      }
+      const aiSql = d.dbAiSql
+      if (aiSql !== undefined && aiSql !== null && !(typeof aiSql === 'object' && !Array.isArray(aiSql) && Object.entries(aiSql as Record<string, unknown>).every(([k, v]) => k.length > 0 && k.length <= 64 && typeof v === 'boolean'))) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": dbAiSql must be { <database slot>: true | false }`, { nodeId: n.id, field: 'dbAiSql' }))
+      }
+      if (!telegramChatsOk(d.telegramChats)) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": telegramChats must be { <telegram slot>: "<chat id — a number like -1001234567890, or @channelname>" }`, { nodeId: n.id, field: 'telegramChats' }))
+      }
+      if (!calendarSlotsOk(d.calendarSlots)) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": calendarSlots must be { <calendar slot>: { connectionId, accountId, calendarId, calendarName? } } — picked in the studio`, { nodeId: n.id, field: 'calendarSlots' }))
+      }
+      const rs = d.ragSpaceId
+      if (rs !== undefined && rs !== null && rs !== '' && !((typeof rs === 'number' && Number.isSafeInteger(rs) && rs > 0) || (typeof rs === 'string' && /^[1-9]\d{0,9}$/.test(rs)))) {
+        issues.push(issue(C, `Node "${label(n as RawNode)}": ragSpaceId must be a positive whole number (leave it empty for the Default space)`, { nodeId: n.id, field: 'ragSpaceId' }))
+      }
+      const ai = d.ai
+      if (ai !== undefined && ai !== null) {
+        const a = ai as Record<string, unknown>
+        const ok = typeof ai === 'object' && !Array.isArray(ai)
+          && (a.model === undefined || (typeof a.model === 'string' && a.model.length <= 100))
+          && (a.systemMessage === undefined || (typeof a.systemMessage === 'string' && a.systemMessage.length <= 20000))
+          && (a.maxTokens === undefined || (typeof a.maxTokens === 'number' && Number.isSafeInteger(a.maxTokens) && a.maxTokens > 0 && a.maxTokens <= 128000))
+          && ['imageInput', 'pdfInput', 'includeChatHistory'].every((k) => a[k] === undefined || typeof a[k] === 'boolean')
+        if (!ok) issues.push(issue(C, `Node "${label(n as RawNode)}": ai must be { model, systemMessage, maxTokens, imageInput, pdfInput, includeChatHistory }`, { nodeId: n.id, field: 'ai' }))
+      }
+    }
+    for (const e of edges) {
+      const fromApp = appIds.has(e.source)
+      const toApp = appIds.has(e.target)
+      const h = typeof e.sourceHandle === 'string' ? e.sourceHandle : ''
+      if (linkIds.has(e.source) || linkIds.has(e.target)) {
+        const other = linkIds.has(e.source) ? e.target : e.source
+        if (h !== 'ref' || !appIds.has(other)) {
+          issues.push(issue(C, 'A link node connects only by a reference line (ref) to a Work app node of this workflow', { edgeId: e.id, nodeId: linkIds.has(e.source) ? e.source : e.target }))
+        }
+        continue
+      }
+      if (fromApp && h !== 'send' && h !== 'ref' && h !== DONE_HANDLE && !eventKindOfHandle(h)) {
+        issues.push(issue(C, `A Work app node connects only by its send / ref lines, its "${DONE_HANDLE}" output or an event output (${EVENT_HANDLE_PREFIX}sealed …) — "${h || 'default'}" is not one`, { edgeId: e.id, nodeId: e.source }))
+      }
+      if (toApp && fromApp && !(h === 'send' || h === 'ref' || h === DONE_HANDLE)) {
+        issues.push(issue(C, 'Between two Work app nodes only a send / ref line or a "done" handoff line can connect', { edgeId: e.id, nodeId: e.target }))
+      }
+      if (toApp && !fromApp && !startIds.has(e.source) && (h === 'tools' || h === 'send' || h === 'ref' || eventKindOfHandle(h))) {
+        issues.push(issue(C, 'Only the Start / App node, another Work app node or a flow after a "done" output can connect into a Work app node', { edgeId: e.id, nodeId: e.target }))
+      }
+      if (startIds.has(e.source) && starts[0]?.data?.triggerType === APP_TRIGGER && !toApp) {
+        issues.push(issue(C, 'In a workflow with Work app nodes, the Start / App node connects only to Work app nodes — flows start from a Work app event output', { edgeId: e.id, nodeId: e.source }))
+      }
+    }
+    for (const n of nodes) {
+      if (engineKind(n) === 'wait') issues.push(issue(C, `Node "${label(n)}": a Wait node cannot be used in a workflow with Work app nodes — its flows run after an app event and no person replies`, { nodeId: n.id }))
+    }
+    for (const n of nodes) {
+      if (engineKind(n) !== 'workAppStep') continue
+      const tn = n.data?.targetNodeId
+      if (tn !== undefined && tn !== null && tn !== '' && !(typeof tn === 'string' && appIds.has(tn))) {
+        issues.push(issue(C, `Node "${label(n)}": targetNodeId must be a Work app node of this workflow`, { nodeId: n.id, field: 'targetNodeId' }))
+      }
+    }
+    for (const n of nodes) {
+      if (engineKind(n) === HANDOFF_NODE) issues.push(issue(C, `Node "${label(n)}": "${HANDOFF_NODE}" is made by the server — connect a "done" flow into a Work app node instead`, { nodeId: n.id }))
+    }
+    const graphs: Array<{ app: string; kind: string; json: string }> = []
+    const covered = new Set<string>()
+    const ho = handoffRoutesOf({ nodes, edges })
+    for (const p of ho.problems) {
+      issues.push(issue(C, `Work app "${label(canvasApps.find(n => n.id === p.appNodeId) as RawNode)}": ${p.message}`, { nodeId: p.appNodeId }))
+    }
+    const cyc = handoffCycle(ho.routes)
+    if (cyc) issues.push(issue(C, `Work app "${label(canvasApps.find(n => n.id === cyc) as RawNode)}": the "done" handoffs go round in a loop — a correction goes back by a send line instead`, { nodeId: cyc }))
+    for (const a of canvasApps) {
+      if (!edges.some(e => e.source === a.id && e.sourceHandle === DONE_HANDLE)) continue
+      const appLabel = label(a as RawNode)
+      const g = doneRunGraph({ nodes, edges }, a.id, 'wf_canvas_check')
+      if (!g) {
+        if (!ho.problems.some(p => p.appNodeId === a.id)) issues.push(issue(C, `Work app "${appLabel}": its "done" flow cannot be taken apart`, { nodeId: a.id }))
+        continue
+      }
+      for (const x of g.nodes) if (typeof x.id === 'string') covered.add(x.id)
+      const vNodes = g.nodes
+        .filter(x => !(typeof x.id === 'string' && x.id.startsWith('__work_event_start-end-')))
+        .map(x => (x.data?.nodeType === HANDOFF_NODE ? { ...x, data: { label: x.data?.label ?? 'Work app', nodeType: 'end' } } : x))
+      const vIds = new Set(vNodes.map(x => x.id))
+      graphs.push({ app: appLabel, kind: DONE_HANDLE, json: JSON.stringify({ nodes: vNodes, edges: g.edges.filter(e => vIds.has(e.source as string) && vIds.has(e.target as string)) }) })
+    }
+    for (const en of canvasEventEntries({ nodes, edges })) {
+      const g = eventRunGraph({ nodes, edges }, en.appNodeId, en.kind, 'wf_canvas_check')
+      const appLabel = label(canvasApps.find(n => n.id === en.appNodeId) as RawNode)
+      if (!g) {
+        issues.push(issue(C, `Work app "${appLabel}": the flow after its "${en.kind}" event must not lead back to a Start or Work app node (or into a send / ref line)`, { nodeId: en.appNodeId }))
+        continue
+      }
+      for (const x of g.nodes) if (typeof x.id === 'string') covered.add(x.id)
+      graphs.push({ app: appLabel, kind: en.kind, json: JSON.stringify(g) })
+    }
+    if (level === 'structural' || issues.some(isBlocking)) return { valid: !issues.some(isBlocking), level, issues }
+    for (const n of nodes) {
+      if (appIds.has(n.id) || linkIds.has(n.id) || startIds.has(n.id) || covered.has(n.id) || isPureNote(n, edges)) continue
+      issues.push(issue(C, `Node "${label(n)}" is not connected to any Work app event or "done" output — it never runs`, { nodeId: n.id }))
+    }
+    for (const g of graphs) {
+      const sub = validateWorkflowJson(g.json, 'deployable', 'main')
+      for (const i of sub.issues) issues.push({ ...i, message: `Work app "${g.app}" · ${g.kind} event: ${i.message}` })
+    }
+    return { valid: !issues.some(isBlocking), level, issues }
+  }
+  const canvasResult = canvasIssues()
+  if (canvasResult) return canvasResult
 
   if (level === 'structural' || issues.some(isBlocking)) {
     return { valid: !issues.some(isBlocking), level, issues }
@@ -351,7 +601,7 @@ export function validateWorkflowJson(
     }
     const e = edges.find(
       x => x.source === node.id &&
-        (!x.sourceHandle || (x.sourceHandle !== 'tools' && x.sourceHandle !== 'loop' && x.sourceHandle !== 'miniapps')),
+        (!x.sourceHandle || (x.sourceHandle !== 'tools' && x.sourceHandle !== 'loop' && x.sourceHandle !== 'miniapps' && x.sourceHandle !== 'ref' && x.sourceHandle !== 'send')),
     )
     return e ? [e.target] : []
   }
@@ -578,6 +828,8 @@ export function validateWorkflowJson(
       continue
     }
 
+    if (kind === 'workAppStep' && !flowEdges.some(e => e.target === node.id || e.source === node.id) && edges.some(e => (e.sourceHandle === 'ref' || e.sourceHandle === 'send') && (e.source === node.id || e.target === node.id))) continue
+
     if (!flowEdges.some(e => e.target === node.id)) {
       issues.push(issue('ORPHAN_NODE', `Node "${label(node)}" has no incoming connection`, { nodeId: node.id }))
     } else if (startNode && !reachable.has(node.id)) {
@@ -669,4 +921,21 @@ export function findReachableCycle(raw: string, extraEntryNodeIds: Array<string 
   if (seeds.length === 0) return null
 
   return findCycle(nodes, flowEdges, seeds)
+}
+
+function calendarSlotsOk(v: unknown): boolean {
+  if (v === undefined || v === null) return true
+  if (typeof v !== 'object' || Array.isArray(v)) return false
+  const txt = (x: unknown, max: number) => typeof x === 'string' && x.trim().length > 0 && x.length <= max
+  return Object.entries(v as Record<string, unknown>).every(([k, x]) => {
+    if (!(k.length > 0 && k.length <= 64) || !x || typeof x !== 'object' || Array.isArray(x)) return false
+    const o = x as Record<string, unknown>
+    return Object.keys(o).every((f) => ['connectionId', 'accountId', 'calendarId', 'calendarName'].includes(f)) && txt(o.connectionId, 64) && txt(o.accountId, 64) && txt(o.calendarId, 300) && (o.calendarName === undefined || (typeof o.calendarName === 'string' && o.calendarName.length <= 120))
+  })
+}
+
+function telegramChatsOk(v: unknown): boolean {
+  if (v === undefined || v === null) return true
+  if (typeof v !== 'object' || Array.isArray(v)) return false
+  return Object.entries(v as Record<string, unknown>).every(([k, x]) => k.length > 0 && k.length <= 64 && typeof x === 'string' && (x.trim() === '' || /^(-?\d{1,20}|@[A-Za-z][A-Za-z0-9_]{3,31})$/.test(x.trim())))
 }

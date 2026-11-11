@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { showAppNotes } from '../utils/app-notes'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useWorkflowContext } from '../contexts/WorkflowContext'
+import { isAppWorkflow } from '@/lib/workflow/start-trigger'
 import { useLanguage } from '@/hooks/useLanguage'
 import { getAgentStudioTranslation } from '@/lib/translations/agent-studio'
 import {
@@ -111,6 +113,7 @@ export const WorkflowHeader: React.FC = () => {
         if (typeof data?.workflow?.version === 'number') {
           agent.workflowVersionRef.current = data.workflow.version
         }
+        showAppNotes(data?.appNotes, t)
         ui.setSaveSuccess(true)
         ui.setHasChanges(false)
 
@@ -118,6 +121,7 @@ export const WorkflowHeader: React.FC = () => {
           nodes: currentNodes,
           edges: currentEdges
         })
+        agent.setSavedWorkflowName(updateData.name)
         if (opts?.withStatus) agent.setWorkflowStatus(opts.withStatus)
         return true
       } else {
@@ -126,6 +130,8 @@ export const WorkflowHeader: React.FC = () => {
           toast.error(error.error, { id: 'translation-model-guard', duration: Infinity, closeButton: true })
         } else if (error?.code === 'STALE_CONFLICT') {
           toast.error(t.workflow_version_conflict, { id: 'workflow-version-conflict', duration: Infinity, closeButton: true })
+        } else if (error?.code === 'COMPANY_LIMIT') {
+          toast.error((t.company_limit_reached || 'Your plan includes {limit} company (bank ledger) — this would add another.').replace('{limit}', String(error?.limit ?? '')), { id: 'company-limit', duration: Infinity, closeButton: true })
         } else if (error?.code === 'STATUS_CHANGED') {
           if (typeof error?.currentStatus === 'string') agent.setWorkflowStatus(error.currentStatus)
           toast.error(t.workflow_status_changed, { id: 'workflow-status-changed', duration: Infinity, closeButton: true })
@@ -337,14 +343,18 @@ export const WorkflowHeader: React.FC = () => {
                 })
                 if (res.ok) {
                   agent.setWorkflowStatus(newStatus)
+                  const ok = await res.json().catch(() => null)
+                  showAppNotes(ok?.appNotes, t)
                   return true
                 }
                 const data = await res.json().catch(() => null)
                 const msg = (data?.error === 'free_limit_reached' || data?.error === 'paid_limit_reached')
                   ? (t.active_limit_reached || 'Active workflow limit reached.')
-                  : (t.deploy_failed || 'Failed to change workflow status.')
+                  : data?.code === 'COMPANY_LIMIT'
+                    ? (t.company_limit_reached || 'Your plan includes {limit} company (bank ledger) — this would add another.').replace('{limit}', String(data?.limit ?? ''))
+                    : (t.deploy_failed || 'Failed to change workflow status.')
                 setStatusError(msg)
-                setTimeout(() => setStatusError(null), 5000)
+                setTimeout(() => setStatusError(null), 10000)
                 return false
               }
 
@@ -356,7 +366,7 @@ export const WorkflowHeader: React.FC = () => {
                   if (ui.hasChanges) {
                     if (!(await handleSave({ withStatus: 'draft' }))) {
                       setStatusError(t.deploy_failed || 'Failed to change workflow status.')
-                      setTimeout(() => setStatusError(null), 5000)
+                      setTimeout(() => setStatusError(null), 10000)
                     }
                   } else {
                     await patchStatus()
@@ -368,7 +378,7 @@ export const WorkflowHeader: React.FC = () => {
               } catch (err) {
                 console.error('[WorkflowHeader] Status change failed:', err)
                 setStatusError(t.deploy_failed || 'Failed to change workflow status.')
-                setTimeout(() => setStatusError(null), 5000)
+                setTimeout(() => setStatusError(null), 10000)
               } finally {
                 statusChangingRef.current = false
                 setIsStatusChanging(false)
@@ -454,6 +464,7 @@ export const WorkflowHeader: React.FC = () => {
           <History className="w-4 h-4" />
         </Button>
 
+        {!isAppWorkflow({ nodes: workflow.nodes }) && (
         <Button
           variant="ghost"
           size="sm"
@@ -469,6 +480,7 @@ export const WorkflowHeader: React.FC = () => {
           <Eye className={`w-4 h-4 mr-1.5 ${test.isExecuting ? 'animate-pulse' : ''}`} />
           {test.isExecuting ? t.testing : t.test}
         </Button>
+        )}
 
         <Button
           variant="default"

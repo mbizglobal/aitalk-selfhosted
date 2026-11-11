@@ -47,14 +47,14 @@ function valueText(lang: WorkLang, v: unknown, pkg: string | null): string {
 
 const isAmount = (v: unknown) => typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)
 
-export function ResultView({ lang, value, table, labelPrefix, listPath }: { lang: WorkLang; value: unknown; table?: string; labelPrefix?: string; listPath?: string }) {
+export function ResultView({ lang, value, table, labelPrefix, listPath, sections }: { lang: WorkLang; value: unknown; table?: string; labelPrefix?: string; listPath?: string; sections?: readonly string[] }) {
   const pkg = useWorkPkg()
   const t = (k: string, f?: string) => workT(lang, k, f, pkg)
   if (!value || typeof value !== 'object') return <p className="text-sm text-gray-300">{valueText(lang, value, pkg)}</p>
   const o = value as Record<string, unknown>
   const boxes = table ? getPath(o, table) : undefined
   const list = listPath ? getPath(o, listPath) : undefined
-  const rest = Object.entries(o).filter(([k, v]) => k !== table && k !== listPath && (v === null || typeof v !== 'object'))
+  const rest = Object.entries(o).filter(([k, v]) => k !== table && k !== listPath && v !== null && v !== undefined && typeof v !== 'object')
   return (
     <div className="space-y-3">
       {rest.length > 0 && (
@@ -102,6 +102,100 @@ export function ResultView({ lang, value, table, labelPrefix, listPath }: { lang
           </div>
         )
       )}
+      {sections?.map((k) => [k, getPath(o, k)] as const).filter(([, v]) => v !== null && typeof v === 'object').map(([k, v]) => (
+        <section key={k} className="space-y-1">
+          <h4 className="text-xs text-gray-400">{t(`res_${k.replace(/\./g, '_')}`, k)}</h4>
+          <NestedResult lang={lang} value={v} depth={1} />
+        </section>
+      ))}
+    </div>
+  )
+}
+
+const isScalar = (v: unknown) => v === null || typeof v !== 'object'
+const isCodeItems = (v: unknown): v is { code: string; items: string[] } =>
+  !!v && typeof v === 'object' && typeof (v as { code?: unknown }).code === 'string' && Array.isArray((v as { items?: unknown }).items) && (v as { items: unknown[] }).items.every((x) => typeof x === 'string')
+const isCodeParams = (v: unknown): v is { code: string; params?: Record<string, string | number> } => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+  const o = v as Record<string, unknown>
+  if (typeof o.code !== 'string' || !Object.keys(o).every((k) => k === 'code' || k === 'params')) return false
+  const p = o.params
+  return p === undefined || (!!p && typeof p === 'object' && !Array.isArray(p) && Object.values(p).every((x) => typeof x === 'string' || typeof x === 'number'))
+}
+
+function NestedResult({ lang, value, depth }: { lang: WorkLang; value: unknown; depth: number }) {
+  const pkg = useWorkPkg()
+  const t = (k: string, f?: string) => workT(lang, k, f, pkg)
+  const cell = (v: unknown) => <td className={`px-2 py-1.5 text-gray-200 whitespace-nowrap ${isAmount(v) ? 'text-right tabular-nums' : ''}`}>{valueText(lang, v, pkg)}</td>
+  const head = (cols: string[], first?: boolean) => (
+    <thead><tr className="text-left text-xs text-gray-400">{first && <th />}{cols.map((c) => <th key={c} className="px-2 py-1 font-normal whitespace-nowrap">{t(`res_${c}`, c)}</th>)}</tr></thead>
+  )
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <p className="text-sm text-gray-500">{t('section_none')}</p>
+    if (value.every(isCodeItems)) {
+      return (
+        <ul className="list-disc pl-5 space-y-1 text-sm text-gray-200">
+          {value.map((b, i) => {
+            const list = b.items.slice(0, 10).join(' · ') + (b.items.length > 10 ? ` … (+${b.items.length - 10})` : '')
+            return <li key={i}>{workStopText(lang, { code: b.code, params: { list } }, pkg) ?? `${b.code}: ${list}`}</li>
+          })}
+        </ul>
+      )
+    }
+    if (value.every(isCodeParams)) {
+      const lines = value.map((b) => workStopText(lang, { code: b.code, params: b.params }, pkg))
+      if (lines.every((x): x is string => x !== null)) {
+        return <ul className="list-disc pl-5 space-y-1 text-sm text-gray-200">{lines.map((x, i) => <li key={i}>{x}</li>)}</ul>
+      }
+    }
+    const rows = value.filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && !Array.isArray(r))
+    const loose = value.filter(isScalar).map((v) => valueText(lang, v, pkg)).join(', ')
+    if (!rows.length) return <p className={`text-sm ${loose ? 'text-gray-300' : 'text-gray-500'}`}>{loose || t('section_none')}</p>
+    const cols = [...new Set(rows.flatMap((r) => Object.keys(r).filter((k) => isScalar(r[k]))))]
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">{head(cols)}<tbody>{rows.map((r, i) => <tr key={i} className="border-t border-[#2A2A2A]">{cols.map((c) => <React.Fragment key={c}>{cell(r[c])}</React.Fragment>)}</tr>)}</tbody></table>
+        {loose && <p className="mt-1 text-sm text-gray-300">{loose}</p>}
+      </div>
+    )
+  }
+  if (!value || typeof value !== 'object') return <p className="text-sm text-gray-300">{valueText(lang, value, pkg)}</p>
+  const o = value as Record<string, unknown>
+  const entries = Object.entries(o)
+  if (entries.length === 0) return <p className="text-sm text-gray-500">{t('section_none')}</p>
+  const groups = entries.filter(([, v]) => v !== null && typeof v === 'object' && !Array.isArray(v)) as Array<[string, Record<string, unknown>]>
+  const scalarKeys = (g: Record<string, unknown>) => Object.keys(g).filter((k) => isScalar(g[k])).sort().join('\u0000')
+  if (groups.length > 1 && groups.length === entries.length) {
+    const cols = Object.keys(groups[0][1]).filter((k) => isScalar(groups[0][1][k]))
+    if (cols.length && groups.every(([, g]) => scalarKeys(g) === scalarKeys(groups[0][1]))) {
+      return (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">{head(cols, true)}<tbody>{groups.map(([k, g]) => <tr key={k} className="border-t border-[#2A2A2A]"><td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{t(`res_${k}`, k)}</td>{cols.map((c) => <React.Fragment key={c}>{cell(g[c])}</React.Fragment>)}</tr>)}</tbody></table>
+        </div>
+      )
+    }
+  }
+  const scalars = entries.filter(([, v]) => isScalar(v) && v !== null && v !== undefined)
+  const inner = depth < 3 ? entries.filter(([, v]) => !isScalar(v)) : []
+  if (entries.every(([, v]) => v === null || v === undefined)) return <p className="text-sm text-gray-500">{t('section_none')}</p>
+  return (
+    <div className="space-y-2">
+      {scalars.length > 0 && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          {scalars.map(([k, v]) => (
+            <React.Fragment key={k}>
+              <dt className="text-gray-400">{t(`res_${k}`, k)}</dt>
+              <dd className={`text-gray-100 ${isAmount(v) ? 'tabular-nums' : ''}`}>{valueText(lang, v, pkg)}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      )}
+      {inner.map(([k, v]) => (
+        <div key={k} className="space-y-1 pl-3 border-l border-[#2A2A2A]">
+          <h5 className="text-xs text-gray-400">{t(`res_${k}`, k)}</h5>
+          <NestedResult lang={lang} value={v} depth={depth + 1} />
+        </div>
+      ))}
     </div>
   )
 }
@@ -149,6 +243,8 @@ function CompareView({ lang, confirmed, draft, table, labelPrefix }: { lang: Wor
   )
 }
 
+const draftInputs = new Map<string, FieldValues>()
+
 export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modules, readOnly, onChanged, refresh = 0, onOpenSheet, choices = [], onChoose, onGoto }: Props) {
   const pkg = useWorkPkg()
   const t = (k: string, f?: string) => workT(lang, k, f, pkg)
@@ -165,7 +261,8 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
   const approvalSeq = useRef(0)
   const [rejectReason, setRejectReason] = useState('')
 
-  const [values, setValues] = useState<FieldValues>({})
+  const [values, setValuesRaw] = useState<FieldValues>(() => draftInputs.get(task.id) ?? {})
+  const setValues = (fn: (x: FieldValues) => FieldValues) => setValuesRaw((x) => { const next = fn(x); draftInputs.set(task.id, next); return next })
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [checkOut, setCheckOut] = useState<Record<string, unknown>>({})
   const [subs, setSubs] = useState<SubmissionItem[] | null>(null)
@@ -218,6 +315,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
     try { await fn() } catch (e) { setError(errorText(lang, e, pkg)) } finally { setBusy(null) }
   }
   const proofs = submitted ? (subs?.[0]?.proofs ?? []) : []
+  const filing = appTemplate?.ui.filing === true
   const proofInput = useRef<HTMLInputElement>(null)
   const addProof = (f: File | undefined) => { if (f) void run('proof', async () => {
     const saved = await files.upload(projectId, f, 'report')
@@ -353,8 +451,8 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
         {awaiting ? (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-300">{t('task_awaiting')}</span>
         ) : (!submitted || subs !== null) && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded ${!submitted ? 'bg-[#2A2A2A] text-gray-400' : proofs.length ? 'bg-emerald-900/60 text-emerald-300' : 'bg-amber-900/50 text-amber-300'}`}>
-            {!submitted ? t('task_open') : proofs.length ? t('task_closed') : t('task_closed_no_proof')}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded ${!submitted ? 'bg-[#2A2A2A] text-gray-400' : !filing || proofs.length ? 'bg-emerald-900/60 text-emerald-300' : 'bg-amber-900/50 text-amber-300'}`}>
+            {!submitted ? t('task_open') : !filing ? t('task_submitted') : proofs.length ? t('task_closed') : t('task_closed_no_proof')}
           </span>
         )}
       </div>
@@ -406,7 +504,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
 
       {status === 'open' && (
         <section className="space-y-3">
-          <h3 className="text-sm text-gray-300">{appTemplate?.hasCalc ? t('calc_title') : t('submit_title')}</h3>
+          <h3 className="text-sm text-gray-300">{appTemplate?.hasCalc ? t(filing ? 'calc_title' : 'calc_title_closing') : t('submit_title')}</h3>
           {calcInput.length > 0 && (
             <div className="space-y-3 max-w-sm">
               <AppTemplateFields lang={lang} prefix="in_" fields={calcInput} values={values} onChange={(n, v) => { previewSeq.current++; setValues((x) => ({ ...x, [n]: v })); setPreview(null) }} idPrefix={`task-${task.id}`} />
@@ -420,11 +518,11 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
             )}
             {!readOnly && (
               <button onClick={() => void startSubmit()} disabled={!!busy || !inputReady || approval === undefined} className={`${btn} bg-[#E07B53] text-white hover:opacity-90`}>
-                {spin('submit') ?? (viaApproval ? <Stamp className="w-4 h-4" /> : <Send className="w-4 h-4" />)} {viaApproval ? t('appr_request') : appTemplate?.hasCalc ? t('close_return') : t('submit')}
+                {spin('submit') ?? (viaApproval ? <Stamp className="w-4 h-4" /> : <Send className="w-4 h-4" />)} {viaApproval ? t('appr_request') : filing ? t('close_return') : t('submit')}
               </button>
             )}
           </div>
-          {viaApproval && !readOnly ? <p className="text-xs text-gray-500">{t('appr_request_help')}</p> : appTemplate?.hasCalc && !readOnly && <p className="text-xs text-gray-500">{t('close_return_help')}</p>}
+          {viaApproval && !readOnly ? <p className="text-xs text-gray-500">{t('appr_request_help')}</p> : filing && !readOnly && <p className="text-xs text-gray-500">{t('close_return_help')}</p>}
           {preview && (
             <div className="rounded-lg border border-[#2A2A2A] p-3 space-y-3">
               <p className="text-xs text-gray-500">{t('preview_note')}</p>
@@ -439,7 +537,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
               {preview.twoWay && appTemplate?.ui.resultTable ? (
                 <CompareView lang={lang} confirmed={(preview.output as { confirmed: unknown }).confirmed} draft={(preview.output as { draft: unknown }).draft} table={appTemplate.ui.resultTable.path} labelPrefix={appTemplate.ui.resultTable.labelPrefix} />
               ) : (
-                <ResultView lang={lang} value={preview.output} table={appTemplate?.ui.resultTable?.path} labelPrefix={appTemplate?.ui.resultTable?.labelPrefix} />
+                <ResultView lang={lang} value={preview.output} table={appTemplate?.ui.resultTable?.path} labelPrefix={appTemplate?.ui.resultTable?.labelPrefix} sections={appTemplate?.ui.resultSections} />
               )}
             </div>
           )}
@@ -490,6 +588,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
               {refStatus.tasks.map((c, i) => <li key={i}>{taskChangeText(c)}</li>)}
               {refStatus.rowsChanged > 0 && <li>{t('ref_rows_changed').replace('{n}', String(refStatus.rowsChanged))}</li>}
               {refStatus.rowsGone > 0 && <li>{t('ref_rows_gone').replace('{n}', String(refStatus.rowsGone))}</li>}
+              {(refStatus.rowsAdded ?? 0) > 0 && <li>{t('ref_rows_added').replace('{n}', String(refStatus.rowsAdded))}</li>}
               {refStatus.pairsChanged > 0 && <li>{t('ref_pairs_changed').replace('{n}', String(refStatus.pairsChanged))}</li>}
             </ul>
             {!readOnly && (
@@ -503,7 +602,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
         )
       )}
 
-      {submitted && subs !== null && (
+      {filing && submitted && subs !== null && (
         <section className="space-y-2">
           <h3 className="text-sm text-gray-300">{t('proof_title')}</h3>
           <p className="text-xs text-gray-500">{t('proof_help')}</p>
@@ -572,7 +671,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
                 </button>
                 {openSub?.id === s.id && openSub.view.result && (
                   <div className="mt-2 mb-3 rounded-lg border border-[#2A2A2A] p-3">
-                    <ResultView lang={lang} value={openSub.view.result.output ?? openSub.view.result} table={appTemplate?.ui.resultTable?.path} labelPrefix={appTemplate?.ui.resultTable?.labelPrefix} />
+                    <ResultView lang={lang} value={openSub.view.result.output ?? openSub.view.result} table={appTemplate?.ui.resultTable?.path} labelPrefix={appTemplate?.ui.resultTable?.labelPrefix} sections={appTemplate?.ui.resultSections} />
                   </div>
                 )}
               </li>
@@ -613,7 +712,7 @@ export function TaskPanel({ api, files, lang, projectId, task, appTemplate, modu
         <ConfirmDialog message={t('appr_approve_confirm')} okLabel={t('appr_approve')} cancelLabel={t('cancel')} busy={!!busy} tone="primary" onOk={() => void doApproval('approve')} onCancel={() => setConfirming(null)} />
       )}
       {confirming === 'submit' && approval !== undefined && (
-        <ConfirmDialog message={viaApproval ? t('appr_request_confirm') : appTemplate?.hasCalc ? t('close_return_confirm') : t('submit_confirm')} okLabel={viaApproval ? t('appr_request') : appTemplate?.hasCalc ? t('close_return') : t('submit')} cancelLabel={t('cancel')} busy={!!busy} tone="primary" onOk={() => void doSubmit()} onCancel={() => setConfirming(null)} />
+        <ConfirmDialog message={viaApproval ? t('appr_request_confirm') : filing ? t('close_return_confirm') : t('submit_confirm')} okLabel={viaApproval ? t('appr_request') : filing ? t('close_return') : t('submit')} cancelLabel={t('cancel')} busy={!!busy} tone="primary" onOk={() => void doSubmit()} onCancel={() => setConfirming(null)} />
       )}
       {confirming === 'unlock' && (
         <ConfirmDialog message={t('unlock_confirm')} okLabel={t('unlock')} cancelLabel={t('cancel')} busy={!!busy} tone="primary" onOk={() => void doUnlock()} onCancel={() => setConfirming(null)} />

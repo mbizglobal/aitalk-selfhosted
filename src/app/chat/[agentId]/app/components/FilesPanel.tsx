@@ -1,21 +1,25 @@
 'use client'
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { FileText, Loader2, Lock, Trash2, Upload, X } from 'lucide-react'
+import { FileText, Flag, Loader2, Lock, Trash2, Upload, X } from 'lucide-react'
 import { convertPdfToImages, isPdfFile } from '@/lib/pdf-to-image'
 import { workT, type WorkLang } from '@/lib/translations/work'
-import { WorkApiError, type ProjectFileView, type WorkFiles } from '../lib/api'
+import { WorkApiError, type LinkedAppView, type ProjectFileStatus, type ProjectFileView, type WorkFiles } from '../lib/api'
 import { errorText } from './SheetTable'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ReportDialog } from './ReportDialog'
 import { asCsv } from './ImportDialog'
 import { useWorkPkg } from './work-pkg'
+import { useEdition } from '@/components/EditionProvider'
 
 export const FILE_MAX_BYTES = 20 * 1024 * 1024
+export const FILE_BIG_MAX_BYTES = 45 * 1024 * 1024
+const BIG_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'])
 export const PDF_MAX_PAGES = 10
 
 export function fileKind(f: File): string {
   const n = f.name.toLowerCase()
-  if (f.type === 'text/csv' || n.endsWith('.csv')) return 'bank_csv'
+  if (f.type === 'text/csv' || n.endsWith('.csv') || n.endsWith('.xml')) return 'bank_csv'
   if (f.type.startsWith('image/') || isPdfFile(f)) return 'receipt'
   return 'other'
 }
@@ -95,20 +99,90 @@ function ReportBox({ report: r, lang, onClose }: { report: Report; lang: WorkLan
   )
 }
 
-export function FilesPanel({ files, lang, projectId, readOnly }: {
+export const HUMAN_REASONS = ['own_transfer', 'statement', 'other_company', 'not_business', 'not_expense'] as const
+
+export const fileDecisionLock = { busy: false }
+
+export function DecisionActions({ f, busy, t, onAct }: { f: ProjectFileView; busy: boolean; t: (k: string, f?: string) => string; onAct: (action: 'exclude' | 'reset' | 'detach', reason?: string) => void }) {
+  const s = f.status?.status ?? 'new'
+  const btn = 'px-1.5 py-0.5 text-[11px] rounded border border-[#3A3A3A] text-gray-400 hover:text-gray-200 hover:border-gray-500 disabled:opacity-40'
+  return (
+    <span className="shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100">
+      {(s === 'new' || s === 'pending' || s === 'unreadable') && (
+        <select aria-label={t('files_action_exclude')} disabled={busy} value="" onChange={(e) => { const v = e.target.value; e.target.blur(); if (v) onAct('exclude', v) }}
+          className="max-w-[7.5rem] bg-[#1A1A1A] text-[11px] text-gray-400 border border-[#3A3A3A] rounded px-1 py-0.5">
+          <option value="">{t('files_action_exclude')}</option>
+          {HUMAN_REASONS.map((r) => <option key={r} value={r}>{t(`files_why_${r}`, r)}</option>)}
+        </select>
+      )}
+      {(s === 'excluded' || s === 'pending') && <button className={btn} disabled={busy} onClick={() => onAct('reset')}>{t('files_action_reset')}</button>}
+      {f.status?.status === 'attached' && f.status.role === 'more' && <button className={btn} disabled={busy} onClick={() => onAct('detach')}>{t('files_action_detach')}</button>}
+    </span>
+  )
+}
+
+export function StatusChip({ st, t, wrap }: { st: ProjectFileStatus | undefined; t: (k: string, f?: string) => string; wrap?: boolean }) {
+  const s = st ?? { status: 'new' as const }
+  const cls = `inline-block max-w-full rounded px-1.5 py-0.5 text-[11px] align-middle ${wrap ? 'whitespace-normal break-words' : 'truncate'}`
+  if (s.status === 'attached') return <span className={`${cls} bg-emerald-500/10 text-emerald-300`}>{t(s.role === 'more' ? 'files_status_attached_more' : 'files_status_attached')}</span>
+  if (s.status === 'excluded') {
+    const why = `${t(`files_why_${s.reason}`, s.reason)}${s.text ? ` — ${s.text}` : ''}${s.by === 'human' ? ` · ${t('files_by_person')}` : ''}`
+    return <span title={why} className={`${cls} bg-gray-500/15 text-gray-300`}>{t('files_status_excluded')}{t('files_colon', ': ')}{why}</span>
+  }
+  if (s.status === 'pending') return <span title={s.question} className={`${cls} bg-amber-500/10 text-amber-300`}>{t('files_status_pending')}{t('files_colon', ': ')}{s.question}</span>
+  if (s.status === 'unreadable') { const why = t(`files_unread_${s.reason}`, s.reason); return <span title={why} className={`${cls} bg-red-500/10 text-red-300`}>{t('files_status_unreadable')}{t('files_colon', ': ')}{why}</span> }
+  return <span className={`${cls} bg-sky-500/10 text-sky-300`}>{t('files_status_new')}</span>
+}
+
+export function UsedIn({ st, usedIn, t, onOpenSheet }: { st: ProjectFileStatus | undefined; usedIn?: FilesUsedIn; t: (k: string, f?: string) => string; onOpenSheet?: (sheetId: string) => void }) {
+  if (!usedIn || st?.status !== 'attached') return null
+  const sheet = usedIn.sheets[st.sheetId]
+  if (!sheet) return null
+  const key = sheet.family ?? `sheet:${st.sheetId}`
+  const apps = usedIn.apps.filter((a) => a.relation.includes('readBy') && a.readsSheets?.includes(key))
+  return (
+    <>
+      {onOpenSheet
+        ? <button type="button" onClick={(e) => { e.stopPropagation(); onOpenSheet(st.sheetId) }} title={t('files_open_tab')} className="text-[11px] text-gray-300 underline underline-offset-2 hover:text-white">{sheet.label}</button>
+        : <span className="text-[11px] text-gray-300">{sheet.label}</span>}
+      {apps.length > 0 && (
+        <span className="text-[11px] text-gray-400">
+          · {t('files_used_by')}{' '}
+          {apps.map((a, i) => <React.Fragment key={a.workflowId}>{i > 0 && ', '}<a href={a.url} onClick={(e) => e.stopPropagation()} className="underline underline-offset-2 hover:text-white">{a.name}</a></React.Fragment>)}
+        </span>
+      )}
+    </>
+  )
+}
+
+export interface FilesUsedIn {
+  sheets: Record<string, { label: string; family: string | null }>
+  apps: LinkedAppView[]
+}
+
+export function FilesPanel({ files, lang, projectId, readOnly, kept, wholeDoc, refresh, onChanged, usedIn, onOpenSheet }: {
+  wholeDoc?: boolean
   files: WorkFiles
   lang: WorkLang
   projectId: string
   readOnly: boolean
+  kept?: boolean
+  refresh?: number
+  onChanged?: () => void
+  usedIn?: FilesUsedIn
+  onOpenSheet?: (sheetId: string) => void
 }) {
   const pkg = useWorkPkg()
   const t = (k: string, f?: string) => workT(lang, k, f, pkg)
+  const selfHosted = useEdition() === 'selfhosted'
   const [list, setList] = useState<ProjectFileView[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState<ProjectFileView[] | null>(null)
+  const [reporting, setReporting] = useState<string[] | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const seq = useRef(0)
@@ -118,11 +192,19 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
       const l = await files.list(projectId)
       if (my !== seq.current) return
       setList(l)
+      setError(null)
       setSelected((cur) => new Set([...cur].filter((id) => l.some((f) => f.id === id && !f.locked))))
     } catch (e) { if (my === seq.current) setError(errorText(lang, e, pkg)) }
   }, [files, projectId, lang, pkg])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void load() }, [load, refresh])
+
+  const decide = async (fileId: string, action: 'exclude' | 'reset' | 'detach', reason?: string) => {
+    if (fileDecisionLock.busy) return
+    fileDecisionLock.busy = true
+    setBusy(true); setError(null)
+    try { await files.decide(projectId, fileId, action, reason); await load(); onChanged?.() } catch (e) { setError(errorText(lang, e, pkg)) } finally { fileDecisionLock.busy = false; setBusy(false) }
+  }
 
   const uploadReason = (e: unknown): string => {
     if (e instanceof WorkApiError && e.code === 'INVALID') return e.detail?.includes('too large') ? t('files_reason_size') : t('files_reason_type')
@@ -136,9 +218,14 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
     const r: Report = { kind: 'upload', total: all.length, done: 0, existing: [], failed: [], notes: [] }
     for (const f of all) {
       if (f.size === 0) { r.failed.push({ name: f.name, reason: t('files_reason_empty') }); continue }
-      if (f.size > FILE_MAX_BYTES) { r.failed.push({ name: f.name, reason: t('files_reason_size') }); continue }
+      const big = f.size > FILE_MAX_BYTES
+      if (big && (!BIG_TYPES.has(f.type) || f.size > FILE_BIG_MAX_BYTES)) { r.failed.push({ name: f.name, reason: t(BIG_TYPES.has(f.type) ? 'files_reason_size_big' : 'files_reason_size') }); continue }
       let saved: { id: string; created: boolean }
-      try { saved = await files.upload(projectId, asCsv(f), fileKind(f)) } catch (e) { r.failed.push({ name: f.name, reason: uploadReason(e) }); continue }
+      try {
+        saved = big
+          ? await files.uploadBig(projectId, f, fileKind(f), (done, total) => setProgress(`${f.name} ${Math.round((done / total) * 100)}%`))
+          : await files.upload(projectId, asCsv(f), fileKind(f))
+      } catch (e) { r.failed.push({ name: f.name, reason: uploadReason(e) }); continue } finally { setProgress(null) }
       if (!saved.created) r.existing.push(f.name)
       else r.done++
       const hadPages = saved.created ? 0 : (list?.find((x) => x.id === saved.id)?.pages ?? 0)
@@ -153,6 +240,7 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
     }
     if (inputRef.current) inputRef.current.value = ''
     await load()
+    onChanged?.()
     setReport(r)
     setBusy(false)
   }
@@ -171,6 +259,7 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
     }
     setDeleting(null)
     await load()
+    onChanged?.()
     setReport(r)
     setBusy(false)
   }
@@ -178,19 +267,22 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
   const deletable = (list ?? []).filter((f) => !f.locked)
   const allOn = deletable.length > 0 && deletable.every((f) => selected.has(f.id))
   const toggle = (id: string) => setSelected((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const drop = useFileDrop(!readOnly && !busy, (l) => void upload(l))
+  const drop = useFileDrop(!readOnly && !kept && !busy, (l) => void upload(l))
 
   return (
     <div className="relative flex-1 min-h-0 flex flex-col" {...drop.props}>
       {drop.over && <DropOverlay text={t('files_drop')} />}
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-xs text-gray-500">{t('files_help')}</p>
-          {!readOnly && (
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500">{t(kept ? 'files_help_kept' : 'files_help')}</p>
+            {!selfHosted && !kept && <p className="text-xs text-gray-400">{t(wholeDoc ? 'files_doc_read_cost' : 'files_card_cost')}</p>}
+          </div>
+          {!readOnly && !kept && (
             <>
-              <input ref={inputRef} type="file" multiple hidden accept=".csv,.pdf,.xlsx,.txt,image/jpeg,image/png,image/webp,image/heic" onChange={(e) => void upload(e.target.files)} />
+              <input ref={inputRef} type="file" multiple hidden accept=".csv,.xml,.pdf,.xlsx,.txt,image/jpeg,image/png,image/webp,image/heic" onChange={(e) => void upload(e.target.files)} />
               <button onClick={() => inputRef.current?.click()} disabled={busy} className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md bg-[#E07B53] text-white hover:opacity-90 disabled:opacity-40">
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{busy ? t('files_working') : t('file_upload')}
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{busy ? (progress ?? t('files_working')) : t('file_upload')}
               </button>
             </>
           )}
@@ -211,19 +303,40 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
                   {t('files_select_all')}
                 </label>
                 {selected.size > 0 && (
+                  <span className="flex items-center gap-1.5">
+                  {!selfHosted && (
+                    <button onClick={() => setReporting([...selected].filter((id) => !list?.some((f) => f.id === id && f.reported !== undefined)))} disabled={busy}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-[#3A3A3A] text-gray-300 hover:text-white disabled:opacity-40">
+                      <Flag className="w-3.5 h-3.5" />{t('files_report')}
+                    </button>
+                  )}
                   <button onClick={() => setDeleting((list ?? []).filter((f) => selected.has(f.id)))} disabled={busy}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-red-500/50 text-red-300 hover:bg-red-500/10 disabled:opacity-40">
                     <Trash2 className="w-3.5 h-3.5" />{t('files_delete_selected').replace('{n}', String(selected.size))}
                   </button>
+                  </span>
                 )}
               </div>
+            )}
+            <p className="px-1 text-xs text-gray-400">{t('files_summary')
+              .replace('{n}', String(list.length))
+              .replace('{a}', String(list.filter((f) => f.status?.status === 'attached').length))
+              .replace('{e}', String(list.filter((f) => f.status?.status === 'excluded').length))
+              .replace('{p}', String(list.filter((f) => f.status?.status === 'pending').length))
+              .replace('{f}', String(list.filter((f) => f.status?.status === 'unreadable').length))
+              .replace('{u}', String(list.filter((f) => !f.status || f.status.status === 'new').length))}</p>
+            {!selfHosted && list.some((f) => f.status?.status === 'unreadable') && (
+              <button onClick={() => setReporting(list.filter((f) => f.status?.status === 'unreadable' && f.reported === undefined).map((f) => f.id))}
+                className="px-1 inline-flex items-center gap-1 text-xs text-red-300 hover:text-red-200 underline underline-offset-2">
+                <Flag className="w-3.5 h-3.5" />{t('files_report_unreadable')}
+              </button>
             )}
             <ul className="divide-y divide-[#2A2A2A] rounded-lg border border-[#2A2A2A]">
               {list.map((f) => (
                 <li key={f.id} className="group flex items-center gap-2 px-3 py-2">
                   {!readOnly && (
                     f.locked
-                      ? <span title={t('files_locked')} className="w-4 flex justify-center text-gray-500"><Lock className="w-3.5 h-3.5" /></span>
+                      ? <span title={t(f.lockReason === 'record' ? 'files_locked_record' : 'files_locked')} className="w-4 flex justify-center text-gray-500"><Lock className="w-3.5 h-3.5" /></span>
                       : <input type="checkbox" className="accent-[#E07B53] shrink-0" checked={selected.has(f.id)} disabled={busy} onChange={() => toggle(f.id)} aria-label={f.name} />
                   )}
                   <button onClick={() => void files.open(projectId, f.id).catch((e) => setError(errorText(lang, e, pkg)))} className="flex-1 min-w-0 flex items-center gap-2 text-left">
@@ -231,9 +344,17 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
                     <span className="min-w-0">
                       <span className="block text-sm text-gray-200 truncate hover:text-white">{f.name}</span>
                       <span className="block text-[11px] text-gray-500">{f.uploadedAt.slice(0, 10)} · {sizeText(f.sizeBytes)}</span>
+                      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5"><StatusChip st={f.status} t={t} /><UsedIn st={f.status} usedIn={usedIn} t={t} onOpenSheet={onOpenSheet} />{f.reported !== undefined && <span className="rounded px-1.5 py-0.5 text-[11px] bg-amber-500/10 text-amber-300">{t('files_reported').replace('{n}', String(f.reported))}</span>}</span>
                     </span>
                   </button>
-                  {readOnly && f.locked && <span title={t('files_locked')} className="p-1 text-gray-500"><Lock className="w-3.5 h-3.5" /></span>}
+                  {!readOnly && <DecisionActions f={f} busy={busy} t={t} onAct={(action, reason) => void decide(f.id, action, reason)} />}
+                  {!selfHosted && (
+                    <button onClick={() => setReporting([f.id])} title={t('files_report')} aria-label={t('files_report')}
+                      className={`p-1 hover:text-white ${f.status?.status === 'unreadable' ? 'text-red-300' : 'text-gray-600 sm:opacity-0 sm:group-hover:opacity-100'}`}>
+                      <Flag className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {readOnly && f.locked && <span title={t(f.lockReason === 'record' ? 'files_locked_record' : 'files_locked')} className="p-1 text-gray-500"><Lock className="w-3.5 h-3.5" /></span>}
                   {!readOnly && !f.locked && (
                     <button onClick={() => setDeleting([f])} disabled={busy} className="p-1 text-gray-600 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100" title={t('delete')} aria-label={t('delete')}>
                       <Trash2 className="w-3.5 h-3.5" />
@@ -243,6 +364,9 @@ export function FilesPanel({ files, lang, projectId, readOnly }: {
               ))}
             </ul>
           </>
+        )}
+        {reporting && list && (
+          <ReportDialog files={files} lang={lang} projectId={projectId} candidates={list} initial={reporting} source="work_files" onSent={() => void load()} onClose={() => setReporting(null)} />
         )}
         {deleting && (
           <ConfirmDialog

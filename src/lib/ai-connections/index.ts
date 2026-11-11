@@ -16,9 +16,11 @@ export interface ResolvedAiConnection {
   headers: Record<string, string>
   apiVersion: string | null
   textModel: string
+  textModels: string[]
   imageModel: string | null
   embeddingModel: string | null
   maxOutputTokens: number | null
+  thinkingOff: boolean
 }
 
 export type AiConnectionInfo = Pick<ResolvedAiConnection, 'id' | 'name' | 'kind' | 'textModel' | 'imageModel' | 'embeddingModel' | 'maxOutputTokens'>
@@ -26,16 +28,18 @@ export type AiConnectionInfo = Pick<ResolvedAiConnection, 'id' | 'name' | 'kind'
 export type ResolveFailure = 'none' | 'no_default' | 'not_found' | 'ambiguous_default' | 'unchecked' | 'invalid'
 
 export const MIN_MAX_OUTPUT_TOKENS = 1024
-export type ResolveResult = { ok: true; connection: ResolvedAiConnection } | { ok: false; reason: ResolveFailure }
+export type ResolveResult = { ok: true; connection: ResolvedAiConnection; passedModels: string[] } | { ok: false; reason: ResolveFailure }
 
 export interface AiConnectionCheck {
   ok: boolean
   at: string
-  tools: boolean
-  json: boolean
+  text?: boolean
+  tools?: boolean
+  json?: boolean
   context?: boolean
-  image: boolean | null
+  image?: boolean | null
   embedding: boolean | null
+  models?: Record<string, { tools: boolean; json: boolean; context: boolean }>
   error?: string
 }
 
@@ -48,9 +52,11 @@ export interface AiConnectionRow {
   headers: string | null
   apiVersion: string | null
   textModel: string
+  textModels?: string[] | null
   imageModel: string | null
   embeddingModel: string | null
   maxOutputTokens: number | null
+  thinkingOff?: boolean | null
   isDefault: boolean
   checkResult: unknown
   checkFingerprint: string | null
@@ -71,11 +77,25 @@ export interface AiConnectionDeps {
 
 export const CHECK_CONTRACT = 'ai-connection/2'
 
-export function connectionFingerprint(c: Pick<ResolvedAiConnection, 'kind' | 'baseUrl' | 'apiKey' | 'headers' | 'apiVersion' | 'textModel' | 'imageModel' | 'embeddingModel' | 'maxOutputTokens'>): string {
+export function connectionFingerprint(c: Pick<ResolvedAiConnection, 'kind' | 'baseUrl' | 'apiKey' | 'headers' | 'apiVersion' | 'textModel' | 'imageModel' | 'embeddingModel' | 'maxOutputTokens'> & { textModels?: string[]; thinkingOff?: boolean }): string {
   const headers = Object.keys(c.headers).sort().map((k) => [k, c.headers[k]])
-  return createHash('sha256')
-    .update(JSON.stringify([CHECK_CONTRACT, c.kind, c.baseUrl, c.apiKey, headers, c.apiVersion, c.textModel, c.imageModel, c.embeddingModel, c.maxOutputTokens]))
-    .digest('hex')
+  const parts: unknown[] = [CHECK_CONTRACT, c.kind, c.baseUrl, c.apiKey, headers, c.apiVersion, c.textModel, c.imageModel, c.embeddingModel, c.maxOutputTokens]
+  const extra = (c.textModels ?? []).filter((m) => m !== c.textModel)
+  if (extra.length) parts.push(['textModels', normalizeTextModels(c.textModel, c.textModels)])
+  if (c.thinkingOff) parts.push(['thinkingOff', true])
+  return createHash('sha256').update(JSON.stringify(parts)).digest('hex')
+}
+
+export function normalizeTextModels(textModel: string, textModels?: readonly string[] | null): string[] {
+  const out: string[] = []
+  for (const m of [textModel, ...(textModels ?? [])].map((x) => (typeof x === 'string' ? x.trim() : ''))) if (m && !out.includes(m)) out.push(m)
+  return out
+}
+
+export function passedTextModels(c: Pick<ResolvedAiConnection, 'textModel' | 'textModels'>, check: AiConnectionCheck | null | undefined): string[] {
+  if (!check?.ok) return []
+  if (!check.models) return check.text !== undefined ? [...c.textModels] : c.textModels.filter((m) => m === c.textModel)
+  return c.textModels.filter((m) => { const r = check.models![m]; return r ? r.tools && r.json && r.context : m === c.textModel })
 }
 
 function isKind(v: string): v is AiConnectionKind {
@@ -116,9 +136,11 @@ async function readRow(row: AiConnectionRow, decrypt: AiConnectionDeps['decrypt'
     headers,
     apiVersion: row.apiVersion?.trim() || null,
     textModel: row.textModel.trim(),
+    textModels: normalizeTextModels(row.textModel.trim(), row.textModels),
     imageModel: row.imageModel?.trim() || null,
     embeddingModel: row.embeddingModel?.trim() || null,
     maxOutputTokens: row.maxOutputTokens ?? null,
+    thinkingOff: row.kind === 'openai_compatible' && row.thinkingOff === true,
   }
 }
 
@@ -141,7 +163,7 @@ export async function resolveAiConnection(deps: AiConnectionDeps, connectionId?:
   const connection = await decryptAiConnectionRow(row, deps.decrypt)
   if (!connection) return { ok: false, reason: 'invalid' }
   if (!isChecked(row, connection)) return { ok: false, reason: 'unchecked' }
-  return { ok: true, connection }
+  return { ok: true, connection, passedModels: passedTextModels(connection, row.checkResult as AiConnectionCheck) }
 }
 
 export const defaultAiConnectionDeps = async (): Promise<AiConnectionDeps> => {

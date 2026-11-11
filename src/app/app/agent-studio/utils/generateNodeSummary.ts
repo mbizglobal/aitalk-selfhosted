@@ -20,8 +20,11 @@ interface NodeData {
   mcpServerName?: string
   // Sub-workflow tool
   subWorkflowId?: string
+  inboxFamily?: string
   vectorStoreName?: string
   content?: string
+  action?: string
+  periodDate?: string
   searchQuery?: string
   toolType?: string
   connectionId?: string
@@ -103,6 +106,8 @@ export function generateNodeSummary(nodeType: string, data: NodeData): string {
           return data.connectionLabel ? truncate(data.connectionLabel, 40) : ''
         case 'subworkflow':
           return data.subWorkflowId ? truncate(String(data.subWorkflowId), 40) : ''
+        case 'workInbox':
+          return data.inboxFamily ? truncate(String(data.inboxFamily), 40) : ''
         default:
           return ''
       }
@@ -126,6 +131,17 @@ export function generateNodeSummary(nodeType: string, data: NodeData): string {
         return truncate(firstLine, 40)
       }
       return ''
+    }
+
+    case 'workApp': {
+      const tpl = (data as Record<string, unknown>).appTemplate
+      return typeof tpl === 'string' && tpl ? tpl : ''
+    }
+
+    case 'workAppStep': {
+      const what = data.action === 'read_status' ? 'Read status' : 'Open task'
+      const when = data.periodDate === 'event_start' ? 'event start' : data.periodDate === 'today' ? 'today' : data.periodDate && data.periodDate !== 'event_end' ? data.periodDate : 'event end'
+      return `${what} · ${when}`
     }
 
     case 'start':

@@ -178,3 +178,44 @@ export async function safeFetch(
 
   throw new Error(`Too many redirects (>${maxRedirects})`)
 }
+
+export interface ConnectAddressOptions {
+  allowPrivate?: boolean
+  deny?: readonly string[]
+  lookup?: (hostname: string) => Promise<LookupAddress[]>
+}
+
+const PRIVATE_RANGES = new Set(['private', 'loopback', 'uniqueLocal'])
+
+export function canonicalIp(ip: string): string {
+  const a = ipaddr.parse(ip)
+  if (a.kind() === 'ipv6' && (a as ipaddr.IPv6).isIPv4MappedAddress()) return (a as ipaddr.IPv6).toIPv4Address().toString()
+  return a.toNormalizedString()
+}
+
+export async function resolveConnectAddress(hostname: string, opts: ConnectAddressOptions = {}): Promise<string> {
+  const host = hostname.trim().replace(/^\[|\]$/g, '')
+  if (!host) throw new DnsLookupError(hostname, 'empty host')
+  let ips: string[]
+  if (ipaddr.isValid(host)) ips = [host]
+  else {
+    let addrs: LookupAddress[]
+    try {
+      addrs = await (opts.lookup ?? ((h) => dns.lookup(h, { all: true })))(host)
+    } catch (err: any) {
+      throw new DnsLookupError(hostname, err?.message ?? String(err))
+    }
+    if (!addrs.length) throw new DnsLookupError(hostname, 'no A/AAAA records')
+    ips = addrs.map((a) => a.address)
+  }
+  const deny = new Set((opts.deny ?? []).map(canonicalIp))
+  const out: string[] = []
+  for (const raw of ips) {
+    const ip = canonicalIp(raw)
+    const range = ipaddr.parse(ip).range()
+    if (deny.has(ip)) throw new SSRFError(hostname, ip, 'denied')
+    if (range !== 'unicast' && !(opts.allowPrivate && PRIVATE_RANGES.has(range))) throw new SSRFError(hostname, ip, range)
+    out.push(ip)
+  }
+  return out[0]
+}

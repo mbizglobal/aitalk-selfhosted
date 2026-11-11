@@ -39,6 +39,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { WorkAppCardRows } from '@/components/work/WorkAppCardRows'
+import type { WorkflowWorkApp } from '@/lib/work/workflow-apps'
 
 interface Workflow {
   id: number
@@ -51,6 +53,7 @@ interface Workflow {
   createdAt: Date
   updatedAt: Date
   kind?: string
+  workApp?: WorkflowWorkApp
 }
 
 interface DataSheet {
@@ -182,6 +185,7 @@ function MobileSortableWorkflowItem({
           <span className="font-medium text-xs truncate max-w-[80px]">{item.workflow.name}</span>
           {getStatusBadge(item.workflow.status, item.workflow.kind)}
         </div>
+        {item.workflow.workApp && <WorkAppCardRows workApp={item.workflow.workApp} compact />}
       </div>
 
       <div className="flex items-center gap-0 flex-shrink-0">
@@ -193,14 +197,16 @@ function MobileSortableWorkflowItem({
         >
           <Edit className="w-3 h-3" />
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 w-6 p-0"
-          onClick={() => onSettings(item.workflow)}
-        >
-          <Settings className="w-3 h-3" />
-        </Button>
+        {!item.workflow.workApp && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0"
+            onClick={() => onSettings(item.workflow)}
+          >
+            <Settings className="w-3 h-3" />
+          </Button>
+        )}
         <Button
           size="sm"
           variant="ghost"
@@ -209,7 +215,7 @@ function MobileSortableWorkflowItem({
         >
           <Download className="w-3 h-3" />
         </Button>
-        {item.workflow.status === 'production' && (
+        {!item.workflow.workApp && item.workflow.status === 'production' && (
           <Button
             size="sm"
             variant="ghost"

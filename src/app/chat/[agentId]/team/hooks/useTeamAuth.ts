@@ -5,6 +5,7 @@ export interface TeamMemberInfo {
   id: number | string
   email: string
   displayName: string | null
+  jobTitle?: string | null
   isOwner?: boolean
   authMethod?: string  // password | oauth
 }
@@ -189,7 +190,7 @@ export const useTeamAuth = (agentId: string) => {
     setIsAuthenticated(true)
   }, [agentId])
 
-  const updateDisplayName = useCallback(async (newDisplayName: string): Promise<boolean> => {
+  const updateProfile = useCallback(async (fields: { displayName?: string; jobTitle?: string }): Promise<boolean> => {
     if (!token) return false
 
     try {
@@ -199,7 +200,7 @@ export const useTeamAuth = (agentId: string) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ displayName: newDisplayName })
+        body: JSON.stringify(fields)
       })
 
       if (!response.ok) {
@@ -226,6 +227,17 @@ export const useTeamAuth = (agentId: string) => {
       return false
     }
   }, [agentId, token])
+  const updateDisplayName = useCallback((newDisplayName: string) => updateProfile({ displayName: newDisplayName }), [updateProfile])
+
+  useEffect(() => {
+    if (!token || isOwner) return
+    let live = true
+    fetch(`/api/chat/${agentId}/team/profile`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d?.member) setMember((m) => (m ? { ...m, jobTitle: d.member.jobTitle ?? null } : m)) })
+      .catch(() => { })
+    return () => { live = false }
+  }, [agentId, token, isOwner])
 
   const changePassword = useCallback(async (
     currentPassword: string,
@@ -339,6 +351,7 @@ export const useTeamAuth = (agentId: string) => {
     logout,
     loginWithOAuth,
     updateDisplayName,
+    updateProfile,
     changePassword,
     requestEmailChange
   }

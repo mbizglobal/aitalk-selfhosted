@@ -11,10 +11,11 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
 COPY . .
-# 4 GB heap is enough for the build; more can exhaust an 8 GB Docker VM
+# 4 GB heap is enough for the build; more can exhaust an 8 GB Docker VM. Two build workers (AITALK_BUILD_CPUS) for the same reason:
+#   with one worker per CPU, collecting page data ran out of memory on an 8 GB Docker VM — slower, but it finishes
 # Page data collection imports server modules during the build — background jobs are switched off so they do not look for a database,
 #   and the edition is set as at run time so Cloud-only settings are not reported missing
-RUN npx prisma generate && AITALK_BACKGROUND_JOBS=off AITALK_EDITION=selfhosted \
+RUN npx prisma generate && AITALK_BACKGROUND_JOBS=off AITALK_EDITION=selfhosted AITALK_BUILD_CPUS=2 \
     NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 FROM node:22-bookworm-slim

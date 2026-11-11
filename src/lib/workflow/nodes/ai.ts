@@ -71,8 +71,17 @@ export class AINodeExecutor extends BaseNodeExecutor {
           )
         }
         const conn = resolved.connection
+        const wanted = typeof node.data?.aiConnectionModel === 'string' ? node.data.aiConnectionModel.trim() : ''
+        if (wanted && !resolved.passedModels.includes(wanted)) {
+          const infoMessage = `The AI model chosen for this step (${wanted}) is not available in this AI connection — it was removed or did not pass the connection check. Choose another model in the workflow, or an administrator can run the connection check again.`
+          return this.createSuccessResult(
+            { ...context, aiResponse: infoMessage, outputTokens: 0, inputTokens: 0 },
+            { input: { message: context.message }, output: { aiResponse: infoMessage } }
+          )
+        }
+        const textModel = wanted || conn.textModel
         const hasImages = (node.data?.imageInput || node.data?.pdfInput) && context.uploadedFiles?.some((f) => f.type === 'image')
-        if (hasImages && conn.imageModel !== conn.textModel) {
+        if (hasImages && conn.imageModel !== textModel) {
           const infoMessage = conn.imageModel
             ? 'This AI connection reads images with a separate image model, which cannot be used for images attached directly to the chat yet.'
             : 'This AI connection cannot read images (no image model is set). An administrator can add one.'
@@ -82,8 +91,8 @@ export class AINodeExecutor extends BaseNodeExecutor {
           )
         }
         connectionClient = createConnectionClient(conn)
-        node.data.model = conn.textModel
-        context.workflowAiModel = conn.textModel
+        node.data.model = textModel
+        context.workflowAiModel = textModel
         if (conn.maxOutputTokens && !(maxTokens > 0 && maxTokens <= conn.maxOutputTokens)) node.data.maxTokens = conn.maxOutputTokens
         context.aiConnection = toConnectionInfo(conn)
       } else if (context.isManaged && context.managedRegion) {

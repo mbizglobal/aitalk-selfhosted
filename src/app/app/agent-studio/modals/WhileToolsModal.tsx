@@ -145,7 +145,8 @@ function SortableToolItem({
 export function WhileToolsModal() {
   const { ui, workflow, reloadWorkflow, agent } = useWorkflowContext()
   const workflowKind: WorkflowKind = agent.workflowKind === 'sub' ? 'sub' : 'main'
-  const canAdd = (type: ToolItem['type']) => isLoopToolAllowedForKind(type, workflowKind)
+  const appCanvas = workflow.nodes.some((n) => n.data?.nodeType === 'workApp')
+  const canAdd = (type: ToolItem['type']) => isLoopToolAllowedForKind(type, workflowKind, { appCanvas })
   const { lang } = useLanguage()
   const t = getAgentStudioTranslation(lang)
 

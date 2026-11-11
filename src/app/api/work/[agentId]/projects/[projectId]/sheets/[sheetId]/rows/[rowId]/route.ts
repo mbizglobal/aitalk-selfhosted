@@ -15,7 +15,8 @@ type P = { agentId: string; projectId: string; sheetId: string; rowId: string }
 export const PATCH = workRoute<P>('row.update', async (req, { access, deps }, p) => {
   await assertTeamProject(access, p.projectId)
   const body = await readJsonBody(req)
-  await updateRowFromScreen(deps, { userId: access.userId, projectId: p.projectId, sheetId: p.sheetId, actor: access.actor }, p.rowId, body.data, body.confirm === true, fileIdOf(body.fileId))
+  const fileColumn = typeof body.fileColumn === 'string' && body.fileColumn && body.fileColumn.length <= 64 ? body.fileColumn : undefined
+  await updateRowFromScreen(deps, { userId: access.userId, projectId: p.projectId, sheetId: p.sheetId, actor: access.actor }, p.rowId, body.data, body.confirm === true, fileIdOf(body.fileId), fileColumn)
   return { ok: true }
 })
 

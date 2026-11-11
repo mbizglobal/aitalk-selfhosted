@@ -28,19 +28,19 @@ const CLOUD_METADATA: Metadata = {
       'msvalidate.01': '475FFC7015A820E3A9EFAE87122F6F54',
     },
   },
-  title: "AI Voice Agent & Agentic Workflow Platform | AiTalk.ch",
-  description: "Build AI voice agents, chatbots & agentic workflows — no-code. Powered by Microsoft Azure in Switzerland (Zurich). Swiss data privacy, no API keys, no setup.",
+  title: "Build and Run AI Work Apps — Under Your Control | AiTalk.ch",
+  description: "AI Work Apps turn hard work — invoices, receipts, VAT, year-end and your own processes — into apps you run by talking to AI. Fixed code gets the numbers right, and you confirm.",
   openGraph: {
-    title: "AiTalk.ch — AI Voice Agent in Your Country. Core Infrastructure in Switzerland.",
-    description: "Build AI voice agents, chatbots, and agentic workflows on Microsoft Azure. Conversations, accounts and RAG vector databases are stored in the Azure region Zurich; core infrastructure is in Switzerland.",
-    url: 'https://aitalk.ch',
+    title: "Build and run AI Work Apps — under your control.",
+    description: "Apps in which AI does hard work such as accounting — fixed code calculates the numbers, and a person confirms. AI Talk Cloud (data stored in Switzerland) or Self-hosted.",
+    url: 'https://www.aitalk.ch',
     siteName: 'AiTalk.ch',
     images: [
       {
-        url: '/og-image2.jpg',
+        url: '/og-cover-en.jpg',
         width: 1200,
         height: 630,
-        alt: 'AI Voice Agent in Your Country. Core Infrastructure in Switzerland — AiTalk.ch',
+        alt: 'AI Talk — AI Work Apps. Build and run AI Work Apps — under your control. Ready now: invoices, receipts, VAT, year-end. Or build your own — free with Self-hosted.',
       },
     ],
     locale: 'en_US',
@@ -48,9 +48,9 @@ const CLOUD_METADATA: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "AiTalk.ch — AI Voice Agent in Your Country. Core Infrastructure in Switzerland.",
-    description: "Build AI voice agents, chatbots, and agentic workflows on Microsoft Azure. Conversations, accounts and RAG vector databases are stored in the Azure region Zurich; core infrastructure is in Switzerland.",
-    images: ['/og-image2.jpg'],
+    title: "Build and run AI Work Apps — under your control.",
+    description: "Apps in which AI does hard work such as accounting — fixed code calculates the numbers, and a person confirms.",
+    images: ['/og-cover-en.jpg'],
   },
   icons: {
     icon: [

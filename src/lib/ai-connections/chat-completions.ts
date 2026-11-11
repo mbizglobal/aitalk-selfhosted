@@ -48,7 +48,7 @@ export function toChatMessages(input: unknown): ChatMessage[] {
       if (!['user', 'assistant', 'system'].includes(role)) throw apiError(400, 'unsupported_input', `message role "${String(item.role)}" is not supported`)
       out.push({ role, content: toChatContent(item.content, role) })
     } else if (type === 'function_call') {
-      const call = { id: item.call_id || item.id, type: 'function', function: { name: item.name, arguments: item.arguments || '{}' } }
+      const call: any = { id: item.call_id || item.id, type: 'function', function: { name: item.name, arguments: item.arguments || '{}' }, ...(item.extra_content ? { extra_content: item.extra_content } : {}) }
       const last = out[out.length - 1]
       if (last && last.role === 'assistant' && Array.isArray(last.tool_calls) && !last.content) last.tool_calls.push(call)
       else out.push({ role: 'assistant', content: null, tool_calls: [call] })
@@ -85,7 +85,7 @@ export function toChatParams(req: any, maxOutputCap: number | null) {
 
 interface Turn {
   text: string
-  calls: Array<{ id: string; name: string; arguments: string }>
+  calls: Array<{ id: string; name: string; arguments: string; extra?: unknown }>
   finish: string | null
   usage: { input_tokens: number; output_tokens: number } | null
 }
@@ -94,7 +94,7 @@ function toResponse(rid: string, t: Turn) {
   const truncated = t.finish === 'length' || t.finish === 'content_filter'
   const output: any[] = []
   if (t.text) output.push({ type: 'message', id: id('msg'), role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: t.text, annotations: [] }] })
-  if (!truncated) for (const c of t.calls) output.push({ type: 'function_call', id: `fc_${c.id}`, call_id: c.id, name: c.name, arguments: c.arguments, status: 'completed' })
+  if (!truncated) for (const c of t.calls) output.push({ type: 'function_call', id: `fc_${c.id}`, call_id: c.id, name: c.name, arguments: c.arguments, status: 'completed', ...(c.extra ? { extra_content: c.extra } : {}) })
   return {
     id: rid,
     object: 'response',
@@ -119,18 +119,19 @@ export function createChatCompletionsClient(conn: ResolvedAiConnection, sdk?: Op
     }
     const convo = [...history, ...toChatMessages(req.input)]
     const system = typeof req.instructions === 'string' && req.instructions ? [{ role: 'system', content: req.instructions }] : []
-    return { convo, messages: [...system, ...convo], params: toChatParams(req, conn.maxOutputTokens) }
+    const thinking = conn.thinkingOff ? { chat_template_kwargs: { enable_thinking: false } } : {}
+    return { convo, messages: [...system, ...convo], params: { ...toChatParams(req, conn.maxOutputTokens), ...thinking } }
   }
 
   const remember = (rid: string, convo: ChatMessage[], t: Turn) => {
     const assistant: ChatMessage = { role: 'assistant', content: t.text || null }
-    if (t.calls.length && t.finish !== 'length') assistant.tool_calls = t.calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } }))
+    if (t.calls.length && t.finish !== 'length') assistant.tool_calls = t.calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments }, ...(c.extra ? { extra_content: c.extra } : {}) }))
     conversations.set(rid, [...convo, assistant])
   }
 
   async function* stream(rid: string, chunks: AsyncIterable<any>, convo: ChatMessage[]): AsyncGenerator<any> {
     const t: Turn = { text: '', calls: [], finish: null, usage: null }
-    const byIndex = new Map<number, { id: string; name: string; arguments: string; announced: boolean }>()
+    const byIndex = new Map<number, { id: string; name: string; arguments: string; announced: boolean; extra?: unknown }>()
     yield { type: 'response.created', response: { id: rid, status: 'in_progress' } }
     for await (const chunk of chunks) {
       if (chunk?.usage) t.usage = { input_tokens: chunk.usage.prompt_tokens ?? 0, output_tokens: chunk.usage.completion_tokens ?? 0 }
@@ -151,6 +152,7 @@ export function createChatCompletionsClient(conn: ResolvedAiConnection, sdk?: Op
           byIndex.set(index, call)
         }
         if (tc.function?.name) call.name += tc.function.name
+        if (tc.extra_content) call.extra = tc.extra_content
         if (tc.function?.arguments) {
           if (!call.announced && call.name) {
             call.announced = true
@@ -168,7 +170,7 @@ export function createChatCompletionsClient(conn: ResolvedAiConnection, sdk?: Op
         yield { type: 'response.output_item.added', item: { type: 'function_call', id: `fc_${call.id}`, call_id: call.id, name: call.name, arguments: '' } }
       }
     }
-    t.calls = [...byIndex.values()].filter((c) => c.name).map(({ id: cid, name, arguments: a }) => ({ id: cid, name, arguments: a || '{}' }))
+    t.calls = [...byIndex.values()].filter((c) => c.name).map(({ id: cid, name, arguments: a, extra }) => ({ id: cid, name, arguments: a || '{}', ...(extra ? { extra } : {}) }))
     const response = toResponse(rid, t)
     if (response.status === 'incomplete') {
       yield { type: 'response.incomplete', response }
@@ -196,7 +198,7 @@ export function createChatCompletionsClient(conn: ResolvedAiConnection, sdk?: Op
         const choice = r.choices?.[0]
         const t: Turn = {
           text: textOf(choice?.message?.content),
-          calls: (choice?.message?.tool_calls ?? []).filter((c: any) => c?.function?.name).map((c: any) => ({ id: c.id || id('call'), name: c.function.name, arguments: c.function.arguments || '{}' })),
+          calls: (choice?.message?.tool_calls ?? []).filter((c: any) => c?.function?.name).map((c: any) => ({ id: c.id || id('call'), name: c.function.name, arguments: c.function.arguments || '{}', ...(c.extra_content ? { extra: c.extra_content } : {}) })),
           finish: choice?.finish_reason ?? null,
           usage: r.usage ? { input_tokens: r.usage.prompt_tokens ?? 0, output_tokens: r.usage.completion_tokens ?? 0 } : null,
         }

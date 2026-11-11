@@ -1,22 +1,16 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
 import type { Node } from 'reactflow'
 import { useWorkflowContext } from '../../contexts/WorkflowContext'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import {
-  Eye,
-  EyeOff,
   Info,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Key,
   Mail,
   Maximize2
 } from 'lucide-react'
 import { SendGridIcon } from '../../constants/components'
+import { SendGridConnectionForm } from './SendGridConnectionForm'
 import { useLanguage } from '@/hooks/useLanguage'
 import { getAgentStudioTranslation } from '@/lib/translations/agent-studio'
 import { ToolFieldRole, ToolModeBanner } from './shared'
@@ -37,12 +31,6 @@ export const SendGridPanel: React.FC<Props> = ({ node, updateNodeData }) => {
   const { lang } = useLanguage()
   const t = getAgentStudioTranslation(lang)
 
-  const [apiKey, setApiKey] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [hasStoredKey, setHasStoredKey] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showDevInfo, setShowDevInfo] = useState(false)
 
   const toEmail = node.data.toEmail || ''
@@ -51,78 +39,6 @@ export const SendGridPanel: React.FC<Props> = ({ node, updateNodeData }) => {
   const fromName = node.data.fromName || ''
   const subject = node.data.subject || ''
   const bodyTemplate = node.data.bodyTemplate || '{{context.aiResponse}}'
-
-  const loadApiKeyStatus = useCallback(async () => {
-    if (!agent.agentId) return
-
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/agent-studio/sendgrid?agentId=${agent.agentId}`)
-      const data = await res.json()
-
-      if (res.ok && data.hasApiKey) {
-        setHasStoredKey(true)
-      } else {
-        setHasStoredKey(false)
-      }
-    } catch (err) {
-      console.error('Failed to load API key status:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [agent.agentId])
-
-  useEffect(() => {
-    loadApiKeyStatus()
-  }, [loadApiKeyStatus])
-
-  const handleSaveApiKey = async () => {
-    if (!agent.agentId || !apiKey) return
-
-    setSaving(true)
-    setError(null)
-
-    try {
-      const res = await fetch('/api/agent-studio/sendgrid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: agent.agentId,
-          apiKey: apiKey
-        })
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save API key')
-      }
-
-      setHasStoredKey(true)
-      setApiKey('')  // Clear input after saving
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDeleteApiKey = async () => {
-    if (!agent.agentId) return
-    if (!confirm(t.confirm_remove_api_key)) return
-
-    try {
-      const res = await fetch(`/api/agent-studio/sendgrid?agentId=${agent.agentId}`, {
-        method: 'DELETE'
-      })
-
-      if (res.ok) {
-        setHasStoredKey(false)
-      }
-    } catch (err) {
-      console.error('Failed to delete API key:', err)
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -133,86 +49,7 @@ export const SendGridPanel: React.FC<Props> = ({ node, updateNodeData }) => {
 
       {isToolNode && <ToolModeBanner text={t.tool_mode_banner} />}
 
-      {/* Error Message */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-          <span className="text-sm text-red-400">{error}</span>
-        </div>
-      )}
-
-      {/* API Key Section */}
-      <div className="space-y-3 p-3 bg-[#1A1A1A] rounded-lg border border-[#3A3A3A]">
-        <div className="flex items-center gap-2">
-          <Key className="w-4 h-4 text-gray-400" />
-          <label className="text-sm font-medium text-gray-200">{t.sendgrid_api_key}</label>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-          </div>
-        ) : hasStoredKey ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/20 rounded">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-sm text-green-400">{t.api_key_configured}</span>
-            </div>
-            <button
-              onClick={handleDeleteApiKey}
-              className="text-xs text-gray-400 hover:text-red-400 transition-colors"
-            >
-              {t.remove_api_key}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="relative">
-              <Input
-                type={showApiKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="SG.xxxx..."
-                autoComplete="new-password"
-                className="bg-[#2A2A2A] border-[#3A3A3A] text-gray-200 pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
-              >
-                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <Button
-              onClick={handleSaveApiKey}
-              disabled={saving || !apiKey}
-              className="w-full"
-              size="sm"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {t.saving}
-                </>
-              ) : (
-                t.save_api_key
-              )}
-            </Button>
-            <p className="text-xs text-gray-500">
-              {t.get_api_key_from}{' '}
-              <a
-                href="https://app.sendgrid.com/settings/api_keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#00A9D1] hover:underline"
-              >
-                {t.sendgrid_settings}
-              </a>
-            </p>
-          </div>
-        )}
-      </div>
+      {agent.agentId && <SendGridConnectionForm agentId={agent.agentId} />}
 
       {/* Email Configuration */}
       <div className="space-y-4">
@@ -233,7 +70,7 @@ export const SendGridPanel: React.FC<Props> = ({ node, updateNodeData }) => {
             placeholder="noreply@example.com"
             className="bg-[#1A1A1A] border-[#3A3A3A] text-gray-200"
           />
-          {isToolNode && <p className="text-[11px] text-gray-500 mt-1">{t.tool_field_conn_wins}</p>}
+          {isToolNode && <p className="text-[11px] text-gray-500 mt-1">{t.sendgrid_from_node_wins}</p>}
         </div>
 
         {/* From Name */}

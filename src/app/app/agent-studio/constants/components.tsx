@@ -20,7 +20,7 @@ import {
   Inbox,
   Send,
   DatabaseZap,
-  Phone, LayoutGrid } from 'lucide-react'
+  Phone, LayoutGrid, Link2, Briefcase, ClipboardCheck } from 'lucide-react'
 
 export const SendGridIcon = ({ className }: { className?: string }) => (
   <svg
@@ -65,6 +65,8 @@ export const basicComponents = [
   { id: 'pstn-start', name: 'Start / PSTN', icon: Phone, color: 'bg-teal-500', showLeftHandle: false },
   { id: 'schedule', name: 'Start / Schedule', icon: Clock, color: 'bg-purple-500', showLeftHandle: false },
   { id: 'app-start', name: 'Start / App', icon: LayoutGrid, color: 'bg-amber-500', showLeftHandle: false },
+  { id: 'work-app', name: 'Work app', icon: Briefcase, color: 'bg-amber-600' },
+  // { id: 'work-event-start', name: 'Start / Work app event', icon: Link2, color: 'bg-cyan-600', showLeftHandle: false },
   { id: 'subworkflow-start', name: 'Start / Sub-workflow', icon: Puzzle, color: 'bg-pink-500', showLeftHandle: false },
   { id: 'ai', name: 'AI', icon: Bot, color: 'bg-blue-500' },
   { id: 'end', name: 'End', icon: Circle, color: 'bg-green-500' },
@@ -93,6 +95,7 @@ export const flowComponents = [
 export const dataComponents = [
   { id: 'data-sheets', name: 'Data Sheets', icon: Database, color: 'bg-indigo-500' },
   { id: 'store', name: 'RAG Store', icon: DatabaseZap, color: 'bg-emerald-500' },
+  { id: 'work-app-step', name: 'Open work app task', icon: ClipboardCheck, color: 'bg-amber-800' },
   // { id: 'mysql', name: 'MySQL/MariaDB', icon: Database, color: 'bg-cyan-500' },
 ]
 

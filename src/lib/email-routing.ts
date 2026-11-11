@@ -11,6 +11,7 @@ export interface MailData {
   html: string
   from?: string
   bcc?: string
+  replyTo?: string
 }
 
 export interface MailResult {
@@ -76,6 +77,7 @@ async function sendViaHostpoint(data: MailData, defaultFrom: string): Promise<Ma
       from: `AI Talk <${data.from || defaultFrom}>`,
       to: data.to,
       ...(data.bcc && { bcc: data.bcc }),
+      ...(data.replyTo && { replyTo: data.replyTo }),
       subject: data.subject,
       html: data.html,
     })
@@ -124,6 +126,7 @@ async function sendViaCompanySmtp(data: MailData, env: Record<string, string | u
     const info = await t.sendMail({
       from: env.SMTP_FROM_NAME ? { name: env.SMTP_FROM_NAME, address: from } : from,
       to: data.to,
+      ...(data.replyTo && { replyTo: data.replyTo }),
       subject: data.subject,
       html: data.html,
     })

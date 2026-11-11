@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/button'
 import { GripVertical, Edit, Settings, Download, Link, Trash2, ArrowRight, Play, Archive } from 'lucide-react'
 import type { WorkflowGroupItem, Workflow } from '../types'
+import { WorkAppCardRows } from '@/components/work/WorkAppCardRows'
 
 interface SortableWorkflowItemProps {
   item: WorkflowGroupItem
@@ -66,6 +67,7 @@ export function SortableWorkflowItem({
           {getStatusBadge(item.workflow.status, item.workflow.kind)}
         </div>
         <h4 className="font-medium text-sm mb-1 truncate">{item.workflow.name}</h4>
+        {item.workflow.workApp && <WorkAppCardRows workApp={item.workflow.workApp} compact />}
         <div className="flex flex-wrap gap-0.5 mt-2">
           <Button
             size="sm"
@@ -76,15 +78,17 @@ export function SortableWorkflowItem({
           >
             <Edit className="w-3 h-3" />
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 w-6 p-0"
-            onClick={() => onSettings(item.workflow)}
-            title="Settings"
-          >
-            <Settings className="w-3 h-3" />
-          </Button>
+          {!item.workflow.workApp && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={() => onSettings(item.workflow)}
+              title="Settings"
+            >
+              <Settings className="w-3 h-3" />
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -94,7 +98,7 @@ export function SortableWorkflowItem({
           >
             <Download className="w-3 h-3" />
           </Button>
-          {item.workflow.status === 'production' && (
+          {!item.workflow.workApp && item.workflow.status === 'production' && (
             <Button
               size="sm"
               variant="ghost"

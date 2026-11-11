@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode, useEffect, useRef, useCallback, useState } from 'react'
 import { toast } from 'sonner'
+import { showAppNotes } from '../utils/app-notes'
 import { useWorkflowState } from '../hooks/useWorkflowState'
 import { useUIState } from '../hooks/useUIState'
 import { useAgentState } from '../hooks/useAgentState'
@@ -105,9 +106,10 @@ export const WorkflowProvider: React.FC<{
 
     const nodesChanged = !compareNodes(workflow.nodes, ui.savedSnapshot.nodes)
     const edgesChanged = !compareEdges(workflow.edges, ui.savedSnapshot.edges)
+    const nameChanged = agent.workflowName !== agent.savedWorkflowName
 
-    ui.setHasChanges(nodesChanged || edgesChanged)
-  }, [workflow.nodes, workflow.edges, ui.savedSnapshot, ui])
+    ui.setHasChanges(nodesChanged || edgesChanged || nameChanged)
+  }, [workflow.nodes, workflow.edges, ui.savedSnapshot, ui, agent.workflowName, agent.savedWorkflowName])
 
   const nodeHandlers = createNodeHandlers(
     workflow.nodes,
@@ -214,12 +216,14 @@ export const WorkflowProvider: React.FC<{
         if (typeof data?.workflow?.version === 'number') {
           agent.workflowVersionRef.current = data.workflow.version
         }
+        showAppNotes(data?.appNotes, t)
         ui.setSaveSuccess(true)
         ui.setHasChanges(false)
         ui.setSavedSnapshot({
           nodes: workflow.nodes,
           edges: workflow.edges
         })
+        agent.setSavedWorkflowName(updateData.name)
         return true
       } else {
         const error = await response.json().catch(() => null)
@@ -227,6 +231,8 @@ export const WorkflowProvider: React.FC<{
           toast.error(error.error, { id: 'translation-model-guard', duration: Infinity, closeButton: true })
         } else if (error?.code === 'STALE_CONFLICT') {
           toast.error(t.workflow_version_conflict, { id: 'workflow-version-conflict', duration: Infinity, closeButton: true })
+        } else if (error?.code === 'COMPANY_LIMIT') {
+          toast.error((t.company_limit_reached || 'Your plan includes {limit} company (bank ledger) — this would add another.').replace('{limit}', String(error?.limit ?? '')), { id: 'company-limit', duration: Infinity, closeButton: true })
         } else if (error?.code === 'STATUS_CHANGED') {
           if (typeof error?.currentStatus === 'string') agent.setWorkflowStatus(error.currentStatus)
           toast.error(t.workflow_status_changed, { id: 'workflow-status-changed', duration: Infinity, closeButton: true })
@@ -296,6 +302,10 @@ export const WorkflowProvider: React.FC<{
       }
       if (typeof wf.status === 'string') {
         agent.setWorkflowStatus(wf.status)
+      }
+      if (typeof wf.name === 'string') {
+        agent.setWorkflowName(wf.name)
+        agent.setSavedWorkflowName(wf.name)
       }
       setReloadGeneration(g => g + 1)
 

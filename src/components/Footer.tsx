@@ -39,7 +39,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="#pricing"
+                  href={`/${currentLanguage}/pricing`}
                   className="hover:text-green-400 transition-colors"
                 >
                   {t('footer_pricing')}

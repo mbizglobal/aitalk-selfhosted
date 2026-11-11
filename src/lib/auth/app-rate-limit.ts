@@ -1,3 +1,4 @@
+import { clientIpFromHeaders } from '@/lib/ipAuth'
 
 interface WindowEntry {
   timestamps: number[]
@@ -42,7 +43,7 @@ function record(key: string, now: number): void {
 export function allowLoginAttempt(
   email: string,
   ip: string | null,
-  scope: 'login' | 'delete' | 'restore' = 'login',
+  scope: 'login' | 'delete' | 'restore' | 'handoff' = 'login',
 ): { ok: true } | { ok: false; scope: 'email' | 'ip' } {
   const now = Date.now()
   const emailKey = scope === 'login' ? `email:${email}` : `email:${scope}:${email}`
@@ -59,7 +60,8 @@ export function allowLoginAttempt(
 }
 
 export function clientIpOf(headers: Headers): string | null {
-  return headers.get('x-forwarded-for')?.split(',')[0]?.trim() || headers.get('x-real-ip') || null
+  const ip = clientIpFromHeaders(headers)
+  return ip === '-' ? null : ip
 }
 
 export function maskEmail(email: string): string {

@@ -1,5 +1,6 @@
 
 import nodemailer from 'nodemailer'
+import { mailConnectTarget } from '@/lib/edition-connect'
 import { maskEmail } from '@/lib/log-mask'
 import { BaseNodeExecutor, NodeExecutionResult } from './base'
 import { WorkflowNode, WorkflowContext } from '../types'
@@ -308,10 +309,11 @@ export class SmtpNodeExecutor extends BaseNodeExecutor {
     }
   ): Promise<SmtpResult> {
     let transportConfig: any
+    const target = await mailConnectTarget(config.host)
 
     if (authCredentials.accessToken) {
       transportConfig = {
-        host: config.host,
+        ...target,
         port: config.port,
         secure: config.secure ?? (config.port === 465),
         auth: {
@@ -322,7 +324,7 @@ export class SmtpNodeExecutor extends BaseNodeExecutor {
       }
     } else {
       transportConfig = {
-        host: config.host,
+        ...target,
         port: config.port,
         secure: config.secure ?? (config.port === 465),
         auth: {

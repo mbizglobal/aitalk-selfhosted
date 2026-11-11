@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Edit, Copy, Trash2, Play, Archive, Settings, Download, Link } from 'lucide-react'
+import { WorkAppBadge, WorkAppCardRows } from '@/components/work/WorkAppCardRows'
 import { formatDistanceToNow } from 'date-fns'
 import type { Locale } from 'date-fns'
 import type { Workflow } from '../types'
@@ -41,6 +42,7 @@ export function WorkflowCard({
   t,
 }: WorkflowCardProps) {
   const isSub = workflow.kind === 'sub'
+  const workApp = workflow.workApp
   if (isMobile) {
     return (
       <Card className="p-3 overflow-hidden">
@@ -49,7 +51,9 @@ export function WorkflowCard({
             <div className="flex items-center gap-2">
               <span className="font-medium text-sm truncate max-w-[120px]">{workflow.name}</span>
               {getStatusBadge(workflow.status, workflow.kind)}
+              {workApp && <WorkAppBadge />}
             </div>
+            {workApp && <WorkAppCardRows workApp={workApp} compact />}
           </div>
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <Button
@@ -60,15 +64,17 @@ export function WorkflowCard({
             >
               <Edit className="w-3.5 h-3.5" />
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              onClick={() => onSettings(workflow)}
-            >
-              <Settings className="w-3.5 h-3.5" />
-            </Button>
-            {workflow.status === 'production' && (
+            {!workApp && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                onClick={() => onSettings(workflow)}
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {!workApp && workflow.status === 'production' && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -114,7 +120,10 @@ export function WorkflowCard({
               </CardDescription>
             )}
           </div>
-          {getStatusBadge(workflow.status, workflow.kind)}
+          <div className="flex flex-col items-end gap-1">
+            {getStatusBadge(workflow.status, workflow.kind)}
+            {workApp && <WorkAppBadge />}
+          </div>
         </div>
       </CardHeader>
 
@@ -129,6 +138,8 @@ export function WorkflowCard({
             </div>
           </div>
 
+          {workApp && <WorkAppCardRows workApp={workApp} manageLink />}
+
           <div className="flex flex-wrap gap-2 pt-2">
             <Button
               size="sm"
@@ -138,25 +149,27 @@ export function WorkflowCard({
               {t.workflow_edit}
             </Button>
 
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onSettings(workflow)}
-              disabled={isLoading}
-            >
-              <Settings className="w-3 h-3 mr-1" />
-              Settings
-            </Button>
+            {!workApp && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onSettings(workflow)}
+                disabled={isLoading}
+              >
+                <Settings className="w-3 h-3 mr-1" />
+                Settings
+              </Button>
+            )}
 
             <Button
               size="sm"
               variant="outline"
               onClick={() => onDownload(workflow)}
               disabled={isLoading}
-              title="JSON 다운로드"
+              title={workApp ? (t.work_bk_note ?? 'Backup') : 'JSON 다운로드'}
             >
               <Download className="w-3 h-3 mr-1" />
-              JSON
+              {workApp ? (t.work_bk_short ?? 'Backup') : 'JSON'}
             </Button>
 
             <Button
@@ -193,7 +206,7 @@ export function WorkflowCard({
               </Button>
             )}
 
-            {workflow.status === 'production' && (
+            {!workApp && workflow.status === 'production' && (
               <Button
                 size="sm"
                 variant="outline"

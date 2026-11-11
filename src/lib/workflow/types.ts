@@ -6,7 +6,7 @@ import { NextRequest } from 'next/server'
 
 export interface WorkflowNode {
   id: string
-  type: 'start' | 'ai' | 'file_search' | 'source' | 'condition' | 'ifElse' | 'webhook' | 'while' | 'wait' | 'dataSheets' | 'mcp' | 'sendgrid' | 'telegram' | 'sms' | 'sms_acs' | 'sms_infobip' | 'imap' | 'smtp' | 'httpRequest' | 'store' | 'pstn' | 'end' | 'tool' | 'note' | 'continue'
+  type: 'start' | 'ai' | 'file_search' | 'source' | 'condition' | 'ifElse' | 'webhook' | 'while' | 'wait' | 'dataSheets' | 'mcp' | 'sendgrid' | 'telegram' | 'sms' | 'sms_acs' | 'sms_infobip' | 'imap' | 'smtp' | 'httpRequest' | 'store' | 'pstn' | 'workAppStep' | 'workHandoff' | 'end' | 'tool' | 'note' | 'continue'
   position: { x: number; y: number }
   data: Record<string, any>
 }

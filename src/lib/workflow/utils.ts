@@ -77,7 +77,7 @@ export function determineWorkflowMode(workflowJson: WorkflowJson): 'simple' | 'w
     nodeTypes[1] === 'end' &&
     nodeTypes[2] === 'start'
 
-  const flowEdges = edges.filter(e => e.sourceHandle !== 'tools' && e.sourceHandle !== 'miniapps')
+  const flowEdges = edges.filter(e => e.sourceHandle !== 'tools' && e.sourceHandle !== 'miniapps' && e.sourceHandle !== 'ref' && e.sourceHandle !== 'send')
 
   if (flowEdges.length !== 2) {
     return 'workflow'
@@ -269,7 +269,7 @@ export function validateWorkflow(
   // ========================================
 
   const logicNodes = nodes.filter(n => n.type !== 'tool')
-  const flowEdges = edges.filter(e => e.sourceHandle !== 'tools' && e.sourceHandle !== 'miniapps')
+  const flowEdges = edges.filter(e => e.sourceHandle !== 'tools' && e.sourceHandle !== 'miniapps' && e.sourceHandle !== 'ref' && e.sourceHandle !== 'send')
 
   for (const node of logicNodes) {
     const nodeType = getNodeTypeForValidation(node)

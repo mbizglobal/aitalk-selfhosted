@@ -1,6 +1,8 @@
 import NextAuth from 'next-auth'
 import { gmailMustUseGoogle, isGoogleLoginEnabled } from '@/lib/auth/google-login'
+import { isPasswordTeamMember } from '@/lib/auth/password-member'
 import GoogleProvider from 'next-auth/providers/google'
+import { isHandoffExpired } from '@/lib/auth/handoff-expiry'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { PrismaClient } from '@prisma/client'
@@ -165,6 +167,7 @@ const authConfig = {
       return `${fallbackBaseUrl}/app`
     },
     async jwt({ token, user, account }: { token: any; user: any; account?: any }) {
+      if (isHandoffExpired(token)) throw new Error('HANDOFF_EXPIRED')
       if (user) {
         token.id = user.id
         token.authAt = Date.now()
@@ -322,6 +325,8 @@ const authConfig = {
           })
 
           if (!dbUser) {
+            if (await isPasswordTeamMember(user.email)) throw new Error('MEMBER_USE_PASSWORD')
+
             const cookieStore = await cookies()
             const fingerprintCookie = cookieStore.get('signup-fingerprint')
             const fingerprint = fingerprintCookie?.value || null
@@ -384,7 +389,7 @@ const authConfig = {
           }
         } catch (error) {
           if (error instanceof Error &&
-              (error.message === 'DEVICE_SIGNUP_LIMIT_EXCEEDED' || error.message === 'IP_SIGNUP_LIMIT_EXCEEDED')) {
+              (error.message === 'DEVICE_SIGNUP_LIMIT_EXCEEDED' || error.message === 'IP_SIGNUP_LIMIT_EXCEEDED' || error.message === 'MEMBER_USE_PASSWORD')) {
             throw error
           }
         }

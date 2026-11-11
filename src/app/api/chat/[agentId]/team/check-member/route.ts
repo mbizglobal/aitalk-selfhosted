@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import { describeCaughtError } from '@/lib/log-mask'
+import { gmailMustUseGoogle } from '@/lib/auth/google-login'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -30,12 +31,23 @@ export async function GET(
       select: {
         agentId: true,
         accessMode: true,
-        title: true
+        title: true,
+        user: { select: { email: true, password: true } }
       }
     })
 
     if (!agent) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+
+    if (agent.user?.email && agent.user.email.toLowerCase().trim() === email) {
+      return NextResponse.json({
+        exists: true,
+        isOwner: true,
+        authMethod: agent.user.password && !gmailMustUseGoogle(email) ? 'password' : 'oauth',
+        hasPasskey: false,
+        agentTitle: agent.title
+      })
     }
 
     if (agent.accessMode !== 'team') {

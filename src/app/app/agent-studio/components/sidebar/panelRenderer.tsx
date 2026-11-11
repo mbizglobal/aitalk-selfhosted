@@ -5,6 +5,10 @@ import { isMiniAppNodeOfType } from '@/lib/workflow/mini-app-registry'
 import {
   ChatWidgetPanel,
   AppStartPanel,
+  WorkEventStartPanel,
+  WorkAppStepPanel,
+  WorkAppNodePanel,
+  WorkAppLinkPanel,
   SchedulePanel,
   AiNodePanel,
   SourcePanel,
@@ -33,10 +37,15 @@ import {
   PstnStartPanel,
   SubWorkflowStartPanel,
   SubWorkflowToolPanel,
+  WorkInboxToolPanel,
 } from '../right-panel'
 import {
   isChatWidgetNode,
   isAppStartNode,
+  isWorkEventStartNode,
+  isWorkAppStepNode,
+  isWorkAppNode,
+  isWorkAppLinkNode,
   isScheduleNode,
   isAiNode,
   isSourceNode,
@@ -64,6 +73,7 @@ import {
   isEndNode,
   isSubWorkflowStartNode,
   isSubWorkflowToolNode,
+  isWorkInboxToolNode,
 } from './nodeTypeUtils'
 
 export function renderNodePanel(
@@ -77,8 +87,23 @@ export function renderNodePanel(
   if (isSubWorkflowToolNode(node)) {
     return <SubWorkflowToolPanel node={node} updateNodeData={updateNodeData} />
   }
+  if (isWorkInboxToolNode(node)) {
+    return <WorkInboxToolPanel node={node} updateNodeData={updateNodeData} />
+  }
   if (isAppStartNode(node)) {
     return <AppStartPanel node={node} updateNodeData={updateNodeData} />
+  }
+  if (isWorkEventStartNode(node)) {
+    return <WorkEventStartPanel node={node} updateNodeData={updateNodeData} />
+  }
+  if (isWorkAppStepNode(node)) {
+    return <WorkAppStepPanel node={node} updateNodeData={updateNodeData} />
+  }
+  if (isWorkAppNode(node)) {
+    return <WorkAppNodePanel node={node} updateNodeData={updateNodeData} />
+  }
+  if (isWorkAppLinkNode(node)) {
+    return <WorkAppLinkPanel node={node} updateNodeData={updateNodeData} />
   }
   if (isChatWidgetNode(node)) {
     return <ChatWidgetPanel node={node} updateNodeData={updateNodeData} />

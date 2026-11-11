@@ -49,4 +49,6 @@ export interface AIToolClient {
   callTool(name: string, args: Record<string, any>, callContext?: ToolCallContext): Promise<string>
 
   initialize(prisma: PrismaClient, connectionId: string, overrides?: any, userId?: string): Promise<void>
+
+  rerunnable?(name: string, args: Record<string, any>, previousOutput: string): boolean
 }

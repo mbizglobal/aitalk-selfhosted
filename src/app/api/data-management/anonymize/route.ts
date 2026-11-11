@@ -24,6 +24,9 @@ import { translations as deTranslations } from '@/lib/translations/dashboard/de'
 import { translations as frTranslations } from '@/lib/translations/dashboard/fr'
 import { translations as esTranslations } from '@/lib/translations/dashboard/es'
 import { describeCaughtError } from '@/lib/log-mask'
+import { hasEverPaidById } from '@/lib/subscription/payment-history'
+import { isSelfHosted } from '@/lib/edition'
+import { hasRecoverablePlayContract } from '@/lib/store/delete-guard'
 
 const REAUTH_MAX_AGE_MS = 5 * 60 * 1000
 const CLOCK_LEEWAY_MS = 60 * 1000
@@ -98,7 +101,8 @@ export async function POST(req: NextRequest) {
 
     const plan = user.settings?.plan?.toLowerCase() ?? 'free'
     const subscription = user.subscription
-    if (subscription && plan !== 'free') {
+    const unpaidTrial = !isSelfHosted() && !!subscription?.trialEndsAt && !(await hasEverPaidById(userId))
+    if (subscription && plan !== 'free' && !unpaidTrial) {
       const membershipActive = subscription.end_date ? new Date(subscription.end_date) > new Date() : false
       const hasPaidCredits = (subscription.paid_cpa ?? 0) > 0 || (subscription.paid_total ?? 0) > 0
       if (membershipActive && hasPaidCredits) {
@@ -107,6 +111,13 @@ export async function POST(req: NextRequest) {
           error: t.api_anonymize_active_subscription || 'Cannot anonymize while subscription is active. Please cancel your subscription first.'
         }, { status: 403 })
       }
+    }
+
+    if (await hasRecoverablePlayContract(subscription)) {
+      return NextResponse.json({
+        success: false,
+        error: t.api_anonymize_active_subscription || 'Cannot anonymize while subscription is active. Please cancel your subscription first.',
+      }, { status: 403 })
     }
 
     const userEmail = user.email!
