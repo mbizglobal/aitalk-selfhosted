@@ -1,8 +1,8 @@
 # AI Talk — Self-hosted
 
 AI agents and workflow automation that you run on your own servers. Build workflows with AI steps, connect
-your own AI service, let the AI answer from your own documents, and use business apps (the first one prepares
-Swiss VAT returns) — with your data staying in your installation.
+your own AI service, let the AI answer from your own documents, and use business apps (Swiss VAT returns built in,
+or team apps your coding agent assembles from ready-made blocks) — with your data staying in your installation.
 
 This is the source of **AI Talk Self-hosted** and **AI Talk Business** (the same software; Business features
 are switched on with a license key). The hosted service is AI Talk Cloud at https://www.aitalk.ch.
@@ -40,12 +40,17 @@ restart. See [Assembled apps over MCP](#assembled-apps-over-mcp).
 ## What is included
 
 - Workflow studio with AI steps, tools and sub-workflows; chat widget for your website
-- AI connections you choose: **Azure OpenAI**, any **OpenAI-compatible** service (vLLM, Ollama, OpenAI and others),
-  or **Anthropic**
+- AI connections you choose by company: **Azure OpenAI**, **OpenAI**, **Gemini**, **Claude**, LLM hosting
+  (Switzerland: **Infomaniak**), your own AI server (Ollama, vLLM) or any OpenAI-compatible service entered by hand.
+  The screen loads the models from the service, a connection can have several text models, and each AI step in
+  Agent Studio can pick one
 - Document search over your own files: built into the database (pgvector) by default, or your own search server
-- Business apps (Work Apps) — Swiss VAT is the first. Work Apps can send email, Telegram messages and web service
+- Business apps (Work Apps) — Swiss VAT is built in. Work Apps can send email, Telegram messages and web service
   calls (a person confirms each one), search your documents, read and write your company database (MySQL, MariaDB,
-  PostgreSQL), take customer requests from the chat widget and Telegram, and start workflows when a period is closed
+  PostgreSQL, SQL Server), take customer requests from the chat widget and Telegram, and start workflows when a
+  period is closed
+- **Assembled apps** — your coding agent builds a team work app from ready-made blocks over MCP, with no code and
+  no image build ([Assembled apps over MCP](#assembled-apps-over-mcp))
 - Team members, roles and the MCP server for controlling AI Talk from other tools
 - Runs without internet access: no calls to our servers, the license key is checked offline
 
@@ -158,7 +163,11 @@ specification.
 ## Work Apps
 
 A Work App is a business app your team opens like a team chat: the AI does the work in the app's sheets, people
-answer and confirm, and a period is closed with a sealed calculation. Swiss VAT is built in.
+answer and confirm, and a period is closed with a sealed calculation. Swiss VAT is built in. There are two ways to
+add your own: assemble one from ready-made blocks over MCP (no code — [below](#assembled-apps-over-mcp)), or write
+one as code for your own calculations and AI tools.
+
+![How AI Talk Work Apps are built](images/architecture.webp)
 
 You can add your own Work App as one folder in `src/work-apps/<id>/` — sheet templates, an app template with the
 AI's instructions, calculation and action modules, optional AI tools and the screen texts. The core draws the
